@@ -76,6 +76,15 @@ export async function uploadImage(
   };
 }
 
+/** Upload a finished PNG into Comfy input so /view can serve it if needed. */
+export async function uploadResultPng(
+  bytes: Uint8Array,
+  filename: string,
+): Promise<ComfyImageRef> {
+  const blob = new Blob([Buffer.from(bytes)], { type: "image/png" });
+  return uploadImage(blob, filename);
+}
+
 export async function queuePrompt(
   prompt: Record<string, unknown>,
   clientId = "narcissus-web",

@@ -1,11 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import {
-  outputSizeForMode,
-  preparePhoto,
-  type FitMode,
-} from "@/lib/photoPrep";
+import { AppNav } from "@/components/AppNav";
 import {
   BODY_TYPES,
   COCK_SIZES,
@@ -14,6 +10,11 @@ import {
   type CockSizeId,
   type CockStateId,
 } from "@/lib/bodyTypes";
+import {
+  outputSizeForMode,
+  preparePhoto,
+  type FitMode,
+} from "@/lib/photoPrep";
 import {
   VIDEO_TEMPLATES,
   type VideoTemplateId,
@@ -182,6 +183,7 @@ export default function Home() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+      <AppNav />
       <header className="mb-12 border-b border-[var(--line)] pb-8">
         <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
           Studio
@@ -193,8 +195,8 @@ export default function Home() {
           Narcissus
         </h1>
         <p className="mt-3 max-w-xl text-base font-light leading-relaxed text-[#c4b7a8]">
-          Keep their face. Fit or crop. Face swap takes a source body plus a
-          donor face. Photo edits and 5s video templates included.
+          Keep their face and hair. Fit or crop. Face swap, clothing removal,
+          photo edits, and 5s video — Art of X lives in the menu above.
         </p>
       </header>
 

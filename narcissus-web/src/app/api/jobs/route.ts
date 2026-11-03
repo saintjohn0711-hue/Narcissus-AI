@@ -18,6 +18,8 @@ import {
   runPromptToImages,
   uploadImage,
 } from "@/lib/comfy";
+import { lockHeadAndHair } from "@/lib/identityLock";
+import { localResultUrl, saveLocalResult } from "@/lib/localResults";
 import { getVideoTemplate, type VideoTemplateId } from "@/lib/templates";
 import {
   buildFaceSwapPrompt,
@@ -144,8 +146,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const originalBytes = new Uint8Array(await file.arrayBuffer());
     const safeName = file.name.replace(/[^\w.\-]+/g, "_") || "upload.png";
-    const uploaded = await uploadImage(file, safeName);
+    const uploaded = await uploadImage(
+      new Blob([Buffer.from(originalBytes)], { type: file.type || "image/jpeg" }),
+      safeName,
+    );
 
     let faceUploadedName: string | null = null;
     if (mode === "faceswap" && faceFile) {
@@ -171,7 +177,7 @@ export async function POST(req: NextRequest) {
         : mode === "undress"
           ? buildUndressPrompt(uploaded.filename, {
               promptOverride,
-              identity: Math.max(identity, 0.82),
+              identity: Math.max(identity, 0.88),
               bodyType,
               cockState,
               cockSize,
@@ -206,19 +212,47 @@ export async function POST(req: NextRequest) {
           result = await runPromptToImages(
             buildUndressPrompt(uploaded.filename, {
               promptOverride,
-              identity: Math.max(identity, 0.82),
+              identity: Math.max(identity, 0.88),
               bodyType,
               cockState,
               cockSize,
               checkpoint: undressCkpt || undefined,
               faceLock: false,
-              denoise: 0.52,
+              denoise: 0.48,
             }),
             { timeoutMs: 180_000 },
           );
         }
       } catch {
         // If we can't inspect the image, still return the first result URL.
+      }
+    }
+
+    // Paste original head/hair onto still edits so the person stays the person.
+    let resultUrl = result.viewUrls[0] ?? null;
+    let identityLocked = false;
+    if (
+      (mode === "undress" || mode === "custom") &&
+      result.images[0] &&
+      result.mediaKind === "image"
+    ) {
+      try {
+        const editedBytes = await fetchImageBytes(result.images[0]);
+        if (!isNearlyBlankImage(editedBytes)) {
+          const locked = await lockHeadAndHair(editedBytes, originalBytes, {
+            headRatio: 0.34 + identity * 0.12,
+            feather: 0.16,
+            globalPull: 0,
+          });
+          const localName = await saveLocalResult(
+            `${result.promptId}_locked.png`,
+            locked,
+          );
+          resultUrl = localResultUrl(localName);
+          identityLocked = true;
+        }
+      } catch {
+        // Fall back to Comfy URL if lock fails.
       }
     }
 
@@ -239,6 +273,7 @@ export async function POST(req: NextRequest) {
       cockSize: mode === "undress" && bodyMeta.needsCock ? cockSize : null,
       speech: speech || null,
       identity,
+      identityLocked,
       filename: file.name,
       faceFilename: faceFile?.name ?? null,
       bytes: file.size,
@@ -251,18 +286,20 @@ export async function POST(req: NextRequest) {
           : mode === "undress"
             ? faceLockFallback
               ? `Clothing removed with ${bodyLabel}${cockNote} anatomy (face-lock skipped — previous frame was blank).`
-              : `Clothing removed with ${bodyLabel}${cockNote} anatomy. Face + hair locked via ReActor boost.`
+              : `Clothing removed with ${bodyLabel}${cockNote}. Original face & hair locked onto the body.`
             : mode === "video"
               ? tpl?.id === "say"
                 ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
                 : `5s ${tpl?.label || "video"} template ready.`
-              : "Photo job finished with high identity lock.",
+              : identityLocked
+                ? "Photo edit done — original face & hair preserved on top of the edit."
+                : "Photo job finished with high identity lock.",
       comfyConfigured: true,
       promptId: result.promptId,
       mediaKind: result.mediaKind,
       images: result.images,
-      resultUrl: result.viewUrls[0] ?? null,
-      resultUrls: result.viewUrls,
+      resultUrl,
+      resultUrls: resultUrl ? [resultUrl] : result.viewUrls,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "ComfyUI job failed";

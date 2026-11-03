@@ -1,24 +1,43 @@
+import { readFile } from "fs/promises";
 import { NextRequest, NextResponse } from "next/server";
 import { isComfyConfigured } from "@/lib/comfy";
+import { localResultPath } from "@/lib/localResults";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * Proxy ComfyUI /view through the Next app so the browser never depends on
- * the Runpod proxy (intermittent 403s showed up as blank results).
+ * Serve result media:
+ * - local=1 → identity-locked PNG from .data/results
+ * - else proxy ComfyUI /view (avoids Runpod 403s looking blank in-browser)
  */
 export async function GET(req: NextRequest) {
+  const filename = req.nextUrl.searchParams.get("filename");
+  if (!filename) {
+    return NextResponse.json({ error: "filename required" }, { status: 400 });
+  }
+
+  if (req.nextUrl.searchParams.get("local") === "1") {
+    try {
+      const buf = await readFile(localResultPath(filename));
+      return new NextResponse(buf, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/png",
+          "Cache-Control": "private, max-age=3600",
+          "Content-Length": String(buf.byteLength),
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: "Local result not found" }, { status: 404 });
+    }
+  }
+
   if (!isComfyConfigured()) {
     return NextResponse.json(
       { error: "COMFYUI_BASE_URL is not set." },
       { status: 503 },
     );
-  }
-
-  const filename = req.nextUrl.searchParams.get("filename");
-  if (!filename) {
-    return NextResponse.json({ error: "filename required" }, { status: 400 });
   }
 
   const subfolder = req.nextUrl.searchParams.get("subfolder") || "";

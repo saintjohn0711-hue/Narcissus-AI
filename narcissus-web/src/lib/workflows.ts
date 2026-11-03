@@ -41,14 +41,14 @@ export function denoiseForIdentity(
   mode: Exclude<JobMode, "video">,
   identity = 0.85,
 ): number {
-  // Undress: enough denoise to erase fabric + invent anatomy, but keep the
-  // head/hair stable enough for ReActor to lock identity.
+  // Undress: body can change; head integrity is restored post-pass.
+  // Keep denoise moderate so pose/background don't drift.
   const base =
-    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.55 : 0.3;
+    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.5 : 0.3;
   const clamped = Math.min(1, Math.max(0.35, identity));
   const factor = 1.35 - clamped; // 0.35..1.0
   if (mode === "undress") {
-    return Math.max(0.42, Math.min(0.62, base * (0.92 + factor * 0.15)));
+    return Math.max(0.38, Math.min(0.56, base * (0.95 + factor * 0.12)));
   }
   return Math.max(0.12, Math.min(0.55, base * factor));
 }
