@@ -6,6 +6,7 @@ import {
   displayName,
   loadChats,
   loadPartners,
+  mainPhoto,
   normalizeKinks,
   saveChats,
   stubPartnerReply,
@@ -99,10 +100,10 @@ export default function ChatPage() {
                     : "border-[var(--line)]"
                 }`}
               >
-                {p.photos[0] ? (
+                {mainPhoto(p) ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={p.photos[0]}
+                    src={mainPhoto(p)!}
                     alt=""
                     className="h-10 w-10 object-cover"
                   />

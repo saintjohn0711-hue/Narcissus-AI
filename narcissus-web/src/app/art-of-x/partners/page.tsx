@@ -10,8 +10,10 @@ import {
   emptyPartner,
   fileToPartnerPhoto,
   loadPartners,
+  mainPhoto,
   normalizeKinks,
   savePartners,
+  withMainPhoto,
   type PartnerRecord,
   type PersonGender,
   type PersonType,
@@ -51,6 +53,7 @@ export default function PartnersPage() {
       ...p,
       kinks: normalizeKinks(p.kinks),
       photos: [...(p.photos || [])],
+      mainPhotoIndex: p.mainPhotoIndex ?? 0,
       doneActs: [...(p.doneActs || [])],
       dynTags: [...(p.dynTags || [])],
     });
@@ -119,12 +122,34 @@ export default function PartnersPage() {
 
   async function onPhoto(files: FileList | null) {
     if (!editing || !files?.length) return;
+    const hadNone = editing.photos.length === 0;
     const next = [...editing.photos];
     for (const file of Array.from(files).slice(0, 4)) {
       if (next.length >= 6) break;
       next.push(await fileToPartnerPhoto(file));
     }
-    setEditing({ ...editing, photos: next });
+    setEditing({
+      ...editing,
+      photos: next,
+      // First upload becomes main photo at the top
+      mainPhotoIndex: hadNone ? 0 : editing.mainPhotoIndex,
+    });
+  }
+
+  function setMainPhoto(index: number) {
+    if (!editing) return;
+    setEditing(withMainPhoto(editing, index));
+  }
+
+  function removePhoto(index: number) {
+    if (!editing) return;
+    const photos = editing.photos.filter((_, j) => j !== index);
+    let mainPhotoIndex = editing.mainPhotoIndex ?? 0;
+    if (index === mainPhotoIndex) mainPhotoIndex = 0;
+    else if (index < mainPhotoIndex) mainPhotoIndex -= 1;
+    if (photos.length === 0) mainPhotoIndex = 0;
+    else mainPhotoIndex = Math.min(mainPhotoIndex, photos.length - 1);
+    setEditing({ ...editing, photos, mainPhotoIndex });
   }
 
   function loadDemo() {
@@ -209,6 +234,75 @@ export default function PartnersPage() {
               Cancel
             </button>
           </div>
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Main photo
+            </legend>
+            {mainPhoto(editing) ? (
+              <div className="overflow-hidden border border-[var(--accent)]/50 bg-[#12100e]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={mainPhoto(editing)!}
+                  alt="Main partner photo"
+                  className="max-h-80 w-full object-cover object-top"
+                />
+                <p className="px-3 py-2 text-xs text-[#c4b7a8]">
+                  This is the top / primary photo for cards and chat.
+                </p>
+              </div>
+            ) : (
+              <p className="border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[#c4b7a8]">
+                No main photo yet — upload below, then tap Set as main.
+              </p>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => onPhoto(e.target.files)}
+              className="text-sm text-[#c4b7a8] file:mr-3 file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-sm file:text-[#1a120c]"
+            />
+            {editing.photos.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {editing.photos.map((src, i) => {
+                  const isMain = (editing.mainPhotoIndex ?? 0) === i;
+                  return (
+                    <div key={i} className="relative w-24">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt=""
+                        className={`h-24 w-24 object-cover border ${
+                          isMain
+                            ? "border-[var(--accent)]"
+                            : "border-[var(--line)]"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(i)}
+                        className="absolute right-1 top-1 bg-black/70 px-1.5 text-xs text-[var(--danger)]"
+                      >
+                        ×
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMainPhoto(i)}
+                        className={`mt-1 w-full rounded-sm border px-1 py-1 text-[10px] uppercase tracking-wide ${
+                          isMain
+                            ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
+                            : "border-[var(--line)] text-[#c4b7a8]"
+                        }`}
+                      >
+                        {isMain ? "Main" : "Set as main"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
 
           <label className="grid gap-2 text-sm">
             <span className="uppercase tracking-[0.16em]">Name</span>
@@ -394,45 +488,6 @@ export default function PartnersPage() {
             />
           </fieldset>
 
-          <fieldset className="space-y-3">
-            <legend className="text-sm uppercase tracking-[0.16em]">
-              Photos
-            </legend>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => onPhoto(e.target.files)}
-              className="text-sm text-[#c4b7a8] file:mr-3 file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-sm file:text-[#1a120c]"
-            />
-            {editing.photos.length > 0 && (
-              <div className="flex flex-wrap gap-3">
-                {editing.photos.map((src, i) => (
-                  <div key={i} className="relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt=""
-                      className="h-24 w-24 object-cover border border-[var(--line)]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEditing({
-                          ...editing,
-                          photos: editing.photos.filter((_, j) => j !== i),
-                        })
-                      }
-                      className="absolute right-1 top-1 bg-black/70 px-1.5 text-xs text-[var(--danger)]"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </fieldset>
-
           <button
             type="submit"
             className="justify-self-start rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
@@ -448,21 +503,22 @@ export default function PartnersPage() {
             No partners yet. Add one or load Ark demo people.
           </p>
         )}
-        {visible.map((p) => (
-          <article
-            key={p.id}
-            className="border border-[var(--line)] bg-[var(--bg-elevated)]/30 p-5"
-          >
-            <div className="flex flex-wrap gap-4">
-              {p.photos[0] && (
+        {visible.map((p) => {
+          const hero = mainPhoto(p);
+          return (
+            <article
+              key={p.id}
+              className="overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/30"
+            >
+              {hero && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={p.photos[0]}
+                  src={hero}
                   alt=""
-                  className="h-24 w-24 object-cover border border-[var(--line)]"
+                  className="max-h-56 w-full object-cover object-top"
                 />
               )}
-              <div className="min-w-0 flex-1">
+              <div className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2
@@ -475,6 +531,9 @@ export default function PartnersPage() {
                       {p.type} · {p.gender}
                       {p.doneActs.length
                         ? ` · ${p.doneActs.length} acts logged`
+                        : ""}
+                      {p.photos.length > 1
+                        ? ` · ${p.photos.length} photos`
                         : ""}
                     </p>
                   </div>
@@ -518,9 +577,9 @@ export default function PartnersPage() {
                   </p>
                 )}
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </div>
   );

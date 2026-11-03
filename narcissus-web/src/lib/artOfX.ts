@@ -35,6 +35,8 @@ export type PartnerRecord = {
   doneActs: string[];
   /** data-URL photos (local persistence; keep few + small) */
   photos: string[];
+  /** Index into photos for the primary/top image */
+  mainPhotoIndex: number;
   favorite: boolean;
   isCouple: boolean;
   partnerA: string;
@@ -314,6 +316,7 @@ export function emptyPartner(name = "New partner"): PartnerRecord {
     kinks: [],
     doneActs: [],
     photos: [],
+    mainPhotoIndex: 0,
     favorite: false,
     isCouple: false,
     partnerA: "",
@@ -322,6 +325,24 @@ export function emptyPartner(name = "New partner"): PartnerRecord {
     createdAt: now,
     updatedAt: now,
   };
+}
+
+export function mainPhoto(p: PartnerRecord): string | null {
+  if (!p.photos?.length) return null;
+  const i = Math.min(
+    Math.max(0, p.mainPhotoIndex ?? 0),
+    p.photos.length - 1,
+  );
+  return p.photos[i] || p.photos[0] || null;
+}
+
+export function withMainPhoto(
+  p: PartnerRecord,
+  index: number,
+): PartnerRecord {
+  if (!p.photos.length) return { ...p, mainPhotoIndex: 0 };
+  const i = Math.min(Math.max(0, index), p.photos.length - 1);
+  return { ...p, mainPhotoIndex: i };
 }
 
 /** Local AI chat stub — partner-aware; swap for real LLM later. */
@@ -610,6 +631,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     kinks: normalizeKinks(s.kinks),
     doneActs: [],
     photos: [],
+    mainPhotoIndex: 0,
     favorite: false,
     isCouple: false,
     partnerA: "",
@@ -632,9 +654,21 @@ export function loadPartners(): PartnerRecord[] {
           ...p,
           kinks: normalizeKinks(p.kinks as unknown as Array<string | KinkEntry>),
           photos: Array.isArray(p.photos) ? p.photos : [],
+          mainPhotoIndex:
+            typeof p.mainPhotoIndex === "number" ? p.mainPhotoIndex : 0,
           doneActs: Array.isArray(p.doneActs) ? p.doneActs : [],
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
-        }))
+        })).map((p) =>
+          p.photos.length
+            ? {
+                ...p,
+                mainPhotoIndex: Math.min(
+                  Math.max(0, p.mainPhotoIndex),
+                  p.photos.length - 1,
+                ),
+              }
+            : { ...p, mainPhotoIndex: 0 },
+        )
       : [];
   } catch {
     return [];
