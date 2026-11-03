@@ -609,6 +609,33 @@ export default function PartnersPage() {
             />
           </fieldset>
 
+          <label className="grid gap-2 text-sm">
+            <span className="uppercase tracking-[0.16em]">
+              Sexual history with them
+            </span>
+            <textarea
+              value={editing.history}
+              onChange={(e) =>
+                setEditing({ ...editing, history: e.target.value })
+              }
+              rows={3}
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+              placeholder="What you've done, how it felt, ongoing dynamics…"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm">
+            <span className="uppercase tracking-[0.16em]">Notes</span>
+            <textarea
+              value={editing.notes}
+              onChange={(e) =>
+                setEditing({ ...editing, notes: e.target.value })
+              }
+              rows={2}
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+            />
+          </label>
+
           <button
             type="submit"
             className="justify-self-start rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
