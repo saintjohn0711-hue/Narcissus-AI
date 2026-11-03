@@ -22,6 +22,34 @@ export function isComfyConfigured(): boolean {
   return Boolean(process.env.COMFYUI_BASE_URL?.trim());
 }
 
+export async function listCheckpoints(): Promise<string[]> {
+  if (!isComfyConfigured()) return [];
+  try {
+    const res = await fetch(`${baseUrl()}/models/checkpoints`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as unknown;
+    return Array.isArray(data)
+      ? data.filter((n): n is string => typeof n === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Pick first preferred checkpoint that exists on the pod. */
+export async function resolveCheckpoint(
+  preferred: string[],
+  fallback: string,
+): Promise<string> {
+  const available = new Set(await listCheckpoints());
+  for (const name of preferred) {
+    if (available.has(name)) return name;
+  }
+  return fallback;
+}
+
 export async function uploadImage(
   file: File | Blob,
   filename: string,

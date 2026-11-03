@@ -6,6 +6,7 @@ import {
   preparePhoto,
   type FitMode,
 } from "@/lib/photoPrep";
+import { BODY_TYPES, type BodyTypeId } from "@/lib/bodyTypes";
 import {
   VIDEO_TEMPLATES,
   type VideoTemplateId,
@@ -18,6 +19,7 @@ type JobResult = {
   mode: JobMode;
   filename: string;
   faceFilename?: string | null;
+  bodyType?: BodyTypeId | null;
   message: string;
   comfyConfigured: boolean;
   mediaKind?: "image" | "video";
@@ -42,6 +44,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState(defaultPromptFor("custom"));
   const [speech, setSpeech] = useState("Hey… come closer.");
   const [template, setTemplate] = useState<VideoTemplateId>("blowjob");
+  const [bodyType, setBodyType] = useState<BodyTypeId>("female");
   const [identity, setIdentity] = useState(0.9);
   const [fit, setFit] = useState<FitMode>("contain");
   const [cropX, setCropX] = useState(0.5);
@@ -55,6 +58,7 @@ export default function Home() {
   const [job, setJob] = useState<JobResult | null>(null);
 
   const activeTemplate = VIDEO_TEMPLATES.find((t) => t.id === template)!;
+  const activeBody = BODY_TYPES.find((b) => b.id === bodyType)!;
 
   const canSubmit = useMemo(() => {
     if (!adultsOk || !file || busy) return false;
@@ -140,6 +144,9 @@ export default function Home() {
       if (mode === "video") {
         body.set("template", template);
         if (speech.trim()) body.set("speech", speech.trim());
+      }
+      if (mode === "undress") {
+        body.set("bodyType", bodyType);
       }
       if (mode !== "faceswap" && prompt.trim()) {
         body.set("prompt", prompt.trim());
@@ -315,6 +322,31 @@ export default function Home() {
             </div>
           </fieldset>
 
+          {mode === "undress" && (
+            <fieldset className="space-y-3">
+              <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                Body under the clothes
+              </legend>
+              <div className="flex flex-wrap gap-3">
+                {BODY_TYPES.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => setBodyType(b.id)}
+                    className={`rounded-sm border px-4 py-2 text-sm transition ${
+                      bodyType === b.id
+                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-[#c4b7a8]">{activeBody.blurb}</p>
+            </fieldset>
+          )}
+
           {mode === "video" && (
             <fieldset className="space-y-3">
               <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
@@ -356,6 +388,19 @@ export default function Home() {
                 Animates your photo for 5s with this line. True lip-sync TTS is
                 next; for now motion stays locked to the original face.
               </p>
+            </label>
+          ) : mode === "undress" ? (
+            <label className="flex flex-col gap-3">
+              <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                Extra notes (optional)
+              </span>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={3}
+                placeholder="Optional — pose or lighting notes. Body type already sets anatomy."
+                className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
+              />
             </label>
           ) : mode !== "video" && mode !== "faceswap" ? (
             <label className="flex flex-col gap-3">
@@ -423,12 +468,16 @@ export default function Home() {
                 ? "Rendering 5s video…"
                 : mode === "faceswap"
                   ? "Swapping face…"
-                  : "Running on GPU…"
+                  : mode === "undress"
+                    ? "Removing clothes…"
+                    : "Running on GPU…"
               : mode === "video"
                 ? `Make 5s ${activeTemplate.label}`
                 : mode === "faceswap"
                   ? "Swap face"
-                  : "Run job"}
+                  : mode === "undress"
+                    ? `Undress · ${activeBody.label}`
+                    : "Run job"}
           </button>
 
           {error && (
@@ -442,7 +491,8 @@ export default function Home() {
               <p className="text-[var(--ok)]">Job {job.status}</p>
               <p className="text-[#c4b7a8]">
                 <span className="text-[var(--ink)]">{job.id}</span> · {job.mode}
-                {job.template ? `/${job.template}` : ""} · {job.filename}
+                {job.template ? `/${job.template}` : ""}
+                {job.bodyType ? `/${job.bodyType}` : ""} · {job.filename}
                 {job.faceFilename ? ` + ${job.faceFilename}` : ""}
               </p>
               <p className="text-[#c4b7a8]">{job.message}</p>

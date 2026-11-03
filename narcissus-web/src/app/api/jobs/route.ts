@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  getBodyType,
+  isBodyTypeId,
+  type BodyTypeId,
+} from "@/lib/bodyTypes";
+import {
   isComfyConfigured,
+  resolveCheckpoint,
   runPromptToImages,
   uploadImage,
 } from "@/lib/comfy";
@@ -8,6 +14,7 @@ import { getVideoTemplate, type VideoTemplateId } from "@/lib/templates";
 import {
   buildFaceSwapPrompt,
   buildImg2ImgPrompt,
+  buildUndressPrompt,
   buildVideoPrompt,
   type JobMode,
 } from "@/lib/workflows";
@@ -17,6 +24,13 @@ export const maxDuration = 300;
 
 const MAX_BYTES = 12 * 1024 * 1024;
 const MODES: JobMode[] = ["faceswap", "undress", "custom", "video"];
+
+const UNDRESS_CKPTS = [
+  "epicrealism_naturalSinRC1VAE.safetensors",
+  "realisticVisionV60B1_v51VAE.safetensors",
+  "dreamshaper_8.safetensors",
+  "v1-5-pruned-emaonly-fp16.safetensors",
+];
 
 function asUploadFile(value: FormDataEntryValue | null): File | null {
   if (!(value instanceof File) || value.size === 0) return null;
@@ -32,6 +46,10 @@ export async function POST(req: NextRequest) {
   const promptOverride = String(form.get("prompt") || "").trim() || undefined;
   const speech = String(form.get("speech") || "").trim() || undefined;
   const template = String(form.get("template") || "natural") as VideoTemplateId;
+  const bodyTypeRaw = String(form.get("bodyType") || "female");
+  const bodyType: BodyTypeId = isBodyTypeId(bodyTypeRaw)
+    ? bodyTypeRaw
+    : "female";
   const identity = Math.min(
     1,
     Math.max(0.35, Number(form.get("identity") || 0.9) || 0.9),
@@ -69,7 +87,10 @@ export async function POST(req: NextRequest) {
 
   if (mode === "faceswap" && !faceFile) {
     return NextResponse.json(
-      { error: "Face photo required — the face you want swapped onto the source." },
+      {
+        error:
+          "Face photo required — the face you want swapped onto the source.",
+      },
       { status: 400 },
     );
   }
@@ -118,47 +139,68 @@ export async function POST(req: NextRequest) {
       faceUploadedName = faceUploaded.filename;
     }
 
+    const undressCkpt =
+      mode === "undress"
+        ? await resolveCheckpoint(
+            UNDRESS_CKPTS,
+            "v1-5-pruned-emaonly-fp16.safetensors",
+          )
+        : null;
+
     const graph =
       mode === "faceswap" && faceUploadedName
         ? buildFaceSwapPrompt(uploaded.filename, faceUploadedName, {
             restoreVisibility: Math.min(1, Math.max(0.5, identity)),
           })
-        : mode === "video"
-          ? buildVideoPrompt(uploaded.filename, {
-              template,
-              speech,
-              identity,
-              seconds: 5,
-              fps: 8,
-            })
-          : buildImg2ImgPrompt(mode, uploaded.filename, {
+        : mode === "undress"
+          ? buildUndressPrompt(uploaded.filename, {
               promptOverride,
-              identity,
-            });
+              identity: Math.min(identity, 0.85),
+              bodyType,
+              checkpoint: undressCkpt || undefined,
+            })
+          : mode === "video"
+            ? buildVideoPrompt(uploaded.filename, {
+                template,
+                speech,
+                identity,
+                seconds: 5,
+                fps: 8,
+              })
+            : buildImg2ImgPrompt(mode, uploaded.filename, {
+                promptOverride,
+                identity,
+              });
 
     const result = await runPromptToImages(graph, {
       timeoutMs: mode === "video" ? 360_000 : 180_000,
     });
+
+    const bodyLabel = getBodyType(bodyType).label;
 
     return NextResponse.json({
       id: result.promptId,
       status: "completed",
       mode,
       template: mode === "video" ? template : null,
+      bodyType: mode === "undress" ? bodyType : null,
       speech: speech || null,
       identity,
       filename: file.name,
       faceFilename: faceFile?.name ?? null,
       bytes: file.size,
       prompt: promptOverride || null,
+      checkpoint: undressCkpt,
       message:
         mode === "faceswap"
           ? "Face swap finished — donor face applied onto the source photo."
-          : mode === "video"
-            ? tpl?.id === "say"
-              ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
-              : `5s ${tpl?.label || "video"} template ready.`
-            : "Photo job finished with high identity lock.",
+          : mode === "undress"
+            ? `Clothing removed with ${bodyLabel} anatomy under the clothes. Face locked via ReActor.`
+            : mode === "video"
+              ? tpl?.id === "say"
+                ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
+                : `5s ${tpl?.label || "video"} template ready.`
+              : "Photo job finished with high identity lock.",
       comfyConfigured: true,
       promptId: result.promptId,
       mediaKind: result.mediaKind,
@@ -180,8 +222,12 @@ export async function GET() {
       requires: ["photo", "face"],
       engine: "ReActorFaceSwap + inswapper_128 + GFPGAN",
     },
+    undress: {
+      bodyTypes: ["female", "male", "tranny", "cross_dresser"],
+      engine: "img2img undress + body anatomy + ReActor face lock",
+    },
     videoTemplates: ["natural", "blowjob", "say"],
     comfyConfigured: isComfyConfigured(),
-    engine: "comfyui-reactor+identity+svd-templates",
+    engine: "comfyui-reactor+undress-bodytypes+svd",
   });
 }

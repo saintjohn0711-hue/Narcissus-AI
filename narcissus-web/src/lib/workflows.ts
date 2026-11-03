@@ -1,9 +1,17 @@
+import { getBodyType, type BodyTypeId } from "./bodyTypes";
 import { getVideoTemplate, type VideoTemplateId } from "./templates";
 
 export type JobMode = "faceswap" | "undress" | "custom" | "video";
 
 const CKPT_SD15 = "v1-5-pruned-emaonly-fp16.safetensors";
 const CKPT_SVD = "svd_xt.safetensors";
+/** Prefer NSFW-capable realism checkpoint when present on the pod. */
+const CKPT_UNDRESS_CANDIDATES = [
+  "epicrealism_naturalSinRC1VAE.safetensors",
+  "realisticVisionV60B1_v51VAE.safetensors",
+  "dreamshaper_8.safetensors",
+  CKPT_SD15,
+];
 
 const NEGATIVE =
   "child, minor, underage, baby, toddler, teen, different person, face change, identity change, blurry, low quality, deformed, extra limbs, watermark, text";
@@ -12,7 +20,7 @@ const DEFAULT_PROMPTS: Record<Exclude<JobMode, "video">, string> = {
   faceswap:
     "photorealistic adult portrait of the exact same person as the reference, identical face, same eyes nose mouth bone structure, natural skin, studio soft light",
   undress:
-    "photorealistic adult nude edit of the exact same person, identical face preserved perfectly, remove clothing, natural skin, same body identity",
+    "photorealistic adult nude edit of the exact same person, identical face preserved perfectly, completely remove all clothing, natural skin, same pose and framing",
   custom:
     "photorealistic adult photo of the exact same person as the reference, identical face and likeness, natural skin, detailed face",
 };
@@ -27,12 +35,20 @@ export function denoiseForIdentity(
   mode: Exclude<JobMode, "video">,
   identity = 0.85,
 ): number {
+  // Undress needs enough denoise to erase fabric and invent anatomy.
   const base =
-    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.4 : 0.3;
+    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.68 : 0.3;
   const clamped = Math.min(1, Math.max(0.35, identity));
-  // identity 1 → ~55% of base denoise; identity 0.35 → full base
   const factor = 1.35 - clamped; // 0.35..1.0
+  if (mode === "undress") {
+    return Math.max(0.52, Math.min(0.82, base * (0.85 + factor * 0.25)));
+  }
   return Math.max(0.12, Math.min(0.55, base * factor));
+}
+
+export function undressCheckpoint(preferred?: string): string {
+  if (preferred && preferred.trim()) return preferred.trim();
+  return CKPT_UNDRESS_CANDIDATES[0]!;
 }
 
 /**
@@ -109,6 +125,125 @@ export function buildFaceSwapPrompt(
   };
 }
 
+/**
+ * Clothing removal (Deep Undress–style intent):
+ * high denoise img2img with body-type anatomy + ReActor face lock from the upload.
+ * No full-frame ImageBlend (that puts clothes back on).
+ */
+export function buildUndressPrompt(
+  imageName: string,
+  opts?: {
+    seed?: number;
+    promptOverride?: string;
+    identity?: number;
+    denoise?: number;
+    width?: number;
+    height?: number;
+    bodyType?: BodyTypeId;
+    checkpoint?: string;
+  },
+): Record<string, unknown> {
+  const body = getBodyType(opts?.bodyType);
+  const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
+  const identity = opts?.identity ?? 0.75;
+  const denoise = opts?.denoise ?? denoiseForIdentity("undress", identity);
+  const width = opts?.width ?? 768;
+  const height = opts?.height ?? 768;
+  const ckpt = opts?.checkpoint?.trim() || CKPT_SD15;
+
+  const positive = [
+    opts?.promptOverride?.trim() || DEFAULT_PROMPTS.undress,
+    body.anatomyPrompt,
+    "completely remove all clothing and fabric, nude skin only where clothes were",
+    "maintain identical subject placement, camera angle, framing, and perspective",
+    "exact same face as reference photo, preserve facial identity",
+  ].join(", ");
+
+  const negative = [
+    NEGATIVE,
+    body.anatomyNegative,
+    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed",
+  ].join(", ");
+
+  return {
+    "1": {
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: ckpt },
+    },
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: imageName },
+    },
+    "3": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["2", 0],
+        upscale_method: "lanczos",
+        width,
+        height,
+        crop: "disabled",
+      },
+    },
+    "4": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: positive, clip: ["1", 1] },
+    },
+    "5": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: negative, clip: ["1", 1] },
+    },
+    "6": {
+      class_type: "VAEEncode",
+      inputs: { pixels: ["3", 0], vae: ["1", 2] },
+    },
+    "7": {
+      class_type: "KSampler",
+      inputs: {
+        seed,
+        steps: 32,
+        cfg: 6.0,
+        sampler_name: "euler",
+        scheduler: "normal",
+        denoise,
+        model: ["1", 0],
+        positive: ["4", 0],
+        negative: ["5", 0],
+        latent_image: ["6", 0],
+      },
+    },
+    "8": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["7", 0], vae: ["1", 2] },
+    },
+    // Lock the original face onto the undressed body (DeepSwap-class pattern)
+    "9": {
+      class_type: "ReActorFaceSwap",
+      inputs: {
+        enabled: true,
+        input_image: ["8", 0],
+        source_image: ["3", 0],
+        swap_model: "inswapper_128.onnx",
+        facedetection: "retinaface_resnet50",
+        face_restore_model: "GFPGANv1.4.pth",
+        face_restore_visibility: 1,
+        codeformer_weight: 0.5,
+        detect_gender_input: "no",
+        detect_gender_source: "no",
+        input_faces_index: "0",
+        source_faces_index: "0",
+        console_log_level: 1,
+      },
+    },
+    "10": {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `narcissus_undress_${body.id}`,
+        images: ["9", 0],
+      },
+    },
+  };
+}
+
 export function buildImg2ImgPrompt(
   mode: Exclude<JobMode, "video">,
   imageName: string,
@@ -120,8 +255,14 @@ export function buildImg2ImgPrompt(
     width?: number;
     height?: number;
     prefix?: string;
+    bodyType?: BodyTypeId;
+    checkpoint?: string;
   },
 ): Record<string, unknown> {
+  if (mode === "undress") {
+    return buildUndressPrompt(imageName, opts);
+  }
+
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
   const positive =
     `${opts?.promptOverride?.trim() || DEFAULT_PROMPTS[mode]}, exact same face as reference photo, preserve identity`;
