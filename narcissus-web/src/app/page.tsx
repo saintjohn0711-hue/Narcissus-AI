@@ -6,7 +6,14 @@ import {
   preparePhoto,
   type FitMode,
 } from "@/lib/photoPrep";
-import { BODY_TYPES, type BodyTypeId } from "@/lib/bodyTypes";
+import {
+  BODY_TYPES,
+  COCK_SIZES,
+  COCK_STATES,
+  type BodyTypeId,
+  type CockSizeId,
+  type CockStateId,
+} from "@/lib/bodyTypes";
 import {
   VIDEO_TEMPLATES,
   type VideoTemplateId,
@@ -20,6 +27,8 @@ type JobResult = {
   filename: string;
   faceFilename?: string | null;
   bodyType?: BodyTypeId | null;
+  cockState?: CockStateId | null;
+  cockSize?: CockSizeId | null;
   message: string;
   comfyConfigured: boolean;
   mediaKind?: "image" | "video";
@@ -45,6 +54,8 @@ export default function Home() {
   const [speech, setSpeech] = useState("Hey… come closer.");
   const [template, setTemplate] = useState<VideoTemplateId>("blowjob");
   const [bodyType, setBodyType] = useState<BodyTypeId>("female");
+  const [cockState, setCockState] = useState<CockStateId>("hard");
+  const [cockSize, setCockSize] = useState<CockSizeId>("average");
   const [identity, setIdentity] = useState(0.9);
   const [fit, setFit] = useState<FitMode>("contain");
   const [cropX, setCropX] = useState(0.5);
@@ -59,6 +70,7 @@ export default function Home() {
 
   const activeTemplate = VIDEO_TEMPLATES.find((t) => t.id === template)!;
   const activeBody = BODY_TYPES.find((b) => b.id === bodyType)!;
+  const showCockOptions = mode === "undress" && activeBody.needsCock;
 
   const canSubmit = useMemo(() => {
     if (!adultsOk || !file || busy) return false;
@@ -147,6 +159,10 @@ export default function Home() {
       }
       if (mode === "undress") {
         body.set("bodyType", bodyType);
+        if (activeBody.needsCock) {
+          body.set("cockState", cockState);
+          body.set("cockSize", cockSize);
+        }
       }
       if (mode !== "faceswap" && prompt.trim()) {
         body.set("prompt", prompt.trim());
@@ -347,6 +363,53 @@ export default function Home() {
             </fieldset>
           )}
 
+          {showCockOptions && (
+            <>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                  Cock
+                </legend>
+                <div className="flex flex-wrap gap-3">
+                  {COCK_STATES.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCockState(c.id)}
+                      className={`rounded-sm border px-4 py-2 text-sm transition ${
+                        cockState === c.id
+                          ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                          : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                  Size
+                </legend>
+                <div className="flex flex-wrap gap-3">
+                  {COCK_SIZES.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCockSize(c.id)}
+                      className={`rounded-sm border px-4 py-2 text-sm transition ${
+                        cockSize === c.id
+                          ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                          : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </>
+          )}
+
           {mode === "video" && (
             <fieldset className="space-y-3">
               <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
@@ -425,11 +488,13 @@ export default function Home() {
           {mode !== "faceswap" && (
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                Keep original face ({Math.round(identity * 100)}%)
+                {mode === "undress"
+                  ? `Keep face & hair (${Math.round(identity * 100)}%)`
+                  : `Keep original face (${Math.round(identity * 100)}%)`}
               </span>
               <input
                 type="range"
-                min={0.5}
+                min={mode === "undress" ? 0.65 : 0.5}
                 max={1}
                 step={0.01}
                 value={identity}
@@ -437,8 +502,9 @@ export default function Home() {
                 className="w-full accent-[var(--accent)]"
               />
               <p className="text-xs text-[#c4b7a8]">
-                Higher = closer to the uploaded photo. Default is locked high so
-                results match the person.
+                {mode === "undress"
+                  ? "Higher locks face and hairstyle from the upload via ReActor boost. Keep this high."
+                  : "Higher = closer to the uploaded photo. Default is locked high so results match the person."}
               </p>
             </label>
           )}
@@ -492,7 +558,9 @@ export default function Home() {
               <p className="text-[#c4b7a8]">
                 <span className="text-[var(--ink)]">{job.id}</span> · {job.mode}
                 {job.template ? `/${job.template}` : ""}
-                {job.bodyType ? `/${job.bodyType}` : ""} · {job.filename}
+                {job.bodyType ? `/${job.bodyType}` : ""}
+                {job.cockState ? `/${job.cockState}` : ""}
+                {job.cockSize ? `/${job.cockSize}` : ""} · {job.filename}
                 {job.faceFilename ? ` + ${job.faceFilename}` : ""}
               </p>
               <p className="text-[#c4b7a8]">{job.message}</p>

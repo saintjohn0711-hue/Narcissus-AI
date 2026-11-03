@@ -1,4 +1,10 @@
-import { getBodyType, type BodyTypeId } from "./bodyTypes";
+import {
+  anatomyPromptFor,
+  getBodyType,
+  type BodyTypeId,
+  type CockSizeId,
+  type CockStateId,
+} from "./bodyTypes";
 import { getVideoTemplate, type VideoTemplateId } from "./templates";
 
 export type JobMode = "faceswap" | "undress" | "custom" | "video";
@@ -35,14 +41,14 @@ export function denoiseForIdentity(
   mode: Exclude<JobMode, "video">,
   identity = 0.85,
 ): number {
-  // Undress needs enough denoise to erase fabric — but not so high that the
-  // face vanishes (ReActor then returns a black frame).
+  // Undress: enough denoise to erase fabric + invent anatomy, but keep the
+  // head/hair stable enough for ReActor to lock identity.
   const base =
-    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.58 : 0.3;
+    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.55 : 0.3;
   const clamped = Math.min(1, Math.max(0.35, identity));
   const factor = 1.35 - clamped; // 0.35..1.0
   if (mode === "undress") {
-    return Math.max(0.45, Math.min(0.65, base * (0.9 + factor * 0.2)));
+    return Math.max(0.42, Math.min(0.62, base * (0.92 + factor * 0.15)));
   }
   return Math.max(0.12, Math.min(0.55, base * factor));
 }
@@ -141,14 +147,21 @@ export function buildUndressPrompt(
     width?: number;
     height?: number;
     bodyType?: BodyTypeId;
+    cockState?: CockStateId;
+    cockSize?: CockSizeId;
     checkpoint?: string;
     /** When false, skip ReActor (avoids black frames if face was lost). */
     faceLock?: boolean;
   },
 ): Record<string, unknown> {
   const body = getBodyType(opts?.bodyType);
+  const anatomy = anatomyPromptFor(
+    body.id,
+    opts?.cockState,
+    opts?.cockSize,
+  );
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
-  const identity = opts?.identity ?? 0.75;
+  const identity = opts?.identity ?? 0.85;
   const denoise = opts?.denoise ?? denoiseForIdentity("undress", identity);
   const width = opts?.width ?? 768;
   const height = opts?.height ?? 768;
@@ -158,16 +171,20 @@ export function buildUndressPrompt(
 
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.undress,
-    body.anatomyPrompt,
+    anatomy.positive,
     "completely remove all clothing and fabric, nude skin only where clothes were",
     "maintain identical subject placement, camera angle, framing, and perspective",
-    "keep the face clear and visible, exact same face as reference photo",
+    "exact same face as the reference photo, identical eyes nose mouth bone structure",
+    "exact same hairstyle hair color hair length and hairline as the reference photo",
+    "preserve facial identity and hair, photorealistic skin",
   ].join(", ");
 
   const negative = [
     NEGATIVE,
-    body.anatomyNegative,
-    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed, blank, black image, empty frame",
+    anatomy.negative,
+    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed",
+    "blank, black image, empty frame",
+    "different face, different person, different hairstyle, hair cut, bald, wrong hair color, face morph",
   ].join(", ");
 
   const graph: Record<string, unknown> = {
@@ -205,8 +222,8 @@ export function buildUndressPrompt(
       class_type: "KSampler",
       inputs: {
         seed,
-        steps: 30,
-        cfg: 5.5,
+        steps: 32,
+        cfg: body.needsCock ? 6.5 : 5.5,
         sampler_name: "euler",
         scheduler: "normal",
         denoise,
@@ -223,10 +240,33 @@ export function buildUndressPrompt(
   };
 
   if (faceLock) {
-    // Lock original face onto undressed body. If the face was destroyed by
-    // denoise, ReActor can emit a black frame — caller should retry without lock.
+    // Stronger identity path: Options + FaceBoost → FaceSwapOpt → RestoreFace
     graph["9"] = {
-      class_type: "ReActorFaceSwap",
+      class_type: "ReActorOptions",
+      inputs: {
+        input_faces_order: "large-small",
+        input_faces_index: "0",
+        detect_gender_input: "no",
+        source_faces_order: "large-small",
+        source_faces_index: "0",
+        detect_gender_source: "no",
+        console_log_level: 1,
+        restore_swapped_only: true,
+      },
+    };
+    graph["11"] = {
+      class_type: "ReActorFaceBoost",
+      inputs: {
+        enabled: true,
+        boost_model: "GFPGANv1.4.pth",
+        interpolation: "Bicubic",
+        visibility: 1,
+        codeformer_weight: 0.4,
+        restore_with_main_after: true,
+      },
+    };
+    graph["12"] = {
+      class_type: "ReActorFaceSwapOpt",
       inputs: {
         enabled: true,
         input_image: ["8", 0],
@@ -235,19 +275,26 @@ export function buildUndressPrompt(
         facedetection: "retinaface_resnet50",
         face_restore_model: "GFPGANv1.4.pth",
         face_restore_visibility: 1,
-        codeformer_weight: 0.5,
-        detect_gender_input: "no",
-        detect_gender_source: "no",
-        input_faces_index: "0",
-        source_faces_index: "0",
-        console_log_level: 1,
+        codeformer_weight: 0.4,
+        options: ["9", 0],
+        face_boost: ["11", 0],
       },
     };
-    graph["10"] = {
+    graph["13"] = {
+      class_type: "ReActorRestoreFace",
+      inputs: {
+        image: ["12", 0],
+        facedetection: "retinaface_resnet50",
+        model: "GFPGANv1.4.pth",
+        visibility: 0.9,
+        codeformer_weight: 0.35,
+      },
+    };
+    graph["15"] = {
       class_type: "SaveImage",
       inputs: {
         filename_prefix: `narcissus_undress_${body.id}_${stamp}`,
-        images: ["9", 0],
+        images: ["13", 0],
       },
     };
   } else {

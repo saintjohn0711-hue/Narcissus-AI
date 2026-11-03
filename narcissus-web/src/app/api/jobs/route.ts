@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getBodyType,
+  getCockSize,
+  getCockState,
   isBodyTypeId,
+  isCockSizeId,
+  isCockStateId,
   type BodyTypeId,
+  type CockSizeId,
+  type CockStateId,
 } from "@/lib/bodyTypes";
 import {
   fetchImageBytes,
@@ -52,6 +58,14 @@ export async function POST(req: NextRequest) {
   const bodyType: BodyTypeId = isBodyTypeId(bodyTypeRaw)
     ? bodyTypeRaw
     : "female";
+  const cockStateRaw = String(form.get("cockState") || "hard");
+  const cockState: CockStateId = isCockStateId(cockStateRaw)
+    ? cockStateRaw
+    : "hard";
+  const cockSizeRaw = String(form.get("cockSize") || "average");
+  const cockSize: CockSizeId = isCockSizeId(cockSizeRaw)
+    ? cockSizeRaw
+    : "average";
   const identity = Math.min(
     1,
     Math.max(0.35, Number(form.get("identity") || 0.9) || 0.9),
@@ -157,8 +171,10 @@ export async function POST(req: NextRequest) {
         : mode === "undress"
           ? buildUndressPrompt(uploaded.filename, {
               promptOverride,
-              identity: Math.min(identity, 0.85),
+              identity: Math.max(identity, 0.82),
               bodyType,
+              cockState,
+              cockSize,
               checkpoint: undressCkpt || undefined,
               faceLock: true,
             })
@@ -190,11 +206,13 @@ export async function POST(req: NextRequest) {
           result = await runPromptToImages(
             buildUndressPrompt(uploaded.filename, {
               promptOverride,
-              identity: Math.min(identity, 0.85),
+              identity: Math.max(identity, 0.82),
               bodyType,
+              cockState,
+              cockSize,
               checkpoint: undressCkpt || undefined,
               faceLock: false,
-              denoise: 0.55,
+              denoise: 0.52,
             }),
             { timeoutMs: 180_000 },
           );
@@ -204,7 +222,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const bodyLabel = getBodyType(bodyType).label;
+    const bodyMeta = getBodyType(bodyType);
+    const bodyLabel = bodyMeta.label;
+    const cockNote =
+      bodyMeta.needsCock
+        ? ` · ${getCockState(cockState).label} ${getCockSize(cockSize).label}`
+        : "";
 
     return NextResponse.json({
       id: result.promptId,
@@ -212,6 +235,8 @@ export async function POST(req: NextRequest) {
       mode,
       template: mode === "video" ? template : null,
       bodyType: mode === "undress" ? bodyType : null,
+      cockState: mode === "undress" && bodyMeta.needsCock ? cockState : null,
+      cockSize: mode === "undress" && bodyMeta.needsCock ? cockSize : null,
       speech: speech || null,
       identity,
       filename: file.name,
@@ -225,8 +250,8 @@ export async function POST(req: NextRequest) {
           ? "Face swap finished — donor face applied onto the source photo."
           : mode === "undress"
             ? faceLockFallback
-              ? `Clothing removed with ${bodyLabel} anatomy (face-lock skipped — previous frame was blank).`
-              : `Clothing removed with ${bodyLabel} anatomy under the clothes. Face locked via ReActor.`
+              ? `Clothing removed with ${bodyLabel}${cockNote} anatomy (face-lock skipped — previous frame was blank).`
+              : `Clothing removed with ${bodyLabel}${cockNote} anatomy. Face + hair locked via ReActor boost.`
             : mode === "video"
               ? tpl?.id === "say"
                 ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
@@ -255,7 +280,9 @@ export async function GET() {
     },
     undress: {
       bodyTypes: ["female", "male", "tranny", "cross_dresser"],
-      engine: "img2img undress + body anatomy + ReActor face lock",
+      cockStates: ["hard", "soft"],
+      cockSizes: ["small", "average", "large", "huge"],
+      engine: "img2img undress + cock options + ReActor face/hair boost",
     },
     videoTemplates: ["natural", "blowjob", "say"],
     comfyConfigured: isComfyConfigured(),

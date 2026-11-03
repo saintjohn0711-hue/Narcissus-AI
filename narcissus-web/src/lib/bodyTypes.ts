@@ -1,14 +1,31 @@
 /** Body presentation for clothing removal — drives anatomy under the clothes. */
 export type BodyTypeId = "female" | "male" | "tranny" | "cross_dresser";
 
+export type CockStateId = "hard" | "soft";
+export type CockSizeId = "small" | "average" | "large" | "huge";
+
 export type BodyType = {
   id: BodyTypeId;
   label: string;
   blurb: string;
-  /** Positive prompt fragment describing nude anatomy after clothing removal */
+  /** Needs visible penis after undress */
+  needsCock: boolean;
+  /** Base anatomy without cock state/size (those layer on when needsCock) */
   anatomyPrompt: string;
-  /** Extra negatives so the wrong sex characteristics don't leak in */
   anatomyNegative: string;
+};
+
+export type CockState = {
+  id: CockStateId;
+  label: string;
+  prompt: string;
+  negative: string;
+};
+
+export type CockSize = {
+  id: CockSizeId;
+  label: string;
+  prompt: string;
 };
 
 export const BODY_TYPES: BodyType[] = [
@@ -16,6 +33,7 @@ export const BODY_TYPES: BodyType[] = [
     id: "female",
     label: "Female",
     blurb: "Cis female body under the clothes.",
+    needsCock: false,
     anatomyPrompt:
       "adult woman nude body, natural female breasts, nipples, vagina, vulva, feminine hips and waist, no penis, no testicles",
     anatomyNegative:
@@ -25,28 +43,71 @@ export const BODY_TYPES: BodyType[] = [
     id: "male",
     label: "Male",
     blurb: "Cis male body under the clothes.",
+    needsCock: true,
     anatomyPrompt:
-      "adult man nude body, male chest, flat pectorals, penis, cock, testicles, masculine shoulders, no breasts, no vagina",
+      "adult man nude body, male chest, flat pectorals, clearly visible penis and testicles between the legs, masculine shoulders, no breasts, no vagina",
     anatomyNegative:
-      "female breasts, boobs, cleavage, vagina, vulva, pussy, feminine hips, lipstick, shemale, futa",
+      "female breasts, boobs, cleavage, vagina, vulva, pussy, feminine hips, lipstick, shemale, futa, crotch covered, no penis, missing penis",
   },
   {
     id: "tranny",
     label: "Tranny",
-    blurb: "Feminine presentation with breasts and penis.",
+    blurb: "Feminine body with breasts and a visible penis.",
+    needsCock: true,
     anatomyPrompt:
-      "adult transgender woman nude body, feminine face and body, natural female breasts, nipples, penis, cock, testicles, soft feminine hips, no vagina",
+      "adult transgender woman nude body, feminine face and body, natural female breasts, nipples, soft feminine hips, clearly visible penis and testicles, shemale, no vagina",
     anatomyNegative:
-      "vagina, vulva, pussy, flat male chest only, no breasts, cis man only, cis woman only",
+      "vagina, vulva, pussy, flat male chest only, no breasts, cis man only, cis woman only, crotch covered, no penis, missing penis, smoothed crotch",
   },
   {
     id: "cross_dresser",
     label: "Cross Dresser",
-    blurb: "Male body under feminine clothing (clothes were the costume).",
+    blurb: "Male body under feminine clothing — penis visible once undressed.",
+    needsCock: true,
     anatomyPrompt:
-      "adult male crossdresser now nude, male body underneath feminine clothes removed, flat male chest, penis, cock, testicles, masculine body, no female breasts, no vagina",
+      "adult male crossdresser now nude, male body underneath feminine clothes removed, flat male chest, clearly visible penis and testicles between the legs, masculine body, no female breasts, no vagina",
     anatomyNegative:
-      "female breasts, boobs, vagina, vulva, pussy, feminine nude woman, shemale breasts with penis",
+      "female breasts, boobs, vagina, vulva, pussy, feminine nude woman, shemale breasts with penis, crotch covered, no penis, missing penis, smoothed crotch",
+  },
+];
+
+export const COCK_STATES: CockState[] = [
+  {
+    id: "hard",
+    label: "Hard",
+    prompt:
+      "erect hard cock standing up, fully erect penis, rigid shaft, aroused",
+    negative: "flaccid, soft penis, limp dick, soft cock hanging down",
+  },
+  {
+    id: "soft",
+    label: "Soft",
+    prompt:
+      "soft flaccid penis hanging naturally, limp cock, unerect, relaxed genitals",
+    negative: "erect, hard cock, erection, stiff penis, aroused",
+  },
+];
+
+export const COCK_SIZES: CockSize[] = [
+  {
+    id: "small",
+    label: "Small",
+    prompt: "small penis, short thin cock",
+  },
+  {
+    id: "average",
+    label: "Average",
+    prompt: "average sized penis, normal cock proportions",
+  },
+  {
+    id: "large",
+    label: "Large",
+    prompt: "large thick penis, big cock, heavy shaft",
+  },
+  {
+    id: "huge",
+    label: "Huge",
+    prompt: "huge very large thick penis, massive cock, oversized shaft",
   },
 ];
 
@@ -56,4 +117,43 @@ export function getBodyType(id: string | undefined): BodyType {
 
 export function isBodyTypeId(id: string): id is BodyTypeId {
   return BODY_TYPES.some((b) => b.id === id);
+}
+
+export function getCockState(id: string | undefined): CockState {
+  return COCK_STATES.find((c) => c.id === id) || COCK_STATES[0]!;
+}
+
+export function isCockStateId(id: string): id is CockStateId {
+  return COCK_STATES.some((c) => c.id === id);
+}
+
+export function getCockSize(id: string | undefined): CockSize {
+  return COCK_SIZES.find((c) => c.id === id) || COCK_SIZES[1]!;
+}
+
+export function isCockSizeId(id: string): id is CockSizeId {
+  return COCK_SIZES.some((c) => c.id === id);
+}
+
+/** Full anatomy block including optional cock state/size. */
+export function anatomyPromptFor(
+  bodyTypeId: BodyTypeId,
+  cockStateId?: CockStateId,
+  cockSizeId?: CockSizeId,
+): { positive: string; negative: string } {
+  const body = getBodyType(bodyTypeId);
+  if (!body.needsCock) {
+    return { positive: body.anatomyPrompt, negative: body.anatomyNegative };
+  }
+  const state = getCockState(cockStateId);
+  const size = getCockSize(cockSizeId);
+  return {
+    positive: [
+      body.anatomyPrompt,
+      size.prompt,
+      state.prompt,
+      "genitals fully visible and detailed, penis in frame, not cropped, not covered",
+    ].join(", "),
+    negative: [body.anatomyNegative, state.negative].join(", "),
+  };
 }
