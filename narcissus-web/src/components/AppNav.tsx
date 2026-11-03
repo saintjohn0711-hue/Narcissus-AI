@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/art-of-x", label: "Art of X" },
   { href: "/art-of-x/partners", label: "Partners" },
   { href: "/art-of-x/stories", label: "Stories" },
+  { href: "/art-of-x/chat", label: "AI chat" },
 ];
 
 export function AppNav() {
@@ -19,7 +20,9 @@ export function AppNav() {
         const active =
           link.href === "/"
             ? pathname === "/"
-            : pathname === link.href || pathname.startsWith(`${link.href}/`);
+            : link.href === "/art-of-x"
+              ? pathname === "/art-of-x"
+              : pathname === link.href || pathname.startsWith(`${link.href}/`);
         return (
           <Link
             key={link.href}

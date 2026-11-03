@@ -1,209 +1,524 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import {
+  ALL_KINKS,
+  DONE_ACTS,
+  DYN_TAGS,
+  arkDemoRoster,
   emptyPartner,
+  fileToPartnerPhoto,
+  loadPartners,
+  normalizeKinks,
+  savePartners,
   type PartnerRecord,
-  type PartnerStatus,
+  type PersonGender,
+  type PersonType,
 } from "@/lib/artOfX";
 
-const STORAGE_KEY = "narcissus.artOfX.partners";
-
-const STATUSES: PartnerStatus[] = [
-  "active",
-  "paused",
-  "ended",
-  "fantasy",
-  "one_night",
-];
+const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
+const GENDERS: PersonGender[] = ["woman", "man", "trans", "couple"];
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
-  const [name, setName] = useState("");
-  const [status, setStatus] = useState<PartnerStatus>("active");
-  const [kinks, setKinks] = useState("");
-  const [boundaries, setBoundaries] = useState("");
-  const [notes, setNotes] = useState("");
+  const [filter, setFilter] = useState<"all" | PersonType>("all");
+  const [editing, setEditing] = useState<PartnerRecord | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setPartners(JSON.parse(raw) as PartnerRecord[]);
-    } catch {
-      /* ignore */
-    }
+    setPartners(loadPartners());
     setReady(true);
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(partners));
+    savePartners(partners);
   }, [partners, ready]);
 
-  function onAdd(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    const p = emptyPartner(name.trim());
-    p.status = status;
-    p.kinks = kinks
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    p.boundaries = boundaries
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    p.bodyNotes = notes.trim() || undefined;
-    setPartners((prev) => [p, ...prev]);
-    setName("");
-    setKinks("");
-    setBoundaries("");
-    setNotes("");
+  const visible = useMemo(
+    () =>
+      filter === "all" ? partners : partners.filter((p) => p.type === filter),
+    [partners, filter],
+  );
+
+  function openNew() {
+    setEditing(emptyPartner(""));
   }
 
-  function remove(id: string) {
+  function openEdit(p: PartnerRecord) {
+    setEditing({
+      ...p,
+      kinks: normalizeKinks(p.kinks),
+      photos: [...(p.photos || [])],
+      doneActs: [...(p.doneActs || [])],
+      dynTags: [...(p.dynTags || [])],
+    });
+  }
+
+  function persistEditor(e: FormEvent) {
+    e.preventDefault();
+    if (!editing || !editing.name.trim()) return;
+    const next = {
+      ...editing,
+      name: editing.name.trim(),
+      updatedAt: new Date().toISOString(),
+    };
+    setPartners((prev) => {
+      const i = prev.findIndex((p) => p.id === next.id);
+      if (i >= 0) {
+        const copy = [...prev];
+        copy[i] = next;
+        return copy;
+      }
+      return [next, ...prev];
+    });
+    setEditing(null);
+  }
+
+  function remove(id: number) {
     setPartners((prev) => prev.filter((p) => p.id !== id));
+    if (editing?.id === id) setEditing(null);
+  }
+
+  function toggleAct(act: string) {
+    if (!editing) return;
+    const has = editing.doneActs.includes(act);
+    setEditing({
+      ...editing,
+      doneActs: has
+        ? editing.doneActs.filter((a) => a !== act)
+        : [...editing.doneActs, act],
+    });
+  }
+
+  function toggleKink(tag: string) {
+    if (!editing) return;
+    const has = editing.kinks.some((k) => k.tag === tag);
+    setEditing({
+      ...editing,
+      kinks: has
+        ? editing.kinks.filter((k) => k.tag !== tag)
+        : [
+            ...editing.kinks,
+            { tag, role: "Both", status: "Like", intensity: 6 },
+          ],
+    });
+  }
+
+  function toggleDyn(tag: string) {
+    if (!editing) return;
+    const has = editing.dynTags.includes(tag);
+    setEditing({
+      ...editing,
+      dynTags: has
+        ? editing.dynTags.filter((t) => t !== tag)
+        : [...editing.dynTags, tag],
+    });
+  }
+
+  async function onPhoto(files: FileList | null) {
+    if (!editing || !files?.length) return;
+    const next = [...editing.photos];
+    for (const file of Array.from(files).slice(0, 4)) {
+      if (next.length >= 6) break;
+      next.push(await fileToPartnerPhoto(file));
+    }
+    setEditing({ ...editing, photos: next });
+  }
+
+  function loadDemo() {
+    if (
+      partners.length &&
+      !confirm("Replace current partners with ArkOfX demo people?")
+    ) {
+      return;
+    }
+    setPartners(arkDemoRoster());
   }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
       <AppNav />
-      <header className="mb-10">
-        <h1
-          className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Partner history
-        </h1>
-        <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          Track who you&apos;ve been with — chemistry, kinks, boundaries, body
-          notes. Stored locally until Art of X sync lands.
-        </p>
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1
+            className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
+            style={{ fontFamily: "var(--font-display), serif" }}
+          >
+            Partners
+          </h1>
+          <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
+            Sex tracker — who, what you&apos;ve done, kinks, dynamics, photos.
+            Stored on this device.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={loadDemo}
+            className="rounded-sm border border-[var(--line)] px-3 py-2 text-xs text-[#c4b7a8]"
+          >
+            Load Ark demo people
+          </button>
+          <button
+            type="button"
+            onClick={openNew}
+            className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
+          >
+            Add partner
+          </button>
+        </div>
       </header>
 
-      <form
-        onSubmit={onAdd}
-        className="mb-10 grid gap-4 border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-6"
-      >
-        <label className="grid gap-2 text-sm">
-          <span className="uppercase tracking-[0.16em] text-[var(--ink)]">
-            Name
-          </span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
-            placeholder="Partner name"
-          />
-        </label>
-        <fieldset className="space-y-2">
-          <legend className="text-sm uppercase tracking-[0.16em] text-[var(--ink)]">
-            Status
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {STATUSES.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStatus(s)}
-                className={`rounded-sm border px-3 py-1.5 text-sm ${
-                  status === s
-                    ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                    : "border-[var(--line)] text-[#c4b7a8]"
-                }`}
-              >
-                {s.replace("_", " ")}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <label className="grid gap-2 text-sm">
-          <span className="uppercase tracking-[0.16em] text-[var(--ink)]">
-            Kinks (comma-separated)
-          </span>
-          <input
-            value={kinks}
-            onChange={(e) => setKinks(e.target.value)}
-            className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
-          />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span className="uppercase tracking-[0.16em] text-[var(--ink)]">
-            Boundaries (comma-separated)
-          </span>
-          <input
-            value={boundaries}
-            onChange={(e) => setBoundaries(e.target.value)}
-            className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
-          />
-        </label>
-        <label className="grid gap-2 text-sm">
-          <span className="uppercase tracking-[0.16em] text-[var(--ink)]">
-            Body / voice notes
-          </span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
-          />
-        </label>
-        <button
-          type="submit"
-          className="justify-self-start rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
+      <div className="mb-6 flex flex-wrap gap-2">
+        {(["all", ...TYPES] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            className={`rounded-sm border px-3 py-1.5 text-sm ${
+              filter === f
+                ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                : "border-[var(--line)] text-[#c4b7a8]"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {editing && (
+        <form
+          onSubmit={persistEditor}
+          className="mb-10 grid gap-4 border border-[var(--accent)]/40 bg-[var(--bg-elevated)]/60 p-6"
         >
-          Add partner
-        </button>
-      </form>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2
+              className="text-2xl text-[var(--ink)]"
+              style={{ fontFamily: "var(--font-display), serif" }}
+            >
+              {partners.some((p) => p.id === editing.id) ? "Edit" : "New"}{" "}
+              partner
+            </h2>
+            <button
+              type="button"
+              onClick={() => setEditing(null)}
+              className="text-xs text-[#c4b7a8]"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <label className="grid gap-2 text-sm">
+            <span className="uppercase tracking-[0.16em]">Name</span>
+            <input
+              required
+              value={editing.name}
+              onChange={(e) =>
+                setEditing({ ...editing, name: e.target.value })
+              }
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <fieldset className="space-y-2">
+              <legend className="text-sm uppercase tracking-[0.16em]">
+                Type
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {TYPES.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setEditing({ ...editing, type: t })}
+                    className={`rounded-sm border px-3 py-1.5 text-sm ${
+                      editing.type === t
+                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <fieldset className="space-y-2">
+              <legend className="text-sm uppercase tracking-[0.16em]">
+                Gender
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {GENDERS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() =>
+                      setEditing({
+                        ...editing,
+                        gender: g,
+                        isCouple: g === "couple",
+                      })
+                    }
+                    className={`rounded-sm border px-3 py-1.5 text-sm ${
+                      editing.gender === g
+                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+
+          <label className="grid gap-2 text-sm">
+            <span className="uppercase tracking-[0.16em]">Looks</span>
+            <input
+              value={editing.looks}
+              onChange={(e) =>
+                setEditing({ ...editing, looks: e.target.value })
+              }
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm">
+            <span className="uppercase tracking-[0.16em]">
+              Sexual history with them
+            </span>
+            <textarea
+              value={editing.history}
+              onChange={(e) =>
+                setEditing({ ...editing, history: e.target.value })
+              }
+              rows={3}
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+              placeholder="What you've done, how it felt, ongoing dynamics…"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm">
+            <span className="uppercase tracking-[0.16em]">Notes</span>
+            <textarea
+              value={editing.notes}
+              onChange={(e) =>
+                setEditing({ ...editing, notes: e.target.value })
+              }
+              rows={2}
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+            />
+          </label>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Types of sex / acts done
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {DONE_ACTS.map((act) => {
+                const on = editing.doneActs.includes(act);
+                return (
+                  <button
+                    key={act}
+                    type="button"
+                    onClick={() => toggleAct(act)}
+                    className={`rounded-sm border px-2.5 py-1 text-xs ${
+                      on
+                        ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                  >
+                    {act}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Kinks
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {ALL_KINKS.map((tag) => {
+                const on = editing.kinks.some((k) => k.tag === tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleKink(tag)}
+                    className={`rounded-sm border px-2.5 py-1 text-xs ${
+                      on
+                        ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Dynamics
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {DYN_TAGS.map((tag) => {
+                const on = editing.dynTags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleDyn(tag)}
+                    className={`rounded-sm border px-2.5 py-1 text-xs ${
+                      on
+                        ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              value={editing.dynamics}
+              onChange={(e) =>
+                setEditing({ ...editing, dynamics: e.target.value })
+              }
+              placeholder="Dynamics summary…"
+              className="prompt-field mt-2 w-full rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+            />
+          </fieldset>
+
+          <fieldset className="space-y-3">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Photos
+            </legend>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => onPhoto(e.target.files)}
+              className="text-sm text-[#c4b7a8] file:mr-3 file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-sm file:text-[#1a120c]"
+            />
+            {editing.photos.length > 0 && (
+              <div className="flex flex-wrap gap-3">
+                {editing.photos.map((src, i) => (
+                  <div key={i} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt=""
+                      className="h-24 w-24 object-cover border border-[var(--line)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditing({
+                          ...editing,
+                          photos: editing.photos.filter((_, j) => j !== i),
+                        })
+                      }
+                      className="absolute right-1 top-1 bg-black/70 px-1.5 text-xs text-[var(--danger)]"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </fieldset>
+
+          <button
+            type="submit"
+            className="justify-self-start rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
+          >
+            Save partner
+          </button>
+        </form>
+      )}
 
       <div className="space-y-4">
-        {partners.length === 0 && (
-          <p className="text-sm text-[#c4b7a8]">No partners yet.</p>
+        {visible.length === 0 && (
+          <p className="text-sm text-[#c4b7a8]">
+            No partners yet. Add one or load Ark demo people.
+          </p>
         )}
-        {partners.map((p) => (
+        {visible.map((p) => (
           <article
             key={p.id}
             className="border border-[var(--line)] bg-[var(--bg-elevated)]/30 p-5"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2
-                  className="text-2xl text-[var(--ink)]"
-                  style={{ fontFamily: "var(--font-display), serif" }}
-                >
-                  {p.name}
-                </h2>
-                <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                  {p.status.replace("_", " ")}
-                </p>
+            <div className="flex flex-wrap gap-4">
+              {p.photos[0] && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.photos[0]}
+                  alt=""
+                  className="h-24 w-24 object-cover border border-[var(--line)]"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2
+                      className="text-2xl text-[var(--ink)]"
+                      style={{ fontFamily: "var(--font-display), serif" }}
+                    >
+                      {p.name}
+                    </h2>
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
+                      {p.type} · {p.gender}
+                      {p.doneActs.length
+                        ? ` · ${p.doneActs.length} acts logged`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-3 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(p)}
+                      className="text-[var(--accent-strong)]"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(p.id)}
+                      className="text-[var(--danger)]"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+                {p.looks && (
+                  <p className="mt-2 text-sm text-[#c4b7a8]">{p.looks}</p>
+                )}
+                {p.history && (
+                  <p className="mt-2 text-sm leading-relaxed text-[#f7f1e8]/90]">
+                    {p.history}
+                  </p>
+                )}
+                {p.doneActs.length > 0 && (
+                  <p className="mt-2 text-xs text-[#c4b7a8]">
+                    <span className="text-[var(--ink)]">Acts:</span>{" "}
+                    {p.doneActs.join(" · ")}
+                  </p>
+                )}
+                {p.kinks.length > 0 && (
+                  <p className="mt-1 text-xs text-[#c4b7a8]">
+                    <span className="text-[var(--ink)]">Kinks:</span>{" "}
+                    {normalizeKinks(p.kinks)
+                      .map((k) => k.tag)
+                      .join(" · ")}
+                  </p>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => remove(p.id)}
-                className="text-xs text-[var(--danger)]"
-              >
-                Remove
-              </button>
             </div>
-            {p.kinks.length > 0 && (
-              <p className="mt-3 text-sm text-[#c4b7a8]">
-                <span className="text-[var(--ink)]">Kinks:</span>{" "}
-                {p.kinks.join(", ")}
-              </p>
-            )}
-            {p.boundaries.length > 0 && (
-              <p className="mt-1 text-sm text-[#c4b7a8]">
-                <span className="text-[var(--ink)]">Boundaries:</span>{" "}
-                {p.boundaries.join(", ")}
-              </p>
-            )}
-            {p.bodyNotes && (
-              <p className="mt-2 text-sm leading-relaxed text-[#c4b7a8]">
-                {p.bodyNotes}
-              </p>
-            )}
           </article>
         ))}
       </div>
