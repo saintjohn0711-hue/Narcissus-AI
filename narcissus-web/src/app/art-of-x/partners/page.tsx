@@ -20,6 +20,7 @@ import {
   type PartnerRecord,
   type PersonType,
 } from "@/lib/artOfX";
+import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
 
 const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
 
@@ -27,6 +28,10 @@ export default function PartnersPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [filter, setFilter] = useState<"all" | PersonType>("all");
   const [editing, setEditing] = useState<PartnerRecord | null>(null);
+  /** Photo indexes chosen as sources for “Pull looks” */
+  const [looksFromIdx, setLooksFromIdx] = useState<number[]>([]);
+  const [pullingLooks, setPullingLooks] = useState(false);
+  const [looksNote, setLooksNote] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -47,17 +52,22 @@ export default function PartnersPage() {
 
   function openNew() {
     setEditing(emptyPartner(""));
+    setLooksFromIdx([]);
+    setLooksNote(null);
   }
 
   function openEdit(p: PartnerRecord) {
+    const main = p.mainPhotoIndex ?? 0;
     setEditing({
       ...p,
       kinks: normalizeKinks(p.kinks),
       photos: [...(p.photos || [])],
-      mainPhotoIndex: p.mainPhotoIndex ?? 0,
+      mainPhotoIndex: main,
       doneActs: [...(p.doneActs || [])],
       dynTags: [...(p.dynTags || [])],
     });
+    setLooksFromIdx(p.photos?.length ? [main] : []);
+    setLooksNote(null);
   }
 
   function persistEditor(e: FormEvent) {
@@ -78,11 +88,17 @@ export default function PartnersPage() {
       return [next, ...prev];
     });
     setEditing(null);
+    setLooksFromIdx([]);
+    setLooksNote(null);
   }
 
   function remove(id: number) {
     setPartners((prev) => prev.filter((p) => p.id !== id));
-    if (editing?.id === id) setEditing(null);
+    if (editing?.id === id) {
+      setEditing(null);
+      setLooksFromIdx([]);
+      setLooksNote(null);
+    }
   }
 
   function toggleAct(act: string) {
@@ -142,12 +158,29 @@ export default function PartnersPage() {
       photos: next,
       mainPhotoIndex: hadNone ? 0 : editing.mainPhotoIndex,
     });
+    if (hadNone) setLooksFromIdx([0]);
+    else {
+      const added = Array.from(
+        { length: next.length - editing.photos.length },
+        (_, i) => editing.photos.length + i,
+      );
+      setLooksFromIdx((prev) => [...new Set([...prev, ...added])]);
+    }
     if (input) input.value = "";
   }
 
   function setMainPhoto(index: number) {
     if (!editing) return;
     setEditing(withMainPhoto(editing, index));
+  }
+
+  function toggleLooksSource(index: number) {
+    setLooksFromIdx((prev) =>
+      prev.includes(index)
+        ? prev.filter((i) => i !== index)
+        : [...prev, index].sort((a, b) => a - b),
+    );
+    setLooksNote(null);
   }
 
   function removePhoto(index: number) {
@@ -159,6 +192,45 @@ export default function PartnersPage() {
     if (photos.length === 0) mainPhotoIndex = 0;
     else mainPhotoIndex = Math.min(mainPhotoIndex, photos.length - 1);
     setEditing({ ...editing, photos, mainPhotoIndex });
+    setLooksFromIdx((prev) =>
+      prev
+        .filter((i) => i !== index)
+        .map((i) => (i > index ? i - 1 : i))
+        .filter((i) => i < photos.length),
+    );
+  }
+
+  async function pullLooks() {
+    if (!editing || !looksFromIdx.length) {
+      setLooksNote("Choose one or more photos below first.");
+      return;
+    }
+    const urls = looksFromIdx
+      .map((i) => editing.photos[i])
+      .filter(Boolean);
+    if (!urls.length) {
+      setLooksNote("Chosen photos are missing — pick again.");
+      return;
+    }
+    const gender = editing.gender;
+    const name = editing.name;
+    setPullingLooks(true);
+    setLooksNote(null);
+    try {
+      const result = await pullLooksFromPhotos(urls, { gender, name });
+      setEditing((prev) => (prev ? { ...prev, looks: result.looks } : prev));
+      setLooksNote(
+        result.source === "vision"
+          ? "Looks filled from chosen photo(s) via vision."
+          : "Looks draft from chosen photo(s) — edit as needed. Add a vision API key for sharper descriptions.",
+      );
+    } catch (err) {
+      setLooksNote(
+        err instanceof Error ? err.message : "Could not pull looks from photos.",
+      );
+    } finally {
+      setPullingLooks(false);
+    }
   }
 
   function loadDemo() {
@@ -237,7 +309,11 @@ export default function PartnersPage() {
             </h2>
             <button
               type="button"
-              onClick={() => setEditing(null)}
+              onClick={() => {
+                setEditing(null);
+                setLooksFromIdx([]);
+                setLooksNote(null);
+              }}
               className="text-xs text-[#c4b7a8]"
             >
               Cancel
@@ -301,6 +377,7 @@ export default function PartnersPage() {
               <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
                 {editing.photos.map((src, i) => {
                   const isMain = (editing.mainPhotoIndex ?? 0) === i;
+                  const forLooks = looksFromIdx.includes(i);
                   return (
                     <div key={i} className="relative">
                       <button
@@ -327,15 +404,28 @@ export default function PartnersPage() {
                       >
                         ×
                       </button>
-                      <p
-                        className={`mt-1 text-center text-[10px] uppercase tracking-wide ${
-                          isMain
-                            ? "text-[var(--accent-strong)]"
-                            : "text-[#c4b7a8]"
-                        }`}
-                      >
-                        {isMain ? "Main" : "Set main"}
-                      </p>
+                      <div className="mt-1 space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => setMainPhoto(i)}
+                          className={`w-full text-center text-[10px] uppercase tracking-wide ${
+                            isMain
+                              ? "text-[var(--accent-strong)]"
+                              : "text-[#c4b7a8]"
+                          }`}
+                        >
+                          {isMain ? "Main" : "Set main"}
+                        </button>
+                        <label className="flex cursor-pointer items-center justify-center gap-1 text-[10px] text-[#c4b7a8]">
+                          <input
+                            type="checkbox"
+                            checked={forLooks}
+                            onChange={() => toggleLooksSource(i)}
+                            className="accent-[var(--accent)]"
+                          />
+                          For looks
+                        </label>
+                      </div>
                     </div>
                   );
                 })}
@@ -406,16 +496,35 @@ export default function PartnersPage() {
             </fieldset>
           </div>
 
-          <label className="grid gap-2 text-sm">
-            <span className="uppercase tracking-[0.16em]">Looks</span>
+          <div className="grid gap-2 text-sm">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <span className="uppercase tracking-[0.16em]">Looks</span>
+              <button
+                type="button"
+                onClick={pullLooks}
+                disabled={pullingLooks || !looksFromIdx.length}
+                className="rounded-sm border border-[var(--accent)]/60 px-3 py-1.5 text-xs uppercase tracking-wide text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {pullingLooks
+                  ? "Pulling…"
+                  : `Pull looks from ${looksFromIdx.length || 0} photo${
+                      looksFromIdx.length === 1 ? "" : "s"
+                    }`}
+              </button>
+            </div>
             <input
               value={editing.looks}
-              onChange={(e) =>
-                setEditing({ ...editing, looks: e.target.value })
-              }
+              onChange={(e) => {
+                setEditing({ ...editing, looks: e.target.value });
+                setLooksNote(null);
+              }}
+              placeholder="Hair, build, style — or pull from chosen photos"
               className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
             />
-          </label>
+            {looksNote && (
+              <p className="text-xs text-[#c4b7a8]">{looksNote}</p>
+            )}
+          </div>
 
           <label className="grid gap-2 text-sm">
             <span className="uppercase tracking-[0.16em]">
