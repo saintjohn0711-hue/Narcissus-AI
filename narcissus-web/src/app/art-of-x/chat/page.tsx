@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import {
   displayName,
+  genderLabel,
   loadChats,
   loadPartners,
   mainPhoto,
@@ -117,7 +118,7 @@ export default function ChatPage() {
                     {p.name}
                   </span>
                   <span className="block truncate text-xs text-[var(--muted)]">
-                    {p.type} · {p.gender}
+                    {p.type} · {genderLabel(p.gender)}
                   </span>
                 </span>
               </button>

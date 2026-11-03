@@ -4,7 +4,37 @@
  */
 
 export type PersonType = "Real" | "Dream" | "Wanted";
-export type PersonGender = "woman" | "man" | "trans" | "couple";
+export type PersonGender =
+  | "woman"
+  | "man"
+  | "trans"
+  | "crossdresser"
+  | "couple";
+
+export const PERSON_GENDERS: PersonGender[] = [
+  "woman",
+  "man",
+  "trans",
+  "crossdresser",
+  "couple",
+];
+
+export function genderLabel(g: PersonGender | string): string {
+  switch (g) {
+    case "woman":
+      return "Woman";
+    case "man":
+      return "Man";
+    case "trans":
+      return "Trans";
+    case "crossdresser":
+      return "Cross dresser";
+    case "couple":
+      return "Couple";
+    default:
+      return g;
+  }
+}
 
 export type KinkRole = "Both" | "Receive" | "Give" | "Watch";
 export type KinkStatus =
@@ -656,6 +686,14 @@ export function loadPartners(): PartnerRecord[] {
           photos: Array.isArray(p.photos) ? p.photos : [],
           mainPhotoIndex:
             typeof p.mainPhotoIndex === "number" ? p.mainPhotoIndex : 0,
+          gender: (() => {
+            const raw = String(p.gender || "");
+            if (PERSON_GENDERS.includes(raw as PersonGender)) {
+              return raw as PersonGender;
+            }
+            if (/cross\s*dresser/i.test(raw)) return "crossdresser";
+            return "woman";
+          })(),
           doneActs: Array.isArray(p.doneActs) ? p.doneActs : [],
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
         })).map((p) =>
@@ -709,10 +747,21 @@ export function saveChats(map: Record<string, ChatMessage[]>) {
   localStorage.setItem(STORAGE.chats, JSON.stringify(map));
 }
 
-/** Compress image file to a small data URL for local partner photos. */
+/**
+ * Soft photo caps for local MVP. Production will gate these by account tier
+ * (free / plus / private vault) — do not hard-code product limits in UI copy.
+ */
+export const PARTNER_PHOTO_LIMITS = {
+  /** Per-partner photo file size until accounts exist */
+  perPartner: 24,
+  maxSidePx: 960,
+  jpegQuality: 0.88,
+} as const;
+
+/** Compress image file to a data URL for local partner photo files. */
 export async function fileToPartnerPhoto(
   file: File,
-  maxSide = 512,
+  maxSide = PARTNER_PHOTO_LIMITS.maxSidePx,
 ): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
@@ -722,7 +771,10 @@ export async function fileToPartnerPhoto(
       el.onerror = () => reject(new Error("Failed to load photo"));
       el.src = url;
     });
-    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const scale = Math.min(
+      1,
+      maxSide / Math.max(img.naturalWidth, img.naturalHeight),
+    );
     const w = Math.max(1, Math.round(img.naturalWidth * scale));
     const h = Math.max(1, Math.round(img.naturalHeight * scale));
     const canvas = document.createElement("canvas");
@@ -731,7 +783,10 @@ export async function fileToPartnerPhoto(
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Canvas unavailable");
     ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.82);
+    return canvas.toDataURL(
+      "image/jpeg",
+      PARTNER_PHOTO_LIMITS.jpegQuality,
+    );
   } finally {
     URL.revokeObjectURL(url);
   }

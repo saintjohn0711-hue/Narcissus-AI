@@ -6,21 +6,22 @@ import {
   ALL_KINKS,
   DONE_ACTS,
   DYN_TAGS,
+  PARTNER_PHOTO_LIMITS,
+  PERSON_GENDERS,
   arkDemoRoster,
   emptyPartner,
   fileToPartnerPhoto,
+  genderLabel,
   loadPartners,
   mainPhoto,
   normalizeKinks,
   savePartners,
   withMainPhoto,
   type PartnerRecord,
-  type PersonGender,
   type PersonType,
 } from "@/lib/artOfX";
 
 const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
-const GENDERS: PersonGender[] = ["woman", "man", "trans", "couple"];
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -120,20 +121,28 @@ export default function PartnersPage() {
     });
   }
 
-  async function onPhoto(files: FileList | null) {
+  async function onPhoto(
+    files: FileList | null,
+    input?: HTMLInputElement | null,
+  ) {
     if (!editing || !files?.length) return;
+    const cap = PARTNER_PHOTO_LIMITS.perPartner;
+    const room = cap - editing.photos.length;
+    if (room <= 0) {
+      if (input) input.value = "";
+      return;
+    }
     const hadNone = editing.photos.length === 0;
     const next = [...editing.photos];
-    for (const file of Array.from(files).slice(0, 4)) {
-      if (next.length >= 6) break;
+    for (const file of Array.from(files).slice(0, room)) {
       next.push(await fileToPartnerPhoto(file));
     }
     setEditing({
       ...editing,
       photos: next,
-      // First upload becomes main photo at the top
       mainPhotoIndex: hadNone ? 0 : editing.mainPhotoIndex,
     });
+    if (input) input.value = "";
   }
 
   function setMainPhoto(index: number) {
@@ -237,48 +246,80 @@ export default function PartnersPage() {
 
           <fieldset className="space-y-3">
             <legend className="text-sm uppercase tracking-[0.16em]">
-              Main photo
+              Photo file
             </legend>
             {mainPhoto(editing) ? (
               <div className="overflow-hidden border border-[var(--accent)]/50 bg-[#12100e]">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={mainPhoto(editing)!}
-                  alt="Main partner photo"
-                  className="max-h-80 w-full object-cover object-top"
-                />
+                <div className="flex max-h-96 min-h-48 w-full items-center justify-center bg-[#0c0a09]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={mainPhoto(editing)!}
+                    alt="Main partner photo"
+                    className="max-h-96 w-full object-contain"
+                  />
+                </div>
                 <p className="px-3 py-2 text-xs text-[#c4b7a8]">
-                  This is the top / primary photo for cards and chat.
+                  Main photo on top — fits full frame (no crop). Mark another
+                  below to replace it.
                 </p>
               </div>
             ) : (
               <p className="border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[#c4b7a8]">
-                No main photo yet — upload below, then tap Set as main.
+                Empty photo file — add photos, then set one as main.
               </p>
             )}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => onPhoto(e.target.files)}
-              className="text-sm text-[#c4b7a8] file:mr-3 file:border-0 file:bg-[var(--accent)] file:px-3 file:py-1.5 file:text-sm file:text-[#1a120c]"
-            />
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#c4b7a8]">
+              <span>
+                {editing.photos.length} / {PARTNER_PHOTO_LIMITS.perPartner}{" "}
+                photos
+                <span className="text-[var(--muted)]">
+                  {" "}
+                  · account limits later
+                </span>
+              </span>
+              <label
+                className={`cursor-pointer rounded-sm border px-3 py-1.5 text-xs uppercase tracking-wide ${
+                  editing.photos.length >= PARTNER_PHOTO_LIMITS.perPartner
+                    ? "pointer-events-none border-[var(--line)] opacity-40"
+                    : "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                }`}
+              >
+                Add photos
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={
+                    editing.photos.length >= PARTNER_PHOTO_LIMITS.perPartner
+                  }
+                  onChange={(e) => onPhoto(e.target.files, e.target)}
+                  className="sr-only"
+                />
+              </label>
+            </div>
             {editing.photos.length > 0 && (
-              <div className="flex flex-wrap gap-3">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-6">
                 {editing.photos.map((src, i) => {
                   const isMain = (editing.mainPhotoIndex ?? 0) === i;
                   return (
-                    <div key={i} className="relative w-24">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt=""
-                        className={`h-24 w-24 object-cover border ${
+                    <div key={i} className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setMainPhoto(i)}
+                        className={`block w-full overflow-hidden border bg-[#0c0a09] ${
                           isMain
                             ? "border-[var(--accent)]"
                             : "border-[var(--line)]"
                         }`}
-                      />
+                        title={isMain ? "Main photo" : "Set as main"}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt=""
+                          className="aspect-square h-auto w-full object-contain"
+                        />
+                      </button>
                       <button
                         type="button"
                         onClick={() => removePhoto(i)}
@@ -286,17 +327,15 @@ export default function PartnersPage() {
                       >
                         ×
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setMainPhoto(i)}
-                        className={`mt-1 w-full rounded-sm border px-1 py-1 text-[10px] uppercase tracking-wide ${
+                      <p
+                        className={`mt-1 text-center text-[10px] uppercase tracking-wide ${
                           isMain
-                            ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
-                            : "border-[var(--line)] text-[#c4b7a8]"
+                            ? "text-[var(--accent-strong)]"
+                            : "text-[#c4b7a8]"
                         }`}
                       >
-                        {isMain ? "Main" : "Set as main"}
-                      </button>
+                        {isMain ? "Main" : "Set main"}
+                      </p>
                     </div>
                   );
                 })}
@@ -343,7 +382,7 @@ export default function PartnersPage() {
                 Gender
               </legend>
               <div className="flex flex-wrap gap-2">
-                {GENDERS.map((g) => (
+                {PERSON_GENDERS.map((g) => (
                   <button
                     key={g}
                     type="button"
@@ -360,7 +399,7 @@ export default function PartnersPage() {
                         : "border-[var(--line)] text-[#c4b7a8]"
                     }`}
                   >
-                    {g}
+                    {genderLabel(g)}
                   </button>
                 ))}
               </div>
@@ -511,12 +550,14 @@ export default function PartnersPage() {
               className="overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/30"
             >
               {hero && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={hero}
-                  alt=""
-                  className="max-h-56 w-full object-cover object-top"
-                />
+                <div className="flex max-h-64 min-h-40 w-full items-center justify-center bg-[#0c0a09]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={hero}
+                    alt=""
+                    className="max-h-64 w-full object-contain"
+                  />
+                </div>
               )}
               <div className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -528,12 +569,12 @@ export default function PartnersPage() {
                       {p.name}
                     </h2>
                     <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                      {p.type} · {p.gender}
+                      {p.type} · {genderLabel(p.gender)}
                       {p.doneActs.length
                         ? ` · ${p.doneActs.length} acts logged`
                         : ""}
-                      {p.photos.length > 1
-                        ? ` · ${p.photos.length} photos`
+                      {p.photos.length
+                        ? ` · ${p.photos.length} photo${p.photos.length === 1 ? "" : "s"}`
                         : ""}
                     </p>
                   </div>
@@ -575,6 +616,23 @@ export default function PartnersPage() {
                       .map((k) => k.tag)
                       .join(" · ")}
                   </p>
+                )}
+                {p.photos.length > 1 && (
+                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                    {p.photos.map((src, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={src}
+                        alt=""
+                        className={`h-14 w-14 shrink-0 object-contain bg-[#0c0a09] border ${
+                          (p.mainPhotoIndex ?? 0) === i
+                            ? "border-[var(--accent)]"
+                            : "border-[var(--line)]"
+                        }`}
+                      />
+                    ))}
+                  </div>
                 )}
               </div>
             </article>
