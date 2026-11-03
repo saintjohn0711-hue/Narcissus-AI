@@ -35,13 +35,14 @@ export function denoiseForIdentity(
   mode: Exclude<JobMode, "video">,
   identity = 0.85,
 ): number {
-  // Undress needs enough denoise to erase fabric and invent anatomy.
+  // Undress needs enough denoise to erase fabric — but not so high that the
+  // face vanishes (ReActor then returns a black frame).
   const base =
-    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.68 : 0.3;
+    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.58 : 0.3;
   const clamped = Math.min(1, Math.max(0.35, identity));
   const factor = 1.35 - clamped; // 0.35..1.0
   if (mode === "undress") {
-    return Math.max(0.52, Math.min(0.82, base * (0.85 + factor * 0.25)));
+    return Math.max(0.45, Math.min(0.65, base * (0.9 + factor * 0.2)));
   }
   return Math.max(0.12, Math.min(0.55, base * factor));
 }
@@ -141,6 +142,8 @@ export function buildUndressPrompt(
     height?: number;
     bodyType?: BodyTypeId;
     checkpoint?: string;
+    /** When false, skip ReActor (avoids black frames if face was lost). */
+    faceLock?: boolean;
   },
 ): Record<string, unknown> {
   const body = getBodyType(opts?.bodyType);
@@ -150,22 +153,24 @@ export function buildUndressPrompt(
   const width = opts?.width ?? 768;
   const height = opts?.height ?? 768;
   const ckpt = opts?.checkpoint?.trim() || CKPT_SD15;
+  const faceLock = opts?.faceLock !== false;
+  const stamp = Date.now().toString(36);
 
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.undress,
     body.anatomyPrompt,
     "completely remove all clothing and fabric, nude skin only where clothes were",
     "maintain identical subject placement, camera angle, framing, and perspective",
-    "exact same face as reference photo, preserve facial identity",
+    "keep the face clear and visible, exact same face as reference photo",
   ].join(", ");
 
   const negative = [
     NEGATIVE,
     body.anatomyNegative,
-    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed",
+    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed, blank, black image, empty frame",
   ].join(", ");
 
-  return {
+  const graph: Record<string, unknown> = {
     "1": {
       class_type: "CheckpointLoaderSimple",
       inputs: { ckpt_name: ckpt },
@@ -200,8 +205,8 @@ export function buildUndressPrompt(
       class_type: "KSampler",
       inputs: {
         seed,
-        steps: 32,
-        cfg: 6.0,
+        steps: 30,
+        cfg: 5.5,
         sampler_name: "euler",
         scheduler: "normal",
         denoise,
@@ -215,8 +220,12 @@ export function buildUndressPrompt(
       class_type: "VAEDecode",
       inputs: { samples: ["7", 0], vae: ["1", 2] },
     },
-    // Lock the original face onto the undressed body (DeepSwap-class pattern)
-    "9": {
+  };
+
+  if (faceLock) {
+    // Lock original face onto undressed body. If the face was destroyed by
+    // denoise, ReActor can emit a black frame — caller should retry without lock.
+    graph["9"] = {
       class_type: "ReActorFaceSwap",
       inputs: {
         enabled: true,
@@ -233,15 +242,25 @@ export function buildUndressPrompt(
         source_faces_index: "0",
         console_log_level: 1,
       },
-    },
-    "10": {
+    };
+    graph["10"] = {
       class_type: "SaveImage",
       inputs: {
-        filename_prefix: `narcissus_undress_${body.id}`,
+        filename_prefix: `narcissus_undress_${body.id}_${stamp}`,
         images: ["9", 0],
       },
-    },
-  };
+    };
+  } else {
+    graph["10"] = {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `narcissus_undress_${body.id}_${stamp}`,
+        images: ["8", 0],
+      },
+    };
+  }
+
+  return graph;
 }
 
 export function buildImg2ImgPrompt(

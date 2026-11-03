@@ -5,7 +5,9 @@ import {
   type BodyTypeId,
 } from "@/lib/bodyTypes";
 import {
+  fetchImageBytes,
   isComfyConfigured,
+  isNearlyBlankImage,
   resolveCheckpoint,
   runPromptToImages,
   uploadImage,
@@ -158,6 +160,7 @@ export async function POST(req: NextRequest) {
               identity: Math.min(identity, 0.85),
               bodyType,
               checkpoint: undressCkpt || undefined,
+              faceLock: true,
             })
           : mode === "video"
             ? buildVideoPrompt(uploaded.filename, {
@@ -172,9 +175,34 @@ export async function POST(req: NextRequest) {
                 identity,
               });
 
-    const result = await runPromptToImages(graph, {
+    let result = await runPromptToImages(graph, {
       timeoutMs: mode === "video" ? 360_000 : 180_000,
     });
+
+    // ReActor can emit a pure-black frame when the undress pass wiped the face.
+    // Detect that and immediately retry without the face-lock node.
+    let faceLockFallback = false;
+    if (mode === "undress" && result.images[0]) {
+      try {
+        const bytes = await fetchImageBytes(result.images[0]);
+        if (isNearlyBlankImage(bytes)) {
+          faceLockFallback = true;
+          result = await runPromptToImages(
+            buildUndressPrompt(uploaded.filename, {
+              promptOverride,
+              identity: Math.min(identity, 0.85),
+              bodyType,
+              checkpoint: undressCkpt || undefined,
+              faceLock: false,
+              denoise: 0.55,
+            }),
+            { timeoutMs: 180_000 },
+          );
+        }
+      } catch {
+        // If we can't inspect the image, still return the first result URL.
+      }
+    }
 
     const bodyLabel = getBodyType(bodyType).label;
 
@@ -191,11 +219,14 @@ export async function POST(req: NextRequest) {
       bytes: file.size,
       prompt: promptOverride || null,
       checkpoint: undressCkpt,
+      faceLockFallback,
       message:
         mode === "faceswap"
           ? "Face swap finished — donor face applied onto the source photo."
           : mode === "undress"
-            ? `Clothing removed with ${bodyLabel} anatomy under the clothes. Face locked via ReActor.`
+            ? faceLockFallback
+              ? `Clothing removed with ${bodyLabel} anatomy (face-lock skipped — previous frame was blank).`
+              : `Clothing removed with ${bodyLabel} anatomy under the clothes. Face locked via ReActor.`
             : mode === "video"
               ? tpl?.id === "say"
                 ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`

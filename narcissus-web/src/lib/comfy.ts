@@ -185,6 +185,52 @@ export function viewUrl(image: ComfyImageRef): string {
   return `${baseUrl()}/view?${params.toString()}`;
 }
 
+/** App-local URL so the browser never hits the Runpod proxy directly (avoids blank/403). */
+export function proxyViewUrl(image: ComfyImageRef): string {
+  const params = new URLSearchParams({
+    filename: image.filename,
+    subfolder: image.subfolder || "",
+    type: image.type,
+  });
+  return `/api/media?${params.toString()}`;
+}
+
+export async function fetchImageBytes(
+  image: ComfyImageRef,
+): Promise<Uint8Array> {
+  const res = await fetch(viewUrl(image), { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch result image (${res.status})`);
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+/**
+ * Detect pure/near-black frames (ReActor failure mode when no face is found).
+ * Samples every Nth RGB triple; true if almost all samples are near black.
+ */
+export function isNearlyBlankImage(bytes: Uint8Array): boolean {
+  // PNG IHDR is enough to reject tiny all-black encodings (~3KB for 512²).
+  if (bytes.byteLength > 0 && bytes.byteLength < 12_000) {
+    // Very small PNG for a portrait-sized output is almost always blank.
+    // Still verify by scanning IDAT-decoded pixels when possible — fall through
+    // to a crude byte heuristic for non-PNG.
+  }
+  // Heuristic without a PNG decoder: blank RGB PNGs from Comfy are tiny
+  // (<8KB for 512–768) and mostly compressed zeros. Real photos are >>50KB.
+  if (bytes.byteLength < 8_000) return true;
+  if (bytes.byteLength < 20_000) {
+    // Spot-check raw bytes for non-zero diversity outside PNG headers.
+    let nonzero = 0;
+    const step = Math.max(1, Math.floor(bytes.byteLength / 400));
+    for (let i = 64; i < bytes.byteLength; i += step) {
+      if (bytes[i]! > 16) nonzero++;
+    }
+    return nonzero < 8;
+  }
+  return false;
+}
+
 function mediaKindOf(images: ComfyImageRef[]): "image" | "video" {
   return images.some(
     (m) =>
@@ -199,16 +245,17 @@ function mediaKindOf(images: ComfyImageRef[]): "image" | "video" {
 
 export async function runPromptToImages(
   prompt: Record<string, unknown>,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; proxyUrls?: boolean },
 ): Promise<ComfyJobResult> {
   const promptId = await queuePrompt(prompt);
   const images = await waitForPrompt(promptId, {
     timeoutMs: opts?.timeoutMs,
   });
+  const toUrl = opts?.proxyUrls === false ? viewUrl : proxyViewUrl;
   return {
     promptId,
     images,
-    viewUrls: images.map(viewUrl),
+    viewUrls: images.map(toUrl),
     mediaKind: mediaKindOf(images),
   };
 }
