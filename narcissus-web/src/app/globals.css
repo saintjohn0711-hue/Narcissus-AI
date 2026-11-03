@@ -36,3 +36,17 @@ body {
 ::selection {
   background: rgba(232, 168, 124, 0.35);
 }
+
+/* Keep prompt/motion notes readable on dark surfaces */
+.prompt-field {
+  color: #f7f1e8;
+  -webkit-text-fill-color: #f7f1e8;
+  caret-color: #e8a87c;
+  font-weight: 500;
+}
+
+.prompt-field::placeholder {
+  color: #c4b7a8;
+  -webkit-text-fill-color: #c4b7a8;
+  opacity: 1;
+}

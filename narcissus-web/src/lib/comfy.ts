@@ -2,12 +2,14 @@ export type ComfyImageRef = {
   filename: string;
   subfolder: string;
   type: "input" | "output" | "temp";
+  format?: string;
 };
 
 export type ComfyJobResult = {
   promptId: string;
   images: ComfyImageRef[];
   viewUrls: string[];
+  mediaKind: "image" | "video";
 };
 
 function baseUrl(): string {
@@ -69,25 +71,61 @@ export async function queuePrompt(
   return data.prompt_id as string;
 }
 
+type HistoryMedia = {
+  filename: string;
+  subfolder?: string;
+  type?: string;
+  format?: string;
+};
+
 type HistoryEntry = {
   outputs?: Record<
     string,
     {
-      images?: Array<{
-        filename: string;
-        subfolder?: string;
-        type?: string;
-      }>;
+      images?: HistoryMedia[];
+      gifs?: HistoryMedia[];
+      videos?: HistoryMedia[];
     }
   >;
-  status?: { completed?: boolean; status_str?: string };
+  status?: {
+    completed?: boolean;
+    status_str?: string;
+    messages?: unknown[];
+  };
 };
+
+function collectMedia(entry: HistoryEntry): ComfyImageRef[] {
+  const out: ComfyImageRef[] = [];
+  for (const node of Object.values(entry.outputs || {})) {
+    for (const key of ["gifs", "videos", "images"] as const) {
+      for (const img of node[key] || []) {
+        out.push({
+          filename: img.filename,
+          subfolder: img.subfolder || "",
+          type: (img.type as ComfyImageRef["type"]) || "output",
+          format: img.format,
+        });
+      }
+    }
+  }
+  // Prefer real video containers, then animated stills
+  const mp4 = out.filter((m) => /\.(mp4|webm)$/i.test(m.filename));
+  if (mp4.length) return mp4;
+  const animated = out.filter(
+    (m) =>
+      m.format?.includes("webp") ||
+      m.format?.includes("gif") ||
+      m.format?.includes("video") ||
+      /\.(webp|gif)$/i.test(m.filename),
+  );
+  return animated.length ? animated : out;
+}
 
 export async function waitForPrompt(
   promptId: string,
   {
-    timeoutMs = 180_000,
-    intervalMs = 1500,
+    timeoutMs = 300_000,
+    intervalMs = 2000,
   }: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<ComfyImageRef[]> {
   const start = Date.now();
@@ -98,18 +136,12 @@ export async function waitForPrompt(
     }
     const hist = (await res.json()) as Record<string, HistoryEntry>;
     const entry = hist[promptId];
+    if (entry?.status?.status_str === "error") {
+      throw new Error("ComfyUI reported a job error");
+    }
     if (entry?.outputs) {
-      const images: ComfyImageRef[] = [];
-      for (const node of Object.values(entry.outputs)) {
-        for (const img of node.images || []) {
-          images.push({
-            filename: img.filename,
-            subfolder: img.subfolder || "",
-            type: (img.type as ComfyImageRef["type"]) || "output",
-          });
-        }
-      }
-      if (images.length) return images;
+      const media = collectMedia(entry);
+      if (media.length) return media;
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }
@@ -125,14 +157,30 @@ export function viewUrl(image: ComfyImageRef): string {
   return `${baseUrl()}/view?${params.toString()}`;
 }
 
+function mediaKindOf(images: ComfyImageRef[]): "image" | "video" {
+  return images.some(
+    (m) =>
+      m.format?.includes("webp") ||
+      m.format?.includes("gif") ||
+      m.format?.includes("video") ||
+      /\.(webp|gif|mp4|webm)$/i.test(m.filename),
+  )
+    ? "video"
+    : "image";
+}
+
 export async function runPromptToImages(
   prompt: Record<string, unknown>,
+  opts?: { timeoutMs?: number },
 ): Promise<ComfyJobResult> {
   const promptId = await queuePrompt(prompt);
-  const images = await waitForPrompt(promptId);
+  const images = await waitForPrompt(promptId, {
+    timeoutMs: opts?.timeoutMs,
+  });
   return {
     promptId,
     images,
     viewUrls: images.map(viewUrl),
+    mediaKind: mediaKindOf(images),
   };
 }

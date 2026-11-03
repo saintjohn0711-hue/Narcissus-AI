@@ -4,19 +4,38 @@ import {
   runPromptToImages,
   uploadImage,
 } from "@/lib/comfy";
-import { buildImg2ImgPrompt, type JobMode } from "@/lib/workflows";
+import { getVideoTemplate, type VideoTemplateId } from "@/lib/templates";
+import {
+  buildFaceSwapPrompt,
+  buildImg2ImgPrompt,
+  buildVideoPrompt,
+  type JobMode,
+} from "@/lib/workflows";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MAX_BYTES = 12 * 1024 * 1024;
+const MODES: JobMode[] = ["faceswap", "undress", "custom", "video"];
+
+function asUploadFile(value: FormDataEntryValue | null): File | null {
+  if (!(value instanceof File) || value.size === 0) return null;
+  return value;
+}
 
 export async function POST(req: NextRequest) {
   const form = await req.formData();
-  const file = form.get("photo");
+  const file = asUploadFile(form.get("photo"));
+  const faceFile = asUploadFile(form.get("face"));
   const mode = String(form.get("mode") || "") as JobMode;
   const adultsConfirmed = form.get("adultsConfirmed") === "true";
   const promptOverride = String(form.get("prompt") || "").trim() || undefined;
+  const speech = String(form.get("speech") || "").trim() || undefined;
+  const template = String(form.get("template") || "natural") as VideoTemplateId;
+  const identity = Math.min(
+    1,
+    Math.max(0.35, Number(form.get("identity") || 0.9) || 0.9),
+  );
 
   if (!adultsConfirmed) {
     return NextResponse.json(
@@ -25,8 +44,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "Photo required." }, { status: 400 });
+  if (!file) {
+    return NextResponse.json(
+      {
+        error:
+          mode === "faceswap"
+            ? "Source photo required (body/scene to receive the face)."
+            : "Photo required.",
+      },
+      { status: 400 },
+    );
   }
 
   if (file.size > MAX_BYTES) {
@@ -36,8 +63,37 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (mode !== "faceswap" && mode !== "undress") {
+  if (!MODES.includes(mode)) {
     return NextResponse.json({ error: "Invalid mode." }, { status: 400 });
+  }
+
+  if (mode === "faceswap" && !faceFile) {
+    return NextResponse.json(
+      { error: "Face photo required — the face you want swapped onto the source." },
+      { status: 400 },
+    );
+  }
+
+  if (faceFile && faceFile.size > MAX_BYTES) {
+    return NextResponse.json(
+      { error: "Face photo too large (max 12MB)." },
+      { status: 400 },
+    );
+  }
+
+  if (mode === "custom" && !promptOverride) {
+    return NextResponse.json(
+      { error: "Custom mode needs a prompt describing the photo." },
+      { status: 400 },
+    );
+  }
+
+  const tpl = mode === "video" ? getVideoTemplate(template) : null;
+  if (mode === "video" && tpl?.needsSpeech && !speech) {
+    return NextResponse.json(
+      { error: "Say template needs the line you want spoken." },
+      { status: 400 },
+    );
   }
 
   if (!isComfyConfigured()) {
@@ -53,20 +109,59 @@ export async function POST(req: NextRequest) {
   try {
     const safeName = file.name.replace(/[^\w.\-]+/g, "_") || "upload.png";
     const uploaded = await uploadImage(file, safeName);
-    const prompt = buildImg2ImgPrompt(mode, uploaded.filename, {
-      promptOverride,
+
+    let faceUploadedName: string | null = null;
+    if (mode === "faceswap" && faceFile) {
+      const faceSafe =
+        faceFile.name.replace(/[^\w.\-]+/g, "_") || "face.png";
+      const faceUploaded = await uploadImage(faceFile, `face_${faceSafe}`);
+      faceUploadedName = faceUploaded.filename;
+    }
+
+    const graph =
+      mode === "faceswap" && faceUploadedName
+        ? buildFaceSwapPrompt(uploaded.filename, faceUploadedName, {
+            restoreVisibility: Math.min(1, Math.max(0.5, identity)),
+          })
+        : mode === "video"
+          ? buildVideoPrompt(uploaded.filename, {
+              template,
+              speech,
+              identity,
+              seconds: 5,
+              fps: 8,
+            })
+          : buildImg2ImgPrompt(mode, uploaded.filename, {
+              promptOverride,
+              identity,
+            });
+
+    const result = await runPromptToImages(graph, {
+      timeoutMs: mode === "video" ? 360_000 : 180_000,
     });
-    const result = await runPromptToImages(prompt);
 
     return NextResponse.json({
       id: result.promptId,
       status: "completed",
       mode,
+      template: mode === "video" ? template : null,
+      speech: speech || null,
+      identity,
       filename: file.name,
+      faceFilename: faceFile?.name ?? null,
       bytes: file.size,
-      message: "ComfyUI job finished.",
+      prompt: promptOverride || null,
+      message:
+        mode === "faceswap"
+          ? "Face swap finished — donor face applied onto the source photo."
+          : mode === "video"
+            ? tpl?.id === "say"
+              ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
+              : `5s ${tpl?.label || "video"} template ready.`
+            : "Photo job finished with high identity lock.",
       comfyConfigured: true,
       promptId: result.promptId,
+      mediaKind: result.mediaKind,
       images: result.images,
       resultUrl: result.viewUrls[0] ?? null,
       resultUrls: result.viewUrls,
@@ -80,8 +175,13 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     service: "narcissus-jobs",
-    modes: ["faceswap", "undress"],
+    modes: MODES,
+    faceswap: {
+      requires: ["photo", "face"],
+      engine: "ReActorFaceSwap + inswapper_128 + GFPGAN",
+    },
+    videoTemplates: ["natural", "blowjob", "say"],
     comfyConfigured: isComfyConfigured(),
-    engine: "comfyui-img2img",
+    engine: "comfyui-reactor+identity+svd-templates",
   });
 }
