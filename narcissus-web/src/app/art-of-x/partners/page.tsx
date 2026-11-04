@@ -12,14 +12,18 @@ import {
   emptyPartner,
   fileToPartnerPhoto,
   genderLabel,
-  loadPartners,
   mainPhoto,
   normalizeKinks,
-  savePartners,
   withMainPhoto,
   type PartnerRecord,
   type PersonType,
 } from "@/lib/artOfX";
+import {
+  fetchPartners,
+  getStoreMode,
+  persistPartners,
+  type StoreMode,
+} from "@/lib/artOfXStore";
 import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
 
 const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
@@ -32,16 +36,31 @@ export default function PartnersPage() {
   const [looksFromIdx, setLooksFromIdx] = useState<number[]>([]);
   const [pullingLooks, setPullingLooks] = useState(false);
   const [looksNote, setLooksNote] = useState<string | null>(null);
+  const [storeMode, setStoreMode] = useState<StoreMode>("local");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setPartners(loadPartners());
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      const mode = await getStoreMode();
+      const list = await fetchPartners();
+      if (cancelled) return;
+      setStoreMode(mode);
+      setPartners(list);
+      setReady(true);
+    })().catch(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    savePartners(partners);
+    void persistPartners(partners).catch(() => {
+      /* keep UI responsive if save fails */
+    });
   }, [partners, ready]);
 
   const visible = useMemo(
@@ -256,7 +275,9 @@ export default function PartnersPage() {
           </h1>
           <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
             Sex tracker — who, what you&apos;ve done, kinks, dynamics, photos.
-            Stored on this device.
+            {storeMode === "database"
+              ? " Saved to your database."
+              : " Stored on this device until the database is connected."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

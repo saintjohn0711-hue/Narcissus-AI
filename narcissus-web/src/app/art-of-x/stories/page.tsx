@@ -10,13 +10,11 @@ import {
   continueStory,
   displayName,
   injectStoryDirection,
-  loadPartners,
-  loadScenes,
-  saveScenes,
   type PartnerRecord,
   type SavedScene,
   type SceneLength,
 } from "@/lib/artOfX";
+import { fetchPartners, fetchScenes, persistScenes } from "@/lib/artOfXStore";
 
 export default function StoriesPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -39,14 +37,24 @@ export default function StoriesPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setPartners(loadPartners());
-    setScenes(loadScenes());
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      const [p, s] = await Promise.all([fetchPartners(), fetchScenes()]);
+      if (cancelled) return;
+      setPartners(p);
+      setScenes(s);
+      setReady(true);
+    })().catch(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    saveScenes(scenes);
+    void persistScenes(scenes).catch(() => {});
   }, [scenes, ready]);
 
   const cast = useMemo(

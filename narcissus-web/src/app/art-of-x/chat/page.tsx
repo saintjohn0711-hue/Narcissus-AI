@@ -5,15 +5,13 @@ import { AppNav } from "@/components/AppNav";
 import {
   displayName,
   genderLabel,
-  loadChats,
-  loadPartners,
   mainPhoto,
   normalizeKinks,
-  saveChats,
   stubPartnerReply,
   type ChatMessage,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import { fetchChats, fetchPartners, persistChats } from "@/lib/artOfXStore";
 
 export default function ChatPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -23,16 +21,25 @@ export default function ChatPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const list = loadPartners();
-    setPartners(list);
-    setChats(loadChats());
-    if (list[0]) setActiveId(list[0].id);
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      const [list, map] = await Promise.all([fetchPartners(), fetchChats()]);
+      if (cancelled) return;
+      setPartners(list);
+      setChats(map);
+      if (list[0]) setActiveId(list[0].id);
+      setReady(true);
+    })().catch(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    saveChats(chats);
+    void persistChats(chats).catch(() => {});
   }, [chats, ready]);
 
   const partner = useMemo(
