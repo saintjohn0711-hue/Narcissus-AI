@@ -62,6 +62,9 @@ export function undressCheckpoint(preferred?: string): string {
  * True face swap via ReActor:
  * - targetImage = body/scene photo that receives the face (input_image)
  * - faceImage = donor face to swap in (source_image)
+ *
+ * Use center crop (not letterbox) so face detectors see a filled frame —
+ * letterboxed scales often make ReActor emit a pure-black "success" frame.
  */
 export function buildFaceSwapPrompt(
   targetImage: string,
@@ -71,12 +74,20 @@ export function buildFaceSwapPrompt(
     height?: number;
     prefix?: string;
     restoreVisibility?: number;
+    facedetection?:
+      | "retinaface_resnet50"
+      | "retinaface_mobile0.25"
+      | "YOLOv5l"
+      | "YOLOv5n";
+    faceRestore?: "GFPGANv1.4.pth" | "none";
   },
 ): Record<string, unknown> {
   const width = opts?.width ?? 768;
   const height = opts?.height ?? 768;
   const prefix = opts?.prefix ?? "narcissus_faceswap";
   const restoreVisibility = opts?.restoreVisibility ?? 1;
+  const facedetection = opts?.facedetection ?? "retinaface_resnet50";
+  const faceRestore = opts?.faceRestore ?? "GFPGANv1.4.pth";
 
   return {
     "1": {
@@ -94,7 +105,7 @@ export function buildFaceSwapPrompt(
         upscale_method: "lanczos",
         width,
         height,
-        crop: "disabled",
+        crop: "center",
       },
     },
     "4": {
@@ -104,7 +115,7 @@ export function buildFaceSwapPrompt(
         upscale_method: "lanczos",
         width: 512,
         height: 512,
-        crop: "disabled",
+        crop: "center",
       },
     },
     "5": {
@@ -114,8 +125,8 @@ export function buildFaceSwapPrompt(
         input_image: ["3", 0],
         source_image: ["4", 0],
         swap_model: "inswapper_128.onnx",
-        facedetection: "retinaface_resnet50",
-        face_restore_model: "GFPGANv1.4.pth",
+        facedetection,
+        face_restore_model: faceRestore,
         face_restore_visibility: restoreVisibility,
         codeformer_weight: 0.5,
         detect_gender_input: "no",

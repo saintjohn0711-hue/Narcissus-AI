@@ -216,28 +216,48 @@ export async function fetchImageBytes(
 
 /**
  * Detect pure/near-black frames (ReActor failure mode when no face is found).
- * Samples every Nth RGB triple; true if almost all samples are near black.
+ * Tiny compressed PNGs are a fast path; larger buffers are still scanned.
  */
 export function isNearlyBlankImage(bytes: Uint8Array): boolean {
-  // PNG IHDR is enough to reject tiny all-black encodings (~3KB for 512²).
-  if (bytes.byteLength > 0 && bytes.byteLength < 12_000) {
-    // Very small PNG for a portrait-sized output is almost always blank.
-    // Still verify by scanning IDAT-decoded pixels when possible — fall through
-    // to a crude byte heuristic for non-PNG.
-  }
-  // Heuristic without a PNG decoder: blank RGB PNGs from Comfy are tiny
-  // (<8KB for 512–768) and mostly compressed zeros. Real photos are >>50KB.
+  // Blank RGB PNGs from Comfy are tiny (<8KB for 512–768). Real photos >>50KB.
   if (bytes.byteLength < 8_000) return true;
-  if (bytes.byteLength < 20_000) {
-    // Spot-check raw bytes for non-zero diversity outside PNG headers.
+  if (bytes.byteLength < 40_000) {
     let nonzero = 0;
     const step = Math.max(1, Math.floor(bytes.byteLength / 400));
     for (let i = 64; i < bytes.byteLength; i += step) {
       if (bytes[i]! > 16) nonzero++;
     }
-    return nonzero < 8;
+    return nonzero < 12;
   }
   return false;
+}
+
+/** Async blank check using sharp when available (more accurate). */
+export async function isNearlyBlankImageAsync(
+  bytes: Uint8Array,
+): Promise<boolean> {
+  if (isNearlyBlankImage(bytes)) return true;
+  try {
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(Buffer.from(bytes))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const pixels = info.width * info.height;
+    if (!pixels) return true;
+    const step = Math.max(1, Math.floor(pixels / 4000));
+    let dark = 0;
+    let samples = 0;
+    for (let i = 0; i < pixels; i += step) {
+      const o = i * info.channels;
+      const lum = (data[o]! + data[o + 1]! + data[o + 2]!) / 3;
+      if (lum < 10) dark++;
+      samples++;
+    }
+    return samples > 0 && dark / samples > 0.92;
+  } catch {
+    return false;
+  }
 }
 
 function mediaKindOf(images: ComfyImageRef[]): "image" | "video" {

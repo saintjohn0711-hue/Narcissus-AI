@@ -14,6 +14,7 @@ import {
   fetchImageBytes,
   isComfyConfigured,
   isNearlyBlankImage,
+  isNearlyBlankImageAsync,
   resolveCheckpoint,
   runPromptToImages,
   uploadImage,
@@ -173,6 +174,7 @@ export async function POST(req: NextRequest) {
       mode === "faceswap" && faceUploadedName
         ? buildFaceSwapPrompt(uploaded.filename, faceUploadedName, {
             restoreVisibility: Math.min(1, Math.max(0.5, identity)),
+            facedetection: "retinaface_resnet50",
           })
         : mode === "undress"
           ? buildUndressPrompt(uploaded.filename, {
@@ -207,7 +209,7 @@ export async function POST(req: NextRequest) {
     if (mode === "undress" && result.images[0]) {
       try {
         const bytes = await fetchImageBytes(result.images[0]);
-        if (isNearlyBlankImage(bytes)) {
+        if (await isNearlyBlankImageAsync(bytes)) {
           faceLockFallback = true;
           result = await runPromptToImages(
             buildUndressPrompt(uploaded.filename, {
@@ -228,6 +230,52 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Face swap: blank frame = detector/model miss. Retry with YOLO, then fail loudly.
+    if (mode === "faceswap" && faceUploadedName && result.images[0]) {
+      let swapBytes = await fetchImageBytes(result.images[0]);
+      if (await isNearlyBlankImageAsync(swapBytes)) {
+        result = await runPromptToImages(
+          buildFaceSwapPrompt(uploaded.filename, faceUploadedName, {
+            restoreVisibility: Math.min(1, Math.max(0.5, identity)),
+            facedetection: "YOLOv5l",
+            faceRestore: "GFPGANv1.4.pth",
+          }),
+          { timeoutMs: 180_000 },
+        );
+        swapBytes = await fetchImageBytes(result.images[0]!);
+      }
+      if (await isNearlyBlankImageAsync(swapBytes)) {
+        result = await runPromptToImages(
+          buildFaceSwapPrompt(uploaded.filename, faceUploadedName, {
+            restoreVisibility: 0.75,
+            facedetection: "retinaface_mobile0.25",
+            faceRestore: "none",
+          }),
+          { timeoutMs: 180_000 },
+        );
+        swapBytes = await fetchImageBytes(result.images[0]!);
+      }
+      if (await isNearlyBlankImageAsync(swapBytes)) {
+        return NextResponse.json(
+          {
+            error:
+              "Face swap came back blank. Use two clear face photos (front-ish, well lit). Also ensure the Comfy pod has onnxruntime + models/insightface/inswapper_128.onnx installed.",
+            promptId: result.promptId,
+            blank: true,
+          },
+          { status: 502 },
+        );
+      }
+      const localName = await saveLocalResult(
+        `${result.promptId}_faceswap.png`,
+        swapBytes,
+      );
+      result = {
+        ...result,
+        viewUrls: [localResultUrl(localName)],
+      };
+    }
+
     // Paste original head/hair onto still edits so the person stays the person.
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
@@ -238,7 +286,7 @@ export async function POST(req: NextRequest) {
     ) {
       try {
         const editedBytes = await fetchImageBytes(result.images[0]);
-        if (!isNearlyBlankImage(editedBytes)) {
+        if (!(await isNearlyBlankImageAsync(editedBytes))) {
           const locked = await lockHeadAndHair(editedBytes, originalBytes, {
             headRatio: 0.34 + identity * 0.12,
             feather: 0.16,

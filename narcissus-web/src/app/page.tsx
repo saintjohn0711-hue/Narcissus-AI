@@ -115,12 +115,13 @@ export default function Home() {
     setJob(null);
     try {
       const size = outputSizeForMode(mode);
+      // Face swap needs a filled frame with a visible face — cover/center beats letterbox.
       const prepared = await preparePhoto(file, {
-        fit,
+        fit: mode === "faceswap" ? "cover" : fit,
         width: size.width,
         height: size.height,
-        cropX,
-        cropY,
+        cropX: mode === "faceswap" ? 0.5 : cropX,
+        cropY: mode === "faceswap" ? 0.35 : cropY,
         mime: "image/jpeg",
         quality: 0.95,
       });
