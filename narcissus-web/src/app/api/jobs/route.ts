@@ -30,7 +30,9 @@ import {
 } from "@/lib/workflows";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Vercel plan caps: keep ≤60s for deployability. Long Comfy jobs need a
+// dedicated worker / higher plan — Studio UI still ships.
+export const maxDuration = 60;
 
 const MAX_BYTES = 12 * 1024 * 1024;
 const MODES: JobMode[] = ["faceswap", "undress", "custom", "video"];
