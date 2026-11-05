@@ -10,6 +10,8 @@ const LINKS = [
   { href: "/art-of-x/partners", label: "Partners" },
   { href: "/art-of-x/stories", label: "Stories" },
   { href: "/art-of-x/chat", label: "AI chat" },
+  { href: "/circle", label: "Circle" },
+  { href: "/account", label: "Echo" },
 ];
 
 export function AppNav() {

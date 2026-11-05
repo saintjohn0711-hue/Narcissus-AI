@@ -149,3 +149,72 @@ export const chatMessages = pgTable("chat_messages", {
   text: text("text").notNull(),
   at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Circle — swingers-style discovery + share codes.
+ * Share codes grant linked-viewer connections (view Circle profile + mutual
+ * connection). They are NOT password sharing.
+ */
+
+export const circleShareCodes = pgTable("circle_share_codes", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  /** Short human-enterable code (uppercase). Unique while active. */
+  code: text("code").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Null = active. Set when rotated or revoked. */
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+/** Linked viewers: redeeming a Circle code creates a directed link. */
+export const circleLinks = pgTable("circle_links", {
+  id: text("id").primaryKey(),
+  /** Account that owned the share code */
+  ownerUserId: text("owner_user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  /** Account that redeemed the code */
+  viewerUserId: text("viewer_user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const circleProfiles = pgTable("circle_profiles", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  displayName: text("display_name").notNull().default(""),
+  bio: text("bio").notNull().default(""),
+  lookingFor: jsonb("looking_for").$type<string[]>().notNull().default([]),
+  /** single | couple | thruple | open */
+  vibe: text("vibe").notNull().default("single"),
+  /** Opt-in to appear in Circle discovery browse */
+  discoverable: boolean("discoverable").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const circlePhotos = pgTable("circle_photos", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  caption: text("caption").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
+  hidden: boolean("hidden").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

@@ -142,6 +142,12 @@ export const ART_OF_X_NAV = [
     label: "AI chat",
     blurb: "Chat with partner cards (local personality stub → real LLM next).",
   },
+  {
+    id: "circle",
+    href: "/circle",
+    label: "Circle",
+    blurb: "Swingers discovery — profiles, photos, share codes (Echo).",
+  },
 ] as const;
 
 export const DONE_ACTS = [

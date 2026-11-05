@@ -24,9 +24,13 @@ export function AuthControls() {
   if (session?.user) {
     return (
       <div className="ml-auto flex items-center gap-3 text-sm">
-        <span className="max-w-[10rem] truncate text-[var(--muted)]" title={session.user.email}>
+        <Link
+          href="/account"
+          className="max-w-[10rem] truncate text-[var(--muted)] transition hover:text-[var(--ink)]"
+          title={session.user.email}
+        >
           {session.user.name || session.user.email}
-        </span>
+        </Link>
         <button
           type="button"
           onClick={() => void signOut()}
