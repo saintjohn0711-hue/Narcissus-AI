@@ -10,7 +10,6 @@ export async function synthesizeSpeech(
   outPath: string,
   voice = "en-US-JennyNeural",
 ): Promise<string> {
-  const edgeTTS = await import("edge-tts");
   // edge-tts python is installed; prefer CLI for reliability from Node
   const { spawn } = await import("child_process");
   await mkdir(path.dirname(outPath), { recursive: true });
@@ -35,7 +34,7 @@ export async function synthesizeSpeech(
     child.stderr.on("data", (d) => {
       err += String(d);
     });
-    child.on("error", (e) => {
+    child.on("error", () => {
       // fallback: PATH edge-tts
       const fallback = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
       let err2 = "";

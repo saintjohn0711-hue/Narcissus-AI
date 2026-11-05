@@ -13,7 +13,6 @@ import {
 import {
   fetchImageBytes,
   isComfyConfigured,
-  isNearlyBlankImage,
   isNearlyBlankImageAsync,
   resolveCheckpoint,
   runPromptToImages,
