@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
-import { ownerKey } from "@/lib/ownerKey";
+import { requireUserId } from "@/lib/session";
 import type { SavedScene } from "@/lib/artOfX";
 
 export const runtime = "nodejs";
@@ -25,17 +25,26 @@ export async function GET() {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
   }
+  const auth = await requireUserId();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   const db = getDb();
   const rows = await db
     .select()
     .from(schema.scenes)
-    .where(eq(schema.scenes.ownerKey, ownerKey()));
+    .where(eq(schema.scenes.userId, auth.userId));
   return NextResponse.json({ scenes: rows.map(rowToScene) });
 }
 
 export async function PUT(req: NextRequest) {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
+  }
+  const auth = await requireUserId();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   let body: { scenes?: SavedScene[] };
@@ -47,14 +56,14 @@ export async function PUT(req: NextRequest) {
 
   const list = Array.isArray(body.scenes) ? body.scenes : [];
   const db = getDb();
-  const key = ownerKey();
+  const userId = auth.userId;
 
-  await db.delete(schema.scenes).where(eq(schema.scenes.ownerKey, key));
+  await db.delete(schema.scenes).where(eq(schema.scenes.userId, userId));
 
   for (const s of list.slice(0, 40)) {
     await db.insert(schema.scenes).values({
       id: s.id,
-      ownerKey: key,
+      userId,
       title: s.title || "",
       when: s.when || "",
       text: s.text || "",
@@ -70,7 +79,7 @@ export async function PUT(req: NextRequest) {
   const rows = await db
     .select()
     .from(schema.scenes)
-    .where(eq(schema.scenes.ownerKey, key));
+    .where(eq(schema.scenes.userId, userId));
 
   return NextResponse.json({ scenes: rows.map(rowToScene) });
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AuthControls } from "@/components/AuthControls";
 
 const LINKS = [
   { href: "/", label: "Studio" },
@@ -37,6 +38,7 @@ export function AppNav() {
           </Link>
         );
       })}
+      <AuthControls />
     </nav>
   );
 }

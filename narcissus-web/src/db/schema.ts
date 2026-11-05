@@ -9,13 +9,85 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Art of X persistence — Neon Postgres.
- * ownerKey is a stand-in until real auth (Clerk / etc.).
+ * Better Auth tables + Art of X persistence (Neon Postgres).
+ * Art of X rows are scoped by userId (signed-in account).
  */
+
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  /** Adults-only gate — required at signup */
+  adultsConfirmed: boolean("adults_confirmed").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const session = pgTable("session", {
+  id: text("id").primaryKey(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  token: text("token").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const account = pgTable("account", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull(),
+  providerId: text("provider_id").notNull(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  accessToken: text("access_token"),
+  refreshToken: text("refresh_token"),
+  idToken: text("id_token"),
+  accessTokenExpiresAt: timestamp("access_token_expires_at", {
+    withTimezone: true,
+  }),
+  refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+    withTimezone: true,
+  }),
+  scope: text("scope"),
+  password: text("password"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const verification = pgTable("verification", {
+  id: text("id").primaryKey(),
+  identifier: text("identifier").notNull(),
+  value: text("value").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const partners = pgTable("partners", {
   id: serial("id").primaryKey(),
-  ownerKey: text("owner_key").notNull().default("default"),
+  userId: text("user_id").notNull(),
   name: text("name").notNull(),
   type: text("type").notNull().default("Real"),
   gender: text("gender").notNull().default("woman"),
@@ -54,7 +126,7 @@ export const partners = pgTable("partners", {
 
 export const scenes = pgTable("scenes", {
   id: text("id").primaryKey(),
-  ownerKey: text("owner_key").notNull().default("default"),
+  userId: text("user_id").notNull(),
   title: text("title").notNull().default(""),
   when: text("when").notNull().default(""),
   text: text("text").notNull().default(""),
@@ -71,7 +143,7 @@ export const scenes = pgTable("scenes", {
 
 export const chatMessages = pgTable("chat_messages", {
   id: text("id").primaryKey(),
-  ownerKey: text("owner_key").notNull().default("default"),
+  userId: text("user_id").notNull(),
   partnerId: integer("partner_id").notNull(),
   who: text("who").notNull(),
   text: text("text").notNull(),

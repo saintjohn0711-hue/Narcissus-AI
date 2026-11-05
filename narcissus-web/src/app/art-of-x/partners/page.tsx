@@ -276,8 +276,8 @@ export default function PartnersPage() {
           <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
             Sex tracker — who, what you&apos;ve done, kinks, dynamics, photos.
             {storeMode === "database"
-              ? " Saved to your database."
-              : " Stored on this device until the database is connected."}
+              ? " Saved to your account (Neon)."
+              : " Stored on this device — sign in to save to your account."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
