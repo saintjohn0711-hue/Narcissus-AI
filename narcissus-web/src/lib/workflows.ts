@@ -7,7 +7,7 @@ import {
 } from "./bodyTypes";
 import { getVideoTemplate, type VideoTemplateId } from "./templates";
 
-export type JobMode = "faceswap" | "undress" | "custom" | "video";
+export type JobMode = "faceswap" | "undress" | "custom" | "scene" | "video";
 
 const CKPT_SD15 = "v1-5-pruned-emaonly-fp16.safetensors";
 const CKPT_SVD = "svd_xt.safetensors";
@@ -29,6 +29,8 @@ const DEFAULT_PROMPTS: Record<Exclude<JobMode, "video">, string> = {
     "photorealistic adult nude edit of the exact same person, identical face preserved perfectly, completely remove all clothing, natural skin, same pose and framing",
   custom:
     "photorealistic adult photo of the exact same person as the reference, identical face and likeness, natural skin, detailed face",
+  scene:
+    "photorealistic adult scene of the exact same person as the reference, identical face and likeness, natural skin, detailed face",
 };
 
 export function defaultPromptFor(mode: JobMode): string {
@@ -44,11 +46,20 @@ export function denoiseForIdentity(
   // Undress: body can change; head integrity is restored post-pass.
   // Keep denoise moderate so pose/background don't drift.
   const base =
-    mode === "faceswap" ? 0.28 : mode === "undress" ? 0.5 : 0.3;
+    mode === "faceswap"
+      ? 0.28
+      : mode === "undress"
+        ? 0.5
+        : mode === "scene"
+          ? 0.4
+          : 0.3;
   const clamped = Math.min(1, Math.max(0.35, identity));
   const factor = 1.35 - clamped; // 0.35..1.0
   if (mode === "undress") {
     return Math.max(0.38, Math.min(0.56, base * (0.95 + factor * 0.12)));
+  }
+  if (mode === "scene") {
+    return Math.max(0.28, Math.min(0.52, base * (0.9 + factor * 0.2)));
   }
   return Math.max(0.12, Math.min(0.55, base * factor));
 }
@@ -340,6 +351,8 @@ export function buildImg2ImgPrompt(
     return buildUndressPrompt(imageName, opts);
   }
 
+  // Scene templates run the same img2img path as custom, with stronger
+  // template prompts supplied by the caller.
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
   const positive =
     `${opts?.promptOverride?.trim() || DEFAULT_PROMPTS[mode]}, exact same face as reference photo, preserve identity`;
@@ -443,7 +456,7 @@ export function buildVideoPrompt(
   const fps = opts?.fps ?? 8;
   const seconds = opts?.seconds ?? 5;
   const frames = Math.max(8, Math.round(fps * seconds));
-  const motion = tpl.motion;
+  const motion = tpl.motion ?? 90;
   const width = opts?.width ?? 576;
   const height = opts?.height ?? 320;
   const identity = opts?.identity ?? 0.9;

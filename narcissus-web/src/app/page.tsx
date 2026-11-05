@@ -16,7 +16,13 @@ import {
   type FitMode,
 } from "@/lib/photoPrep";
 import {
+  ACT_TEMPLATES,
+  OUTFIT_TEMPLATES,
+  SAY_VOICES,
   VIDEO_TEMPLATES,
+  getPhotoTemplate,
+  getSayVoice,
+  type PhotoTemplateId,
   type VideoTemplateId,
 } from "@/lib/templates";
 import { defaultPromptFor, type JobMode } from "@/lib/workflows";
@@ -37,12 +43,14 @@ type JobResult = {
   resultUrls?: string[];
   prompt?: string | null;
   speech?: string | null;
+  voice?: string | null;
   template?: string | null;
   error?: string;
 };
 
 const MODES: Array<[JobMode, string]> = [
   ["custom", "Custom photo"],
+  ["scene", "Scene photo"],
   ["faceswap", "Face swap"],
   ["undress", "Clothing removal"],
   ["video", "Photo → video"],
@@ -50,10 +58,13 @@ const MODES: Array<[JobMode, string]> = [
 
 export default function Home() {
   const [adultsOk, setAdultsOk] = useState(false);
-  const [mode, setMode] = useState<JobMode>("custom");
-  const [prompt, setPrompt] = useState(defaultPromptFor("custom"));
+  const [mode, setMode] = useState<JobMode>("scene");
+  const [prompt, setPrompt] = useState(defaultPromptFor("scene"));
   const [speech, setSpeech] = useState("Hey… come closer.");
+  const [photoTemplate, setPhotoTemplate] =
+    useState<PhotoTemplateId>("blowjob");
   const [template, setTemplate] = useState<VideoTemplateId>("blowjob");
+  const [voice, setVoice] = useState(SAY_VOICES[0]!.id);
   const [bodyType, setBodyType] = useState<BodyTypeId>("female");
   const [cockState, setCockState] = useState<CockStateId>("hard");
   const [cockSize, setCockSize] = useState<CockSizeId>("average");
@@ -69,7 +80,9 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<JobResult | null>(null);
 
+  const activePhotoTemplate = getPhotoTemplate(photoTemplate);
   const activeTemplate = VIDEO_TEMPLATES.find((t) => t.id === template)!;
+  const activeVoice = getSayVoice(voice);
   const activeBody = BODY_TYPES.find((b) => b.id === bodyType)!;
   const showCockOptions = mode === "undress" && activeBody.needsCock;
 
@@ -114,7 +127,7 @@ export default function Home() {
     setError(null);
     setJob(null);
     try {
-      const size = outputSizeForMode(mode);
+      const size = outputSizeForMode(mode === "scene" ? "custom" : mode);
       // Face swap needs a filled frame with a visible face — cover/center beats letterbox.
       const prepared = await preparePhoto(file, {
         fit: mode === "faceswap" ? "cover" : fit,
@@ -155,9 +168,14 @@ export default function Home() {
       body.set("fit", fit);
       body.set("identity", String(identity));
       body.set("adultsConfirmed", "true");
+      if (mode === "scene") {
+        body.set("template", photoTemplate);
+        if (prompt.trim()) body.set("prompt", prompt.trim());
+      }
       if (mode === "video") {
         body.set("template", template);
         if (speech.trim()) body.set("speech", speech.trim());
+        if (activeTemplate.needsSpeech) body.set("voice", voice);
       }
       if (mode === "undress") {
         body.set("bodyType", bodyType);
@@ -166,7 +184,10 @@ export default function Home() {
           body.set("cockSize", cockSize);
         }
       }
-      if (mode !== "faceswap" && prompt.trim()) {
+      if (mode === "custom" && prompt.trim()) {
+        body.set("prompt", prompt.trim());
+      }
+      if (mode === "undress" && prompt.trim()) {
         body.set("prompt", prompt.trim());
       }
       const res = await fetch("/api/jobs", { method: "POST", body });
@@ -182,6 +203,14 @@ export default function Home() {
 
   const previewObjectFit = fit === "cover" ? "cover" : "contain";
 
+  function templateButtonClass(active: boolean) {
+    return `rounded-sm border px-4 py-2 text-sm transition ${
+      active
+        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+        : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
+    }`;
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
       <AppNav />
@@ -196,8 +225,9 @@ export default function Home() {
           Narcissus
         </h1>
         <p className="mt-3 max-w-xl text-base font-light leading-relaxed text-[#c4b7a8]">
-          Keep their face and hair. Fit or crop. Face swap, clothing removal,
-          photo edits, and 5s video — Art of X lives in the menu above.
+          Keep their face and hair. Scene templates, outfit changes, clothing
+          removal, face swap, and 5s video with voices — Art of X lives in the
+          menu above.
         </p>
       </header>
 
@@ -279,11 +309,7 @@ export default function Home() {
                   key={value}
                   type="button"
                   onClick={() => setFit(value)}
-                  className={`rounded-sm border px-4 py-2 text-sm transition ${
-                    fit === value
-                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                      : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
-                  }`}
+                  className={templateButtonClass(fit === value)}
                 >
                   {label}
                 </button>
@@ -329,17 +355,55 @@ export default function Home() {
                   key={value}
                   type="button"
                   onClick={() => selectMode(value)}
-                  className={`rounded-sm border px-4 py-2 text-sm transition ${
-                    mode === value
-                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                      : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
-                  }`}
+                  className={templateButtonClass(mode === value)}
                 >
                   {label}
                 </button>
               ))}
             </div>
           </fieldset>
+
+          {mode === "scene" && (
+            <>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                  Act templates
+                </legend>
+                <div className="flex flex-wrap gap-3">
+                  {ACT_TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setPhotoTemplate(t.id as PhotoTemplateId)}
+                      className={templateButtonClass(photoTemplate === t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                  Outfit changes
+                </legend>
+                <div className="flex flex-wrap gap-3">
+                  {OUTFIT_TEMPLATES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setPhotoTemplate(t.id as PhotoTemplateId)}
+                      className={templateButtonClass(photoTemplate === t.id)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[#c4b7a8]">
+                  {activePhotoTemplate.blurb}
+                </p>
+              </fieldset>
+            </>
+          )}
 
           {mode === "undress" && (
             <fieldset className="space-y-3">
@@ -352,11 +416,7 @@ export default function Home() {
                     key={b.id}
                     type="button"
                     onClick={() => setBodyType(b.id)}
-                    className={`rounded-sm border px-4 py-2 text-sm transition ${
-                      bodyType === b.id
-                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                        : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
-                    }`}
+                    className={templateButtonClass(bodyType === b.id)}
                   >
                     {b.label}
                   </button>
@@ -378,11 +438,7 @@ export default function Home() {
                       key={c.id}
                       type="button"
                       onClick={() => setCockState(c.id)}
-                      className={`rounded-sm border px-4 py-2 text-sm transition ${
-                        cockState === c.id
-                          ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                          : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
-                      }`}
+                      className={templateButtonClass(cockState === c.id)}
                     >
                       {c.label}
                     </button>
@@ -399,11 +455,7 @@ export default function Home() {
                       key={c.id}
                       type="button"
                       onClick={() => setCockSize(c.id)}
-                      className={`rounded-sm border px-4 py-2 text-sm transition ${
-                        cockSize === c.id
-                          ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                          : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
-                      }`}
+                      className={templateButtonClass(cockSize === c.id)}
                     >
                       {c.label}
                     </button>
@@ -423,12 +475,8 @@ export default function Home() {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setTemplate(t.id)}
-                    className={`rounded-sm border px-4 py-2 text-sm transition ${
-                      template === t.id
-                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                        : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--accent)]/40"
-                    }`}
+                    onClick={() => setTemplate(t.id as VideoTemplateId)}
+                    className={templateButtonClass(template === t.id)}
                   >
                     {t.label}
                   </button>
@@ -439,22 +487,43 @@ export default function Home() {
           )}
 
           {mode === "video" && activeTemplate.needsSpeech ? (
-            <label className="flex flex-col gap-3">
-              <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                What should they say
-              </span>
-              <textarea
-                value={speech}
-                onChange={(e) => setSpeech(e.target.value)}
-                rows={3}
-                placeholder="Type the exact line…"
-                className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
-              />
-              <p className="text-xs text-[#c4b7a8]">
-                Animates your photo for 5s with this line. True lip-sync TTS is
-                next; for now motion stays locked to the original face.
-              </p>
-            </label>
+            <>
+              <fieldset className="space-y-3">
+                <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                  Voice
+                </legend>
+                <div className="flex flex-wrap gap-3">
+                  {SAY_VOICES.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => setVoice(v.id)}
+                      className={templateButtonClass(voice === v.id)}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-[#c4b7a8]">{activeVoice.blurb}</p>
+              </fieldset>
+              <label className="flex flex-col gap-3">
+                <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                  What should they say
+                </span>
+                <textarea
+                  value={speech}
+                  onChange={(e) => setSpeech(e.target.value)}
+                  rows={3}
+                  placeholder="Type the exact line…"
+                  className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
+                />
+                <p className="text-xs text-[#c4b7a8]">
+                  Animates your photo for 5s with this line in {activeVoice.label}
+                  ’s voice. Full lip-sync lands next; motion stays locked to the
+                  original face.
+                </p>
+              </label>
+            </>
           ) : mode === "undress" ? (
             <label className="flex flex-col gap-3">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
@@ -468,7 +537,20 @@ export default function Home() {
                 className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
               />
             </label>
-          ) : mode !== "video" && mode !== "faceswap" ? (
+          ) : mode === "scene" ? (
+            <label className="flex flex-col gap-3">
+              <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                Extra notes (optional)
+              </span>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={3}
+                placeholder="Optional — pose, lighting, or extras. Template already sets the scene."
+                className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
+              />
+            </label>
+          ) : mode === "custom" ? (
             <label className="flex flex-col gap-3">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
                 Prompt
@@ -497,7 +579,7 @@ export default function Home() {
               </span>
               <input
                 type="range"
-                min={mode === "undress" ? 0.65 : 0.5}
+                min={mode === "undress" || mode === "scene" ? 0.65 : 0.5}
                 max={1}
                 step={0.01}
                 value={identity}
@@ -539,14 +621,18 @@ export default function Home() {
                   ? "Swapping face…"
                   : mode === "undress"
                     ? "Removing clothes…"
-                    : "Running on GPU…"
+                    : mode === "scene"
+                      ? "Building scene…"
+                      : "Running on GPU…"
               : mode === "video"
                 ? `Make 5s ${activeTemplate.label}`
                 : mode === "faceswap"
                   ? "Swap face"
                   : mode === "undress"
                     ? `Undress · ${activeBody.label}`
-                    : "Run job"}
+                    : mode === "scene"
+                      ? `Make ${activePhotoTemplate.label}`
+                      : "Run job"}
           </button>
 
           {error && (
@@ -568,7 +654,10 @@ export default function Home() {
               </p>
               <p className="text-[#c4b7a8]">{job.message}</p>
               {job.speech && (
-                <p className="text-[#f7f1e8]">“{job.speech}”</p>
+                <p className="text-[#f7f1e8]">
+                  “{job.speech}”
+                  {job.voice ? ` · ${getSayVoice(job.voice).label}` : ""}
+                </p>
               )}
               {job.resultUrl &&
                 (() => {
