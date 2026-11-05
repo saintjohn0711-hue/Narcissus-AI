@@ -20,12 +20,22 @@ import {
 } from "@/lib/comfy";
 import { lockHeadAndHair } from "@/lib/identityLock";
 import { localResultUrl, saveLocalResult } from "@/lib/localResults";
-import { getVideoTemplate, type VideoTemplateId } from "@/lib/templates";
+import {
+  getPhotoTemplate,
+  getSayVoice,
+  getVideoTemplate,
+  isPhotoTemplateId,
+  isSayVoiceId,
+  isVideoTemplateId,
+  type PhotoTemplateId,
+  type VideoTemplateId,
+} from "@/lib/templates";
 import {
   buildFaceSwapPrompt,
   buildImg2ImgPrompt,
   buildUndressPrompt,
   buildVideoPrompt,
+  denoiseForIdentity,
   type JobMode,
 } from "@/lib/workflows";
 
@@ -35,7 +45,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MAX_BYTES = 12 * 1024 * 1024;
-const MODES: JobMode[] = ["faceswap", "undress", "custom", "video"];
+const MODES: JobMode[] = ["faceswap", "undress", "custom", "scene", "video"];
 
 const UNDRESS_CKPTS = [
   "epicrealism_naturalSinRC1VAE.safetensors",
@@ -57,7 +67,11 @@ export async function POST(req: NextRequest) {
   const adultsConfirmed = form.get("adultsConfirmed") === "true";
   const promptOverride = String(form.get("prompt") || "").trim() || undefined;
   const speech = String(form.get("speech") || "").trim() || undefined;
-  const template = String(form.get("template") || "natural") as VideoTemplateId;
+  const templateRaw = String(form.get("template") || "");
+  const voiceRaw = String(form.get("voice") || "en-US-JennyNeural");
+  const voice = isSayVoiceId(voiceRaw)
+    ? voiceRaw
+    : "en-US-JennyNeural";
   const bodyTypeRaw = String(form.get("bodyType") || "female");
   const bodyType: BodyTypeId = isBodyTypeId(bodyTypeRaw)
     ? bodyTypeRaw
@@ -129,7 +143,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const tpl = mode === "video" ? getVideoTemplate(template) : null;
+  const photoTemplateId: PhotoTemplateId = isPhotoTemplateId(templateRaw)
+    ? templateRaw
+    : "blowjob";
+  const videoTemplateId: VideoTemplateId = isVideoTemplateId(templateRaw)
+    ? templateRaw
+    : "natural";
+  const sceneTpl = mode === "scene" ? getPhotoTemplate(photoTemplateId) : null;
+  const tpl = mode === "video" ? getVideoTemplate(videoTemplateId) : null;
   if (mode === "video" && tpl?.needsSpeech && !speech) {
     return NextResponse.json(
       { error: "Say template needs the line you want spoken." },
@@ -189,16 +210,34 @@ export async function POST(req: NextRequest) {
             })
           : mode === "video"
             ? buildVideoPrompt(uploaded.filename, {
-                template,
+                template: videoTemplateId,
                 speech,
                 identity,
                 seconds: 5,
                 fps: 8,
               })
-            : buildImg2ImgPrompt(mode, uploaded.filename, {
-                promptOverride,
-                identity,
-              });
+            : mode === "scene" && sceneTpl
+              ? buildImg2ImgPrompt("scene", uploaded.filename, {
+                  promptOverride: [
+                    sceneTpl.stillPrompt,
+                    promptOverride,
+                  ]
+                    .filter(Boolean)
+                    .join(", "),
+                  identity: Math.max(identity, 0.85),
+                  denoise:
+                    sceneTpl.stillDenoise *
+                    (1.25 - Math.min(1, Math.max(0.4, identity))),
+                  prefix: `narcissus_scene_${sceneTpl.id}`,
+                })
+              : buildImg2ImgPrompt(mode, uploaded.filename, {
+                  promptOverride,
+                  identity,
+                  denoise: denoiseForIdentity(
+                    mode === "custom" ? "custom" : "faceswap",
+                    identity,
+                  ),
+                });
 
     let result = await runPromptToImages(graph, {
       timeoutMs: mode === "video" ? 360_000 : 180_000,
@@ -281,7 +320,7 @@ export async function POST(req: NextRequest) {
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
     if (
-      (mode === "undress" || mode === "custom") &&
+      (mode === "undress" || mode === "custom" || mode === "scene") &&
       result.images[0] &&
       result.mediaKind === "image"
     ) {
@@ -312,21 +351,29 @@ export async function POST(req: NextRequest) {
         ? ` · ${getCockState(cockState).label} ${getCockSize(cockSize).label}`
         : "";
 
+    const sayVoice = getSayVoice(voice);
+
     return NextResponse.json({
       id: result.promptId,
       status: "completed",
       mode,
-      template: mode === "video" ? template : null,
+      template:
+        mode === "video"
+          ? videoTemplateId
+          : mode === "scene"
+            ? photoTemplateId
+            : null,
       bodyType: mode === "undress" ? bodyType : null,
       cockState: mode === "undress" && bodyMeta.needsCock ? cockState : null,
       cockSize: mode === "undress" && bodyMeta.needsCock ? cockSize : null,
       speech: speech || null,
+      voice: mode === "video" && tpl?.needsSpeech ? voice : null,
       identity,
       identityLocked,
       filename: file.name,
       faceFilename: faceFile?.name ?? null,
       bytes: file.size,
-      prompt: promptOverride || null,
+      prompt: promptOverride || sceneTpl?.stillPrompt || null,
       checkpoint: undressCkpt,
       faceLockFallback,
       message:
@@ -336,13 +383,17 @@ export async function POST(req: NextRequest) {
             ? faceLockFallback
               ? `Clothing removed with ${bodyLabel}${cockNote} anatomy (face-lock skipped — previous frame was blank).`
               : `Clothing removed with ${bodyLabel}${cockNote}. Original face & hair locked onto the body.`
-            : mode === "video"
-              ? tpl?.id === "say"
-                ? `5s talking clip ready. Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
-                : `5s ${tpl?.label || "video"} template ready.`
-              : identityLocked
-                ? "Photo edit done — original face & hair preserved on top of the edit."
-                : "Photo job finished with high identity lock.",
+            : mode === "scene"
+              ? identityLocked
+                ? `${sceneTpl?.label || "Scene"} ready — original face & hair locked.`
+                : `${sceneTpl?.label || "Scene"} photo finished.`
+              : mode === "video"
+                ? tpl?.id === "say"
+                  ? `5s talking clip ready (${sayVoice.label}). Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
+                  : `5s ${tpl?.label || "video"} template ready.`
+                : identityLocked
+                  ? "Photo edit done — original face & hair preserved on top of the edit."
+                  : "Photo job finished with high identity lock.",
       comfyConfigured: true,
       promptId: result.promptId,
       mediaKind: result.mediaKind,
@@ -370,8 +421,26 @@ export async function GET() {
       cockSizes: ["small", "average", "large", "huge"],
       engine: "img2img undress + cock options + ReActor face/hair boost",
     },
+    photoTemplates: [
+      "blowjob",
+      "double_blowjob",
+      "cumshot",
+      "facial",
+      "lingerie",
+      "bikini",
+      "lbd",
+      "wet_silk",
+    ],
     videoTemplates: ["natural", "blowjob", "say"],
+    sayVoices: [
+      "en-US-JennyNeural",
+      "en-US-AriaNeural",
+      "en-US-SaraNeural",
+      "en-GB-SoniaNeural",
+      "en-US-GuyNeural",
+      "en-US-DavisNeural",
+    ],
     comfyConfigured: isComfyConfigured(),
-    engine: "comfyui-reactor+undress-bodytypes+svd",
+    engine: "comfyui-reactor+undress-bodytypes+svd+scenes",
   });
 }
