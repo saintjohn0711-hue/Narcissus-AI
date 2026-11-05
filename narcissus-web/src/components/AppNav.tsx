@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { AuthControls } from "@/components/AuthControls";
 
 const LINKS = [
   { href: "/", label: "Studio" },
@@ -9,6 +10,8 @@ const LINKS = [
   { href: "/art-of-x/partners", label: "Partners" },
   { href: "/art-of-x/stories", label: "Stories" },
   { href: "/art-of-x/chat", label: "AI chat" },
+  { href: "/circle", label: "Circle" },
+  { href: "/account", label: "Echo" },
 ];
 
 export function AppNav() {
@@ -37,6 +40,7 @@ export function AppNav() {
           </Link>
         );
       })}
+      <AuthControls />
     </nav>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
-import { ownerKey } from "@/lib/ownerKey";
+import { requireUserId } from "@/lib/session";
 import type { PartnerRecord } from "@/lib/artOfX";
 
 export const runtime = "nodejs";
@@ -37,11 +37,16 @@ export async function GET() {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
   }
+  const auth = await requireUserId();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
   const db = getDb();
   const rows = await db
     .select()
     .from(schema.partners)
-    .where(eq(schema.partners.ownerKey, ownerKey()));
+    .where(eq(schema.partners.userId, auth.userId));
   return NextResponse.json({
     partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
   });
@@ -50,6 +55,10 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
+  }
+  const auth = await requireUserId();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   let body: { partners?: PartnerRecord[] };
@@ -61,16 +70,16 @@ export async function PUT(req: NextRequest) {
 
   const list = Array.isArray(body.partners) ? body.partners : [];
   const db = getDb();
-  const key = ownerKey();
+  const userId = auth.userId;
   const now = new Date();
 
-  // Replace-all for this owner (simple sync model for MVP)
-  await db.delete(schema.partners).where(eq(schema.partners.ownerKey, key));
+  // Replace-all for this user (simple sync model for MVP)
+  await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
 
   for (const p of list) {
     await db.insert(schema.partners).values({
       id: Number.isFinite(p.id) ? p.id : undefined,
-      ownerKey: key,
+      userId,
       name: p.name || "",
       type: p.type || "Real",
       gender: p.gender || "woman",
@@ -96,7 +105,7 @@ export async function PUT(req: NextRequest) {
   const rows = await db
     .select()
     .from(schema.partners)
-    .where(eq(schema.partners.ownerKey, key));
+    .where(eq(schema.partners.userId, userId));
 
   return NextResponse.json({
     partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
