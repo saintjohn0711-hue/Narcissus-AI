@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
+import { PartnerCard } from "@/components/PartnerCard";
 import {
   ALL_KINKS,
   DONE_ACTS,
@@ -736,108 +737,20 @@ export default function PartnersPage() {
         </form>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {visible.length === 0 && (
           <p className="text-sm text-[#c4b7a8]">
             No partners yet. Add one or load Ark demo people.
           </p>
         )}
-        {visible.map((p) => {
-          const hero = mainPhoto(p);
-          return (
-            <article
-              key={p.id}
-              className="overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/30"
-            >
-              {hero && (
-                <div className="flex max-h-64 min-h-40 w-full items-center justify-center bg-[#0c0a09]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={hero}
-                    alt=""
-                    className="max-h-64 w-full object-contain"
-                  />
-                </div>
-              )}
-              <div className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2
-                      className="text-2xl text-[var(--ink)]"
-                      style={{ fontFamily: "var(--font-display), serif" }}
-                    >
-                      {p.name}
-                    </h2>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--muted)]">
-                      {p.type} · {genderLabel(p.gender)}
-                      {p.doneActs.length
-                        ? ` · ${p.doneActs.length} acts logged`
-                        : ""}
-                      {p.photos.length
-                        ? ` · ${p.photos.length} photo${p.photos.length === 1 ? "" : "s"}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="flex gap-3 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(p)}
-                      className="text-[var(--accent-strong)]"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(p.id)}
-                      className="text-[var(--danger)]"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-                {p.looks && (
-                  <p className="mt-2 text-sm text-[#c4b7a8]">{p.looks}</p>
-                )}
-                {p.history && (
-                  <p className="mt-2 text-sm leading-relaxed text-[#f7f1e8]/90]">
-                    {p.history}
-                  </p>
-                )}
-                {p.doneActs.length > 0 && (
-                  <p className="mt-2 text-xs text-[#c4b7a8]">
-                    <span className="text-[var(--ink)]">Acts:</span>{" "}
-                    {p.doneActs.join(" · ")}
-                  </p>
-                )}
-                {p.kinks.length > 0 && (
-                  <p className="mt-1 text-xs text-[#c4b7a8]">
-                    <span className="text-[var(--ink)]">Kinks:</span>{" "}
-                    {normalizeKinks(p.kinks)
-                      .map((k) => k.tag)
-                      .join(" · ")}
-                  </p>
-                )}
-                {p.photos.length > 1 && (
-                  <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-                    {p.photos.map((src, i) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={i}
-                        src={src}
-                        alt=""
-                        className={`h-14 w-14 shrink-0 object-contain bg-[#0c0a09] border ${
-                          (p.mainPhotoIndex ?? 0) === i
-                            ? "border-[var(--accent)]"
-                            : "border-[var(--line)]"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </article>
-          );
-        })}
+        {visible.map((p) => (
+          <PartnerCard
+            key={p.id}
+            partner={p}
+            onEdit={() => openEdit(p)}
+            onRemove={() => remove(p.id)}
+          />
+        ))}
       </div>
     </div>
   );
