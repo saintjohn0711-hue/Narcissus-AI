@@ -14,7 +14,17 @@ Open http://localhost:3000
 
 ## Env
 
-Copy `.env.example` → `.env.local` and set `COMFYUI_BASE_URL` to the ComfyUI proxy (no trailing slash).
+Set in `.env.local` / Vercel:
+
+| Var | Purpose |
+| --- | --- |
+| `COMFYUI_BASE_URL` | ComfyUI proxy (no trailing slash) |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway — enables Grok-quality Art of X scene writer + looks vision |
+| `OPENAI_API_KEY` | Fallback if Gateway key is absent |
+| `SCENE_MODEL` | Optional override (Gateway default: `spacexai/grok-4.20-non-reasoning`) |
+| `LOOKS_VISION_MODEL` | Optional looks-vision model override |
+
+Without an LLM key, Scene builder uses richer **local** craft (partner looks / dynamics / kinks) instead of thin templates.
 
 ## API
 
