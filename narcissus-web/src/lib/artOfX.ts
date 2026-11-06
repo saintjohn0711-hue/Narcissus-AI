@@ -340,19 +340,27 @@ export function normalizeKinks(
 /** Postgres `integer` / `serial` max — client temp ids must fit. */
 export const PG_INT4_MAX = 2_147_483_647;
 
-/** Next partner id that fits int4 and avoids collisions with `existing`. */
+/**
+ * Next partner id that fits Postgres int4.
+ * Prefer a time-derived slot (not raw Date.now(), which overflows int4),
+ * then fall back to unused randoms within the local list.
+ */
 export function nextPartnerId(existing: { id: number }[] = []): number {
-  let max = 0;
-  for (const p of existing) {
-    if (Number.isFinite(p.id) && p.id > max && p.id <= PG_INT4_MAX) {
-      max = p.id;
-    }
+  const used = new Set(
+    existing
+      .map((p) => p.id)
+      .filter((id) => Number.isFinite(id) && id > 0 && id <= PG_INT4_MAX),
+  );
+  // ~ms within ~24 days — fits int4 and stays unique across rapid adds
+  let id = (Date.now() % 2_000_000_000) + 1;
+  if (!used.has(id)) return id;
+  for (let i = 0; i < 64; i++) {
+    id = Math.floor(Math.random() * PG_INT4_MAX) + 1;
+    if (!used.has(id)) return id;
   }
-  if (max < PG_INT4_MAX) return max + 1;
-  // Extremely unlikely full range — pick an unused random slot.
-  for (let i = 0; i < 32; i++) {
-    const id = Math.floor(Math.random() * PG_INT4_MAX) + 1;
-    if (!existing.some((p) => p.id === id)) return id;
+  // Last resort: scan upward from 1
+  for (let n = 1; n <= PG_INT4_MAX; n++) {
+    if (!used.has(n)) return n;
   }
   return 1;
 }

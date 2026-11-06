@@ -1,16 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
 import { PG_INT4_MAX, type PartnerRecord } from "@/lib/artOfX";
 
 export const runtime = "nodejs";
 
-/** Accept only ids that fit Postgres int4; otherwise let serial assign. */
+/** Accept only ids that fit Postgres int4. */
 function safePartnerId(id: unknown): number | undefined {
   const n = typeof id === "number" ? id : Number(id);
   if (!Number.isInteger(n) || n <= 0 || n > PG_INT4_MAX) return undefined;
   return n;
+}
+
+/**
+ * Partner `id` is a global primary key (not per-user). Preserve the client's
+ * id when free + in-range; otherwise allocate max(existing)+1.
+ */
+function allocatePartnerIds(
+  list: PartnerRecord[],
+  taken: Set<number>,
+): number[] {
+  let next = 1;
+  for (const id of taken) {
+    if (id >= next) next = id + 1;
+  }
+  const out: number[] = [];
+  for (const p of list) {
+    let id = safePartnerId(p.id);
+    if (id == null || taken.has(id)) {
+      while (taken.has(next) || next > PG_INT4_MAX) next += 1;
+      id = next;
+      next += 1;
+    }
+    taken.add(id);
+    out.push(id);
+  }
+  return out;
 }
 
 function rowToPartner(
@@ -81,12 +107,22 @@ export async function PUT(req: NextRequest) {
   const now = new Date();
 
   try {
+    // Ids already held by other accounts (global PK) — must not reuse.
+    const otherRows = await db
+      .select({ id: schema.partners.id })
+      .from(schema.partners)
+      .where(ne(schema.partners.userId, userId));
+    const taken = new Set(otherRows.map((r) => r.id));
+
     // Replace-all for this user (simple sync model for MVP)
     await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
 
-    for (const p of list) {
+    const ids = allocatePartnerIds(list, taken);
+
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
       await db.insert(schema.partners).values({
-        id: safePartnerId(p.id),
+        id: ids[i],
         userId,
         name: p.name || "",
         type: p.type || "Real",
@@ -120,11 +156,16 @@ export async function PUT(req: NextRequest) {
     });
   } catch (err) {
     console.error("partners PUT failed", err);
+    const cause =
+      err && typeof err === "object" && "cause" in err
+        ? (err as { cause?: { message?: string } }).cause
+        : undefined;
     return NextResponse.json(
       {
         error: "save_failed",
         message:
-          err instanceof Error ? err.message : "Failed to save partners",
+          cause?.message ||
+          (err instanceof Error ? err.message : "Failed to save partners"),
       },
       { status: 500 },
     );

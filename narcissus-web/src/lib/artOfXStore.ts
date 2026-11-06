@@ -92,10 +92,10 @@ export async function fetchPartners(): Promise<PartnerRecord[]> {
 
 export async function persistPartners(
   partners: PartnerRecord[],
-): Promise<void> {
+): Promise<PartnerRecord[]> {
   if ((await getStoreMode()) === "local") {
     savePartnersLocal(partners);
-    return;
+    return partners;
   }
   const res = await fetch("/api/art-of-x/partners", {
     method: "PUT",
@@ -118,6 +118,8 @@ export async function persistPartners(
     }
     throw new Error(detail || `Failed to save partners (${res.status})`);
   }
+  const data = (await res.json()) as { partners?: PartnerRecord[] };
+  return Array.isArray(data.partners) ? data.partners : partners;
 }
 
 export async function fetchScenes(): Promise<SavedScene[]> {
