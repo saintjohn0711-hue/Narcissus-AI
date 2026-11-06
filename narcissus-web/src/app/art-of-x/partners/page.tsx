@@ -165,6 +165,12 @@ export default function PartnersPage() {
     }
   }
 
+  function setFeaturedPhoto(id: number, index: number) {
+    setPartners((prev) =>
+      prev.map((p) => (p.id === id ? withMainPhoto(p, index) : p)),
+    );
+  }
+
   function toggleAct(act: string) {
     if (!editing) return;
     const has = editing.doneActs.includes(act);
@@ -749,6 +755,7 @@ export default function PartnersPage() {
             partner={p}
             onEdit={() => openEdit(p)}
             onRemove={() => remove(p.id)}
+            onSelectPhoto={(index) => setFeaturedPhoto(p.id, index)}
           />
         ))}
       </div>

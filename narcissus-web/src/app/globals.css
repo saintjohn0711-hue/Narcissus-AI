@@ -84,6 +84,24 @@ body {
   animation: echo-rise 480ms ease-out both;
 }
 
+.partner-photo-strip {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(232, 168, 124, 0.35) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.partner-photo-strip::-webkit-scrollbar {
+  height: 4px;
+}
+
+.partner-photo-strip::-webkit-scrollbar-thumb {
+  background: rgba(232, 168, 124, 0.35);
+}
+
+.partner-lightbox {
+  animation: echo-rise 280ms ease-out both;
+}
+
 /* —— Brand home —— */
 .home-hero-atmosphere {
   position: absolute;
@@ -185,7 +203,8 @@ body {
   .home-logo-hero,
   .echo-card,
   .echo-cloud-dot,
-  .partner-card {
+  .partner-card,
+  .partner-lightbox {
     animation: none !important;
   }
 }
