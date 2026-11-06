@@ -14,7 +14,15 @@ Open http://localhost:3000
 
 ## Env
 
-Copy `.env.example` → `.env.local` and set `COMFYUI_BASE_URL` to the ComfyUI proxy (no trailing slash).
+Set locally in `.env.local` (or on Vercel for `narcissus-ai`):
+
+| Variable | Purpose |
+| --- | --- |
+| `COMFYUI_BASE_URL` | ComfyUI proxy (no trailing slash) |
+| `XAI_API_KEY` | xAI Grok for Art of X partner chat (`/art-of-x/chat`) |
+| `XAI_MODEL` | Optional; defaults to `grok-4.7` |
+
+**Grok key:** https://console.x.ai/ → API keys → add `XAI_API_KEY` on the Vercel project (Production + Preview). Without it, chat returns “Add XAI_API_KEY”.
 
 ## API
 

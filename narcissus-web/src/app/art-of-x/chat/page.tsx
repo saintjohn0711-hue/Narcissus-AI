@@ -1,17 +1,56 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import {
   displayName,
   genderLabel,
   mainPhoto,
   normalizeKinks,
-  stubPartnerReply,
   type ChatMessage,
   type PartnerRecord,
 } from "@/lib/artOfX";
 import { fetchChats, fetchPartners, persistChats } from "@/lib/artOfXStore";
+import type { ChatPov } from "@/lib/xai";
+
+async function readXaiSseStream(
+  res: Response,
+  onDelta: (chunk: string) => void,
+): Promise<string> {
+  const reader = res.body?.getReader();
+  if (!reader) return "";
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split("\n");
+    buffer = parts.pop() || "";
+
+    for (const line of parts) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith("data:")) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const json = JSON.parse(payload) as {
+          choices?: Array<{ delta?: { content?: string } }>;
+        };
+        const delta = json.choices?.[0]?.delta?.content;
+        if (delta) {
+          full += delta;
+          onDelta(delta);
+        }
+      } catch {
+        // ignore malformed SSE chunks
+      }
+    }
+  }
+  return full;
+}
 
 export default function ChatPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -19,6 +58,11 @@ export default function ChatPage() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
+  const [pov, setPov] = useState<ChatPov>("1st");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [modelLabel, setModelLabel] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -42,6 +86,10 @@ export default function ChatPage() {
     void persistChats(chats).catch(() => {});
   }, [chats, ready]);
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chats, activeId, sending]);
+
   const partner = useMemo(
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],
@@ -49,29 +97,131 @@ export default function ChatPage() {
   const threadKey = activeId != null ? String(activeId) : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
 
-  function send(e: FormEvent) {
+  async function send(e: FormEvent) {
     e.preventDefault();
-    if (!partner || !text.trim()) return;
+    if (!partner || !text.trim() || sending) return;
+
+    const userText = text.trim();
     const now = new Date().toISOString();
     const you: ChatMessage = {
       id: `m_${Date.now()}`,
       partnerId: partner.id,
       who: "You",
-      text: text.trim(),
+      text: userText,
       at: now,
     };
-    const reply: ChatMessage = {
-      id: `m_${Date.now() + 1}`,
+    const replyId = `m_${Date.now() + 1}`;
+    const placeholder: ChatMessage = {
+      id: replyId,
       partnerId: partner.id,
       who: "Partner",
-      text: stubPartnerReply(partner, text.trim()),
+      text: "",
       at: new Date().toISOString(),
     };
+
+    const prior = chats[String(partner.id)] || [];
     setChats((prev) => ({
       ...prev,
-      [String(partner.id)]: [...(prev[String(partner.id)] || []), you, reply],
+      [String(partner.id)]: [...(prev[String(partner.id)] || []), you, placeholder],
     }));
     setText("");
+    setSending(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/art-of-x/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          partner,
+          messages: [...prior, you].map((m) => ({
+            who: m.who,
+            text: m.text,
+          })),
+          pov,
+          stream: true,
+        }),
+      });
+
+      const hdrModel = res.headers.get("X-XAI-Model");
+      if (hdrModel) setModelLabel(hdrModel);
+
+      if (!res.ok) {
+        let message = "Chat request failed.";
+        try {
+          const data = (await res.json()) as {
+            message?: string;
+            error?: string;
+            detail?: string;
+          };
+          message =
+            data.message ||
+            (data.error === "xai_not_configured"
+              ? "Add XAI_API_KEY"
+              : data.detail || data.error || message);
+        } catch {
+          // keep default
+        }
+        setError(message);
+        setChats((prev) => ({
+          ...prev,
+          [String(partner.id)]: (prev[String(partner.id)] || []).filter(
+            (m) => m.id !== replyId,
+          ),
+        }));
+        return;
+      }
+
+      const contentType = res.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream")) {
+        await readXaiSseStream(res, (delta) => {
+          setChats((prev) => {
+            const list = [...(prev[String(partner.id)] || [])];
+            const idx = list.findIndex((m) => m.id === replyId);
+            if (idx < 0) return prev;
+            list[idx] = {
+              ...list[idx]!,
+              text: (list[idx]!.text || "") + delta,
+            };
+            return { ...prev, [String(partner.id)]: list };
+          });
+        });
+      } else {
+        const data = (await res.json()) as { text?: string; model?: string };
+        if (data.model) setModelLabel(data.model);
+        const replyText = data.text?.trim() || "";
+        if (!replyText) throw new Error("empty_reply");
+        setChats((prev) => {
+          const list = [...(prev[String(partner.id)] || [])];
+          const idx = list.findIndex((m) => m.id === replyId);
+          if (idx < 0) return prev;
+          list[idx] = { ...list[idx]!, text: replyText };
+          return { ...prev, [String(partner.id)]: list };
+        });
+      }
+
+      setChats((prev) => {
+        const list = prev[String(partner.id)] || [];
+        const reply = list.find((m) => m.id === replyId);
+        if (reply && !reply.text.trim()) {
+          return {
+            ...prev,
+            [String(partner.id)]: list.filter((m) => m.id !== replyId),
+          };
+        }
+        return prev;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Chat failed");
+      setChats((prev) => ({
+        ...prev,
+        [String(partner.id)]: (prev[String(partner.id)] || []).filter(
+          (m) => m.id !== replyId,
+        ),
+      }));
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -85,8 +235,9 @@ export default function ChatPage() {
           AI chat
         </h1>
         <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          Chat against partner cards. Replies are a local personality stub
-          grounded in history / kinks / dynamics — real LLM wiring is next.
+          Chat with partner cards via xAI Grok
+          {modelLabel ? ` · ${modelLabel}` : ""}. Grounded in looks, kinks,
+          dynamics, and history — witty, vivid, adults 18+ only.
         </p>
       </header>
 
@@ -101,7 +252,10 @@ export default function ChatPage() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setActiveId(p.id)}
+                onClick={() => {
+                  setActiveId(p.id);
+                  setError(null);
+                }}
                 className={`flex w-full items-center gap-3 border px-3 py-2 text-left text-sm ${
                   activeId === p.id
                     ? "border-[var(--accent)] bg-[var(--accent)]/10"
@@ -134,22 +288,41 @@ export default function ChatPage() {
 
           <section className="flex min-h-[28rem] flex-col border border-[var(--line)] bg-[var(--bg-elevated)]/40">
             {partner && (
-              <div className="border-b border-[var(--line)] p-4">
-                <h2
-                  className="text-xl text-[var(--ink)]"
-                  style={{ fontFamily: "var(--font-display), serif" }}
-                >
-                  {displayName(partner)}
-                </h2>
-                <p className="mt-1 text-xs text-[#c4b7a8]">
-                  {normalizeKinks(partner.kinks)
-                    .slice(0, 5)
-                    .map((k) => k.tag)
-                    .join(" · ") || "No kinks tagged"}
-                  {partner.dynTags.length
-                    ? ` · ${partner.dynTags.slice(0, 3).join(", ")}`
-                    : ""}
-                </p>
+              <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] p-4">
+                <div>
+                  <h2
+                    className="text-xl text-[var(--ink)]"
+                    style={{ fontFamily: "var(--font-display), serif" }}
+                  >
+                    {displayName(partner)}
+                  </h2>
+                  <p className="mt-1 text-xs text-[#c4b7a8]">
+                    {normalizeKinks(partner.kinks)
+                      .slice(0, 5)
+                      .map((k) => k.tag)
+                      .join(" · ") || "No kinks tagged"}
+                    {partner.dynTags.length
+                      ? ` · ${partner.dynTags.slice(0, 3).join(", ")}`
+                      : ""}
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                  POV
+                  <select
+                    value={pov}
+                    onChange={(e) => setPov(e.target.value as ChatPov)}
+                    className="rounded-sm border border-[var(--line)] bg-[#1c1814] px-2 py-1 text-sm text-[var(--ink)]"
+                  >
+                    <option value="1st">1st person</option>
+                    <option value="3rd">3rd person</option>
+                  </select>
+                </label>
+              </div>
+            )}
+
+            {error && (
+              <div className="border-b border-[var(--line)] bg-[#3a1814]/60 px-4 py-2 text-sm text-[#f0c4b8]">
+                {error}
               </div>
             )}
 
@@ -171,9 +344,13 @@ export default function ChatPage() {
                   <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                     {m.who}
                   </p>
-                  <p className="whitespace-pre-wrap">{m.text}</p>
+                  <p className="whitespace-pre-wrap">
+                    {m.text ||
+                      (sending && m.who === "Partner" ? "…" : "")}
+                  </p>
                 </div>
               ))}
+              <div ref={bottomRef} />
             </div>
 
             <form
@@ -184,13 +361,15 @@ export default function ChatPage() {
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Message…"
-                className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+                disabled={sending || !partner}
+                className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm disabled:opacity-60"
               />
               <button
                 type="submit"
-                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#1a120c]"
+                disabled={sending || !partner || !text.trim()}
+                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#1a120c] disabled:opacity-50"
               >
-                Send
+                {sending ? "…" : "Send"}
               </button>
             </form>
           </section>
