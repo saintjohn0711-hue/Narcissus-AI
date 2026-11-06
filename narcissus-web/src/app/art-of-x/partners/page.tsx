@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import {
   ALL_KINKS,
@@ -40,6 +40,8 @@ export default function PartnersPage() {
   const [ready, setReady] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Skip the persist effect when applying server-returned ids. */
+  const syncingFromServer = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -62,6 +64,7 @@ export default function PartnersPage() {
       const list = await fetchPartners();
       if (cancelled) return;
       setStoreMode(mode);
+      syncingFromServer.current = true;
       setPartners(list);
       setReady(true);
     })().catch(() => {
@@ -74,10 +77,22 @@ export default function PartnersPage() {
 
   useEffect(() => {
     if (!ready) return;
+    if (syncingFromServer.current) {
+      syncingFromServer.current = false;
+      return;
+    }
     let cancelled = false;
     void persistPartners(partners)
-      .then(() => {
-        if (!cancelled) setSaveError(null);
+      .then((saved) => {
+        if (cancelled) return;
+        setSaveError(null);
+        const sameIds =
+          saved.length === partners.length &&
+          saved.every((p) => partners.some((q) => q.id === p.id));
+        if (!sameIds) {
+          syncingFromServer.current = true;
+          setPartners(saved);
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
