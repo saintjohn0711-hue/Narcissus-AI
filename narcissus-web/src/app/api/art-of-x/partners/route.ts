@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
-import type { PartnerRecord } from "@/lib/artOfX";
+import { PG_INT4_MAX, type PartnerRecord } from "@/lib/artOfX";
 
 export const runtime = "nodejs";
+
+/** Accept only ids that fit Postgres int4; otherwise let serial assign. */
+function safePartnerId(id: unknown): number | undefined {
+  const n = typeof id === "number" ? id : Number(id);
+  if (!Number.isInteger(n) || n <= 0 || n > PG_INT4_MAX) return undefined;
+  return n;
+}
 
 function rowToPartner(
   row: typeof schema.partners.$inferSelect,
@@ -73,41 +80,53 @@ export async function PUT(req: NextRequest) {
   const userId = auth.userId;
   const now = new Date();
 
-  // Replace-all for this user (simple sync model for MVP)
-  await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
+  try {
+    // Replace-all for this user (simple sync model for MVP)
+    await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
 
-  for (const p of list) {
-    await db.insert(schema.partners).values({
-      id: Number.isFinite(p.id) ? p.id : undefined,
-      userId,
-      name: p.name || "",
-      type: p.type || "Real",
-      gender: p.gender || "woman",
-      looks: p.looks || "",
-      notes: p.notes || "",
-      history: p.history || "",
-      dynamics: p.dynamics || "",
-      dynTags: p.dynTags || [],
-      kinks: p.kinks || [],
-      doneActs: p.doneActs || [],
-      photos: p.photos || [],
-      mainPhotoIndex: p.mainPhotoIndex ?? 0,
-      favorite: Boolean(p.favorite),
-      isCouple: Boolean(p.isCouple),
-      partnerA: p.partnerA || "",
-      partnerB: p.partnerB || "",
-      locations: p.locations || "",
-      createdAt: p.createdAt ? new Date(p.createdAt) : now,
-      updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
+    for (const p of list) {
+      await db.insert(schema.partners).values({
+        id: safePartnerId(p.id),
+        userId,
+        name: p.name || "",
+        type: p.type || "Real",
+        gender: p.gender || "woman",
+        looks: p.looks || "",
+        notes: p.notes || "",
+        history: p.history || "",
+        dynamics: p.dynamics || "",
+        dynTags: p.dynTags || [],
+        kinks: p.kinks || [],
+        doneActs: p.doneActs || [],
+        photos: p.photos || [],
+        mainPhotoIndex: p.mainPhotoIndex ?? 0,
+        favorite: Boolean(p.favorite),
+        isCouple: Boolean(p.isCouple),
+        partnerA: p.partnerA || "",
+        partnerB: p.partnerB || "",
+        locations: p.locations || "",
+        createdAt: p.createdAt ? new Date(p.createdAt) : now,
+        updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
+      });
+    }
+
+    const rows = await db
+      .select()
+      .from(schema.partners)
+      .where(eq(schema.partners.userId, userId));
+
+    return NextResponse.json({
+      partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
     });
+  } catch (err) {
+    console.error("partners PUT failed", err);
+    return NextResponse.json(
+      {
+        error: "save_failed",
+        message:
+          err instanceof Error ? err.message : "Failed to save partners",
+      },
+      { status: 500 },
+    );
   }
-
-  const rows = await db
-    .select()
-    .from(schema.partners)
-    .where(eq(schema.partners.userId, userId));
-
-  return NextResponse.json({
-    partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
-  });
 }

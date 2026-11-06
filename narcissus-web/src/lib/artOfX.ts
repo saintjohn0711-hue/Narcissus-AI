@@ -337,10 +337,33 @@ export function normalizeKinks(
     .filter((x) => x.tag);
 }
 
-export function emptyPartner(name = "New partner"): PartnerRecord {
+/** Postgres `integer` / `serial` max — client temp ids must fit. */
+export const PG_INT4_MAX = 2_147_483_647;
+
+/** Next partner id that fits int4 and avoids collisions with `existing`. */
+export function nextPartnerId(existing: { id: number }[] = []): number {
+  let max = 0;
+  for (const p of existing) {
+    if (Number.isFinite(p.id) && p.id > max && p.id <= PG_INT4_MAX) {
+      max = p.id;
+    }
+  }
+  if (max < PG_INT4_MAX) return max + 1;
+  // Extremely unlikely full range — pick an unused random slot.
+  for (let i = 0; i < 32; i++) {
+    const id = Math.floor(Math.random() * PG_INT4_MAX) + 1;
+    if (!existing.some((p) => p.id === id)) return id;
+  }
+  return 1;
+}
+
+export function emptyPartner(
+  name = "New partner",
+  existing: { id: number }[] = [],
+): PartnerRecord {
   const now = new Date().toISOString();
   return {
-    id: Date.now(),
+    id: nextPartnerId(existing),
     name,
     type: "Real",
     gender: "woman",

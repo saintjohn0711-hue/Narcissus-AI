@@ -100,6 +100,7 @@ export async function persistPartners(
   const res = await fetch("/api/art-of-x/partners", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ partners }),
   });
   if (res.status === 401) {
@@ -107,7 +108,16 @@ export async function persistPartners(
     // Do not silently write account edits to localStorage while signed-out mid-session.
     throw new Error("Session expired — sign in to save to your account");
   }
-  if (!res.ok) throw new Error("Failed to save partners");
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const data = (await res.json()) as { message?: string; error?: string };
+      detail = data.message || data.error || "";
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `Failed to save partners (${res.status})`);
+  }
 }
 
 export async function fetchScenes(): Promise<SavedScene[]> {
