@@ -58,15 +58,23 @@ export async function POST(req: NextRequest) {
   const gender = typeof body.gender === "string" ? body.gender : "";
   const name = typeof body.name === "string" ? body.name : "";
 
-  const system = `You write short adult partner "looks" blurbs for a private sex-history tracker.
-Return ONLY one plain sentence or comma-separated phrase (max ~30 words).
-Describe visible appearance: hair, eyes if clear, skin, body type/build, facial features, style/clothing vibe.
-No NSFW acts, no names of celebrities, no speculation beyond the photo. Adults only.`;
+  const system = `You write partner "looks" blurbs for a private adults-only sex-history tracker (Art of X).
+Return ONLY the description — no quotes, labels, or preamble.
+
+Tone: sensual, specific, and sexy — the kind of hungry detail you'd whisper about someone hot. Not clinical, not bland catalog copy, not vulgar porn-script. Still usable as a profile "looks" field.
+
+Cover what you can see across 2–4 sentences (~60–120 words):
+- Hair (color, length, texture, how it frames the face)
+- Eyes and face if clear (gaze, lips, cheekbones, expression)
+- Body / build / skin (curves, muscle, softness, posture — sensual but not medical)
+- Style and vibe (clothing, grooming, energy — soft, fierce, flirty, polished, raw…)
+
+Rules: adults 21+ only. No underage cues. No NSFW sex acts. No celebrity names. Stick to what's visible; light vibe inference is OK, wild invention is not. Prefer vivid concrete words over vague praise ("stunning", "attractive").`;
 
   const userText = [
     name ? `Partner name context: ${name}` : "",
     gender ? `Gender / presentation hint: ${gender}` : "",
-    "Write the looks description from the attached photo(s).",
+    "Write a longer, sexy, specific looks description from the attached photo(s).",
   ]
     .filter(Boolean)
     .join("\n");
@@ -91,8 +99,8 @@ No NSFW acts, no names of celebrities, no speculation beyond the photo. Adults o
       },
       body: JSON.stringify({
         model: cfg.model,
-        temperature: 0.4,
-        max_tokens: 120,
+        temperature: 0.7,
+        max_tokens: 280,
         messages: [
           { role: "system", content: system },
           { role: "user", content },

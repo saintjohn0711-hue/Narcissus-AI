@@ -255,8 +255,8 @@ export default function PartnersPage() {
       setEditing((prev) => (prev ? { ...prev, looks: result.looks } : prev));
       setLooksNote(
         result.source === "vision"
-          ? "Looks filled from chosen photo(s) via vision."
-          : "Looks draft from chosen photo(s) — edit as needed. Add a vision API key for sharper descriptions.",
+          ? "Sexy looks blurb filled from chosen photo(s) via vision — edit freely."
+          : "Sensual looks draft from chosen photo(s) — edit as needed. Add a vision API key for sharper photo-true descriptions.",
       );
     } catch (err) {
       setLooksNote(
@@ -566,14 +566,15 @@ export default function PartnersPage() {
                     }`}
               </button>
             </div>
-            <input
+            <textarea
               value={editing.looks}
               onChange={(e) => {
                 setEditing({ ...editing, looks: e.target.value });
                 setLooksNote(null);
               }}
-              placeholder="Hair, build, style — or pull from chosen photos"
-              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+              rows={4}
+              placeholder="Hair, eyes, body, style, vibe — or pull a sexy description from chosen photos"
+              className="prompt-field min-h-[6rem] resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
             />
             {looksNote && (
               <p className="text-xs text-[#c4b7a8]">{looksNote}</p>
