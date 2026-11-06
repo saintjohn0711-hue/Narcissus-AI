@@ -4,10 +4,21 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 /**
- * Circle share-code UI — lives on Account (and later Echo card).
+ * Circle share-code UI — lives on Echo / Account.
  * Codes create linked-viewer connections, not password sharing.
  */
-export function ShareCodePanel({ signedIn }: { signedIn: boolean }) {
+export function ShareCodePanel({
+  signedIn,
+  variant = "standalone",
+}: {
+  signedIn: boolean;
+  /** embedded = no outer border (nested inside Echo card) */
+  variant?: "standalone" | "embedded";
+}) {
+  const shell =
+    variant === "embedded"
+      ? "pt-1"
+      : "border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-5";
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +150,7 @@ export function ShareCodePanel({ signedIn }: { signedIn: boolean }) {
 
   if (!signedIn) {
     return (
-      <section className="border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-5">
+      <section className={shell}>
         <h2
           className="text-2xl text-[var(--ink)]"
           style={{ fontFamily: "var(--font-display), serif" }}
@@ -161,7 +172,7 @@ export function ShareCodePanel({ signedIn }: { signedIn: boolean }) {
   }
 
   return (
-    <section className="border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-5">
+    <section className={shell}>
       <h2
         className="text-2xl text-[var(--ink)]"
         style={{ fontFamily: "var(--font-display), serif" }}
