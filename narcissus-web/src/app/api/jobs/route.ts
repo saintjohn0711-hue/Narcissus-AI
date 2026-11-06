@@ -33,9 +33,11 @@ import {
 import {
   buildFaceSwapPrompt,
   buildImg2ImgPrompt,
+  buildScenePrompt,
   buildUndressPrompt,
   buildVideoPrompt,
   denoiseForIdentity,
+  sceneDenoise,
   type JobMode,
 } from "@/lib/workflows";
 
@@ -217,7 +219,7 @@ export async function POST(req: NextRequest) {
                 fps: 8,
               })
             : mode === "scene" && sceneTpl
-              ? buildImg2ImgPrompt("scene", uploaded.filename, {
+              ? buildScenePrompt(uploaded.filename, {
                   promptOverride: [
                     sceneTpl.stillPrompt,
                     promptOverride,
@@ -225,9 +227,9 @@ export async function POST(req: NextRequest) {
                     .filter(Boolean)
                     .join(", "),
                   identity: Math.max(identity, 0.85),
-                  denoise:
-                    sceneTpl.stillDenoise *
-                    (1.25 - Math.min(1, Math.max(0.4, identity))),
+                  denoise: sceneDenoise(sceneTpl.stillDenoise, identity),
+                  // Facial needs the generated face effect — don't ReActor it away.
+                  faceLock: sceneTpl.id !== "facial",
                   prefix: `narcissus_scene_${sceneTpl.id}`,
                 })
               : buildImg2ImgPrompt(mode, uploaded.filename, {
@@ -316,10 +318,15 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // Paste original head/hair onto still edits so the person stays the person.
+    // Light head lock only. A large headRatio (~0.45) used to paste the
+    // original chest/shoulders back and cancel undress + scene edits.
+    // Scene/undress already ReActor-lock the face — keep this to a thin band.
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
+    const skipHeadPaste =
+      mode === "scene" && sceneTpl?.id === "facial";
     if (
+      !skipHeadPaste &&
       (mode === "undress" || mode === "custom" || mode === "scene") &&
       result.images[0] &&
       result.mediaKind === "image"
@@ -327,9 +334,13 @@ export async function POST(req: NextRequest) {
       try {
         const editedBytes = await fetchImageBytes(result.images[0]);
         if (!(await isNearlyBlankImageAsync(editedBytes))) {
+          const headRatio =
+            mode === "undress" || mode === "scene"
+              ? 0.2 + identity * 0.06 // ~0.26 at default identity — face/hair only
+              : 0.28 + identity * 0.08;
           const locked = await lockHeadAndHair(editedBytes, originalBytes, {
-            headRatio: 0.34 + identity * 0.12,
-            feather: 0.16,
+            headRatio,
+            feather: 0.1,
             globalPull: 0,
           });
           const localName = await saveLocalResult(
