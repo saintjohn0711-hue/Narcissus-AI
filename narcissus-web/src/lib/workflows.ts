@@ -59,9 +59,23 @@ export function denoiseForIdentity(
     return Math.max(0.38, Math.min(0.56, base * (0.95 + factor * 0.12)));
   }
   if (mode === "scene") {
-    return Math.max(0.28, Math.min(0.52, base * (0.9 + factor * 0.2)));
+    // Floor high enough that SD1.5 actually reshapes the frame (acts/outfits).
+    return Math.max(0.52, Math.min(0.72, base * (1.15 + factor * 0.15)));
   }
   return Math.max(0.12, Math.min(0.55, base * factor));
+}
+
+/**
+ * Scene-template denoise. Template `stillDenoise` is a strength hint — never
+ * crush it by (1.25 − identity); that made blowjob/outfits look like passthrough
+ * (~0.12–0.15 denoise) before ImageBlend + head-lock pasted the upload back.
+ */
+export function sceneDenoise(stillDenoise: number, identity = 0.9): number {
+  const id = Math.min(1, Math.max(0.5, identity));
+  // Identity only trims a little; keep a hard floor so the edit is visible.
+  const trim = (1 - id) * 0.1; // 0..0.05
+  const boosted = Math.max(0.58, stillDenoise + 0.22);
+  return Math.min(0.78, Math.max(0.55, boosted - trim));
 }
 
 export function undressCheckpoint(preferred?: string): string {
@@ -332,6 +346,164 @@ export function buildUndressPrompt(
   return graph;
 }
 
+/**
+ * Scene / act / outfit templates: strong img2img + optional ReActor face lock.
+ * No full-frame ImageBlend (that pulled the upload back and cancelled the edit).
+ */
+export function buildScenePrompt(
+  imageName: string,
+  opts?: {
+    seed?: number;
+    promptOverride?: string;
+    identity?: number;
+    denoise?: number;
+    width?: number;
+    height?: number;
+    prefix?: string;
+    checkpoint?: string;
+    /** ReActor face lock from the upload. Skip for face-effect templates (facial). */
+    faceLock?: boolean;
+  },
+): Record<string, unknown> {
+  const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
+  const identity = opts?.identity ?? 0.9;
+  const denoise =
+    opts?.denoise ?? sceneDenoise(0.42, identity);
+  const width = opts?.width ?? 768;
+  const height = opts?.height ?? 768;
+  const ckpt = opts?.checkpoint?.trim() || CKPT_SD15;
+  const faceLock = opts?.faceLock !== false;
+  const prefix = opts?.prefix ?? "narcissus_scene";
+  const stamp = Date.now().toString(36);
+
+  const positive = [
+    opts?.promptOverride?.trim() || DEFAULT_PROMPTS.scene,
+    "major visible change from the reference photo required",
+    "do not leave clothing pose or framing unchanged",
+    "exact same face as the reference photo, identical eyes nose mouth bone structure",
+    "exact same hairstyle hair color and hairline as the reference",
+    "photorealistic skin, sharp detail",
+  ].join(", ");
+
+  const negative = [
+    NEGATIVE,
+    "identical to input, unchanged photo, passthrough, no change",
+    "blank, black image, empty frame",
+    "different face, different person, different hairstyle, wrong hair color",
+  ].join(", ");
+
+  const graph: Record<string, unknown> = {
+    "1": {
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: ckpt },
+    },
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: imageName },
+    },
+    "3": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["2", 0],
+        upscale_method: "lanczos",
+        width,
+        height,
+        crop: "disabled",
+      },
+    },
+    "4": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: positive, clip: ["1", 1] },
+    },
+    "5": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: negative, clip: ["1", 1] },
+    },
+    "6": {
+      class_type: "VAEEncode",
+      inputs: { pixels: ["3", 0], vae: ["1", 2] },
+    },
+    "7": {
+      class_type: "KSampler",
+      inputs: {
+        seed,
+        steps: 36,
+        cfg: 7,
+        sampler_name: "euler",
+        scheduler: "normal",
+        denoise,
+        model: ["1", 0],
+        positive: ["4", 0],
+        negative: ["5", 0],
+        latent_image: ["6", 0],
+      },
+    },
+    "8": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["7", 0], vae: ["1", 2] },
+    },
+  };
+
+  if (faceLock) {
+    graph["9"] = {
+      class_type: "ReActorOptions",
+      inputs: {
+        input_faces_order: "large-small",
+        input_faces_index: "0",
+        detect_gender_input: "no",
+        source_faces_order: "large-small",
+        source_faces_index: "0",
+        detect_gender_source: "no",
+        console_log_level: 1,
+        restore_swapped_only: true,
+      },
+    };
+    graph["11"] = {
+      class_type: "ReActorFaceBoost",
+      inputs: {
+        enabled: true,
+        boost_model: "GFPGANv1.4.pth",
+        interpolation: "Bicubic",
+        visibility: 1,
+        codeformer_weight: 0.4,
+        restore_with_main_after: true,
+      },
+    };
+    graph["12"] = {
+      class_type: "ReActorFaceSwapOpt",
+      inputs: {
+        enabled: true,
+        input_image: ["8", 0],
+        source_image: ["3", 0],
+        swap_model: "inswapper_128.onnx",
+        facedetection: "retinaface_resnet50",
+        face_restore_model: "GFPGANv1.4.pth",
+        face_restore_visibility: 1,
+        codeformer_weight: 0.4,
+        options: ["9", 0],
+        face_boost: ["11", 0],
+      },
+    };
+    graph["15"] = {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `${prefix}_${stamp}`,
+        images: ["12", 0],
+      },
+    };
+  } else {
+    graph["10"] = {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `${prefix}_${stamp}`,
+        images: ["8", 0],
+      },
+    };
+  }
+
+  return graph;
+}
+
 export function buildImg2ImgPrompt(
   mode: Exclude<JobMode, "video">,
   imageName: string,
@@ -345,14 +517,16 @@ export function buildImg2ImgPrompt(
     prefix?: string;
     bodyType?: BodyTypeId;
     checkpoint?: string;
+    faceLock?: boolean;
   },
 ): Record<string, unknown> {
   if (mode === "undress") {
     return buildUndressPrompt(imageName, opts);
   }
+  if (mode === "scene") {
+    return buildScenePrompt(imageName, opts);
+  }
 
-  // Scene templates run the same img2img path as custom, with stronger
-  // template prompts supplied by the caller.
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
   const positive =
     `${opts?.promptOverride?.trim() || DEFAULT_PROMPTS[mode]}, exact same face as reference photo, preserve identity`;
@@ -361,6 +535,11 @@ export function buildImg2ImgPrompt(
   const width = opts?.width ?? 768;
   const height = opts?.height ?? 768;
   const prefix = opts?.prefix ?? `narcissus_${mode}`;
+  // Soft blend only for freeform custom — keep it light so edits stay visible.
+  const blend = Math.min(
+    0.28,
+    Math.max(0.08, (opts?.identity ?? 0.85) * 0.22),
+  );
 
   return {
     "1": {
@@ -412,13 +591,12 @@ export function buildImg2ImgPrompt(
       class_type: "VAEDecode",
       inputs: { samples: ["7", 0], vae: ["1", 2] },
     },
-    // Blend original back in so the face/photo stays closer to the upload
     "9": {
       class_type: "ImageBlend",
       inputs: {
         image1: ["8", 0],
         image2: ["3", 0],
-        blend_factor: Math.min(0.55, Math.max(0.2, (opts?.identity ?? 0.85) * 0.45)),
+        blend_factor: blend,
         blend_mode: "normal",
       },
     },

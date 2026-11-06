@@ -85,7 +85,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Oral POV still — your face locked onto the scene.",
     stillPrompt:
       "photorealistic adult oral sex blowjob scene, same person face and identity preserved exactly, matching the reference photo face, lips around penis, intimate POV, detailed eyes and mouth, realistic skin",
-    stillDenoise: 0.42,
+    stillDenoise: 0.55,
   },
   {
     id: "double_blowjob",
@@ -94,7 +94,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Two mouths sharing — your face on the primary subject.",
     stillPrompt:
       "photorealistic adult double blowjob threesome oral scene, two women sharing one penis, same person face and identity preserved exactly on the primary subject matching the reference photo, intimate close-up, realistic skin",
-    stillDenoise: 0.45,
+    stillDenoise: 0.58,
   },
   {
     id: "cumshot",
@@ -103,7 +103,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Finish on body — face and hair stay yours.",
     stillPrompt:
       "photorealistic adult cumshot scene, semen on body and chest, same person face and identity preserved exactly matching the reference photo, aroused expression, realistic skin and fluid detail",
-    stillDenoise: 0.4,
+    stillDenoise: 0.52,
   },
   {
     id: "facial",
@@ -112,7 +112,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Finish on face — likeness locked tight.",
     stillPrompt:
       "photorealistic adult facial cumshot, semen on face and lips, same person face and identity preserved exactly matching the reference photo, eyes open, intimate close-up portrait, realistic skin",
-    stillDenoise: 0.38,
+    stillDenoise: 0.5,
   },
   {
     id: "lingerie",
@@ -121,7 +121,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Outfit change — sheer lingerie, same person.",
     stillPrompt:
       "photorealistic adult woman in elegant sheer lingerie, lace bra and panties, same person face and identity preserved exactly matching the reference photo, bedroom soft light, realistic fabric and skin",
-    stillDenoise: 0.36,
+    stillDenoise: 0.5,
     outfitChange: true,
   },
   {
@@ -131,7 +131,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Outfit change — swimwear, same person.",
     stillPrompt:
       "photorealistic adult in a revealing bikini, same person face and identity preserved exactly matching the reference photo, sunlit skin, beach or pool vibe, realistic fabric",
-    stillDenoise: 0.36,
+    stillDenoise: 0.5,
     outfitChange: true,
   },
   {
@@ -141,7 +141,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Outfit change — tight LBD, same person.",
     stillPrompt:
       "photorealistic adult in a tight little black dress, elegant evening look, same person face and identity preserved exactly matching the reference photo, soft glam light, realistic fabric and skin",
-    stillDenoise: 0.36,
+    stillDenoise: 0.5,
     outfitChange: true,
   },
   {
@@ -151,7 +151,7 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     blurb: "Outfit change — wet silk clinging, same person.",
     stillPrompt:
       "photorealistic adult in wet translucent silk dress clinging to the body, same person face and identity preserved exactly matching the reference photo, glossy wet fabric, intimate lighting, realistic skin",
-    stillDenoise: 0.38,
+    stillDenoise: 0.52,
     outfitChange: true,
   },
 
