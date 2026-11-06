@@ -46,15 +46,15 @@ export function AuthControls() {
     <div className="ml-auto flex items-center gap-2 text-sm">
       <Link
         href="/sign-in"
-        className="rounded-sm px-2.5 py-1 text-[#c4b7a8] transition hover:text-[var(--ink)]"
+        className="rounded-sm border border-[var(--accent)]/50 bg-[var(--accent)] px-3 py-1.5 font-semibold text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
       >
-        Sign in
+        Log in
       </Link>
       <Link
         href="/sign-up"
-        className="rounded-sm border border-[var(--accent)]/40 bg-[var(--accent)]/15 px-2.5 py-1 text-[var(--accent-strong)] transition hover:bg-[var(--accent)]/25"
+        className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
       >
-        Create account
+        Sign up
       </Link>
     </div>
   );

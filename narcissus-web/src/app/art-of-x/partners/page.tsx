@@ -38,6 +38,21 @@ export default function PartnersPage() {
   const [looksNote, setLooksNote] = useState<string | null>(null);
   const [storeMode, setStoreMode] = useState<StoreMode>("local");
   const [ready, setReady] = useState(false);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("imported");
+    if (!raw) return;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) {
+      setImportNote(
+        `Imported ${n} partner${n === 1 ? "" : "s"} to your account`,
+      );
+    }
+    window.history.replaceState({}, "", "/art-of-x/partners");
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -265,6 +280,15 @@ export default function PartnersPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
       <AppNav />
+      {importNote && (
+        <p
+          role="status"
+          className="mb-4 rounded-sm border border-[var(--ok)]/35 bg-[var(--ok)]/10 px-3 py-2 text-sm text-[var(--ok)]"
+        >
+          {importNote}
+        </p>
+      )}
+
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1
@@ -276,8 +300,17 @@ export default function PartnersPage() {
           <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
             Sex tracker — who, what you&apos;ve done, kinks, dynamics, photos.
             {storeMode === "database"
-              ? " Saved to your account (Neon)."
-              : " Stored on this device — sign in to save to your account."}
+              ? " Saved to your Narcissus account."
+              : " Stored on this device — "}
+            {storeMode !== "database" && (
+              <a
+                href="/sign-in"
+                className="text-[var(--accent-strong)] underline-offset-2 hover:underline"
+              >
+                sign in
+              </a>
+            )}
+            {storeMode !== "database" && " to save to your account."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
