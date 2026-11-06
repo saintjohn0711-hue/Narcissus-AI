@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { AuthControls } from "@/components/AuthControls";
 
 const LINKS = [
-  { href: "/", label: "Studio" },
+  { href: "/", label: "Home" },
+  { href: "/studio", label: "Studio" },
   { href: "/art-of-x", label: "Art of X" },
   { href: "/art-of-x/partners", label: "Partners" },
   { href: "/art-of-x/stories", label: "Stories" },

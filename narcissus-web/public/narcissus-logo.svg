@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Narcissus logo placeholder">
+  <!-- Drop the real logo here: narcissus-web/public/narcissus-logo.svg -->
+  <defs>
+    <radialGradient id="bloom" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#f0c4a0" stop-opacity="0.55"/>
+      <stop offset="55%" stop-color="#e8a87c" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#e8a87c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="#e8a87c" stroke-opacity="0.35" stroke-width="1.25"/>
+  <circle cx="60" cy="60" r="38" fill="url(#bloom)"/>
+  <path
+    d="M60 28c8 10 14 20 14 32 0 12-6 22-14 32-8-10-14-20-14-32 0-12 6-22 14-32z"
+    fill="none"
+    stroke="#f3ece2"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+  />
+  <circle cx="60" cy="58" r="4" fill="#f0c4a0"/>
+</svg>
