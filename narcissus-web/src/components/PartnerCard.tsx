@@ -161,36 +161,33 @@ export function PartnerCard({ partner: p, onEdit, onRemove }: PartnerCardProps) 
           </header>
 
           {hasBody ? (
-            <div className="flex flex-col gap-6 px-5 py-5 sm:px-6 sm:py-6">
-              {(hasLooks || hasDynBlock) && (
-                <div className="grid gap-6 sm:grid-cols-2 sm:gap-x-10">
-                  {hasLooks && (
-                    <Section label="Looks">
-                      <p className="text-[15px] leading-[1.65] text-[#f7f1e8]/95%">
-                        {p.looks}
-                      </p>
-                    </Section>
+            <div className="flex flex-col gap-5 px-5 py-5 sm:gap-6 sm:px-6 sm:py-6">
+              {hasLooks && (
+                <Section label="Looks">
+                  <p className="text-[15px] leading-[1.65] text-[#f7f1e8]/95%">
+                    {p.looks}
+                  </p>
+                </Section>
+              )}
+
+              {hasDynBlock && (
+                <Section label="Dynamics">
+                  {hasDynTags && <SoftList items={p.dynTags} />}
+                  {hasDynamics && (
+                    <p
+                      className={`text-[15px] leading-[1.65] text-[#d8cfc2] ${
+                        hasDynTags ? "mt-2" : ""
+                      }`}
+                    >
+                      {p.dynamics}
+                    </p>
                   )}
-                  {hasDynBlock && (
-                    <Section label="Dynamics">
-                      {hasDynTags && <SoftList items={p.dynTags} />}
-                      {hasDynamics && (
-                        <p
-                          className={`text-[15px] leading-[1.65] text-[#d8cfc2] ${
-                            hasDynTags ? "mt-2" : ""
-                          }`}
-                        >
-                          {p.dynamics}
-                        </p>
-                      )}
-                    </Section>
-                  )}
-                </div>
+                </Section>
               )}
 
               {hasHistory && (
                 <Section label="History with them">
-                  <p className="max-w-prose text-[15px] leading-[1.7] text-[#f7f1e8]/92%">
+                  <p className="text-[15px] leading-[1.7] text-[#f7f1e8]/92%">
                     {p.history}
                   </p>
                 </Section>
@@ -198,29 +195,34 @@ export function PartnerCard({ partner: p, onEdit, onRemove }: PartnerCardProps) 
 
               {hasNotes && (
                 <Section label="Notes">
-                  <p className="max-w-prose text-[15px] leading-[1.7] text-[#d8cfc2]">
+                  <p className="text-[15px] leading-[1.7] text-[#d8cfc2]">
                     {p.notes}
                   </p>
                 </Section>
               )}
 
-              {(hasActs || hasKinks) && (
-                <div
-                  className={`grid gap-6 ${
-                    hasActs && hasKinks ? "sm:grid-cols-2 sm:gap-x-10" : ""
-                  } ${hasProseAbove ? "border-t border-[var(--line)] pt-5" : ""}`}
+              {hasActs && (
+                <Section
+                  label="Acts logged"
+                  className={
+                    hasProseAbove ? "border-t border-[var(--line)] pt-5" : ""
+                  }
                 >
-                  {hasActs && (
-                    <Section label="Acts logged">
-                      <SoftList items={p.doneActs} />
-                    </Section>
-                  )}
-                  {hasKinks && (
-                    <Section label="Kinks">
-                      <SoftList items={kinkTags} />
-                    </Section>
-                  )}
-                </div>
+                  <SoftList items={p.doneActs} />
+                </Section>
+              )}
+
+              {hasKinks && (
+                <Section
+                  label="Kinks"
+                  className={
+                    hasProseAbove && !hasActs
+                      ? "border-t border-[var(--line)] pt-5"
+                      : ""
+                  }
+                >
+                  <SoftList items={kinkTags} />
+                </Section>
               )}
             </div>
           ) : (
