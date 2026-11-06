@@ -15,8 +15,12 @@ const body = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Narcissus",
-  description: "Adult image studio — likeness-preserving edits on Runpod",
+  title: {
+    default: "Narcissus",
+    template: "%s · Narcissus",
+  },
+  description:
+    "Adult desire studio — likeness edits, partners, stories, and discovery",
 };
 
 export default function RootLayout({

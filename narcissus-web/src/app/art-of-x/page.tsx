@@ -18,7 +18,7 @@ export default function ArtOfXHome() {
         </h1>
         <p className="mt-3 max-w-xl text-base font-light leading-relaxed text-[#c4b7a8]">
           Partner history, scene builder, photos, and AI chat — craft pulled from
-          Ark of X. Studio stays next door for photo edits.
+          Ark of X. Studio is next door at /studio for photo edits.
         </p>
       </header>
 

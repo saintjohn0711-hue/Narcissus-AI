@@ -79,3 +79,109 @@ body {
 .echo-cloud-dot {
   animation: echo-pulse 2.4s ease-in-out infinite;
 }
+
+/* —— Brand home —— */
+.home-hero-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.home-hero-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 70% at 18% 28%, rgba(232, 168, 124, 0.22), transparent 58%),
+    radial-gradient(ellipse 70% 55% at 88% 12%, rgba(120, 88, 58, 0.28), transparent 52%),
+    radial-gradient(ellipse 55% 45% at 70% 78%, rgba(232, 168, 124, 0.08), transparent 60%),
+    linear-gradient(165deg, #1a1510 0%, #0c0b0a 48%, #080706 100%);
+}
+
+.home-hero-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: soft-light;
+}
+
+.home-hero-mirror {
+  position: absolute;
+  width: min(70vw, 640px);
+  height: min(70vw, 640px);
+  right: -8%;
+  top: 8%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 42% 38%, rgba(243, 236, 226, 0.12), transparent 42%),
+    radial-gradient(circle at 55% 60%, rgba(232, 168, 124, 0.18), transparent 55%);
+  border: 1px solid rgba(243, 236, 226, 0.08);
+  animation: home-mirror-drift 18s ease-in-out infinite alternate;
+}
+
+@keyframes home-mirror-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-3%, 4%, 0) scale(1.04);
+  }
+}
+
+@keyframes home-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.home-fade-up {
+  animation: home-fade-up 0.9s ease-out both;
+}
+
+.home-fade-up-delay-1 {
+  animation-delay: 0.12s;
+}
+
+.home-fade-up-delay-2 {
+  animation-delay: 0.24s;
+}
+
+.home-fade-up-delay-3 {
+  animation-delay: 0.36s;
+}
+
+.home-logo-hero {
+  animation: home-logo-breathe 6s ease-in-out infinite;
+}
+
+@keyframes home-logo-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.92;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
+.home-room:hover span:first-child {
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-mirror,
+  .home-fade-up,
+  .home-logo-hero,
+  .echo-card,
+  .echo-cloud-dot {
+    animation: none !important;
+  }
+}
