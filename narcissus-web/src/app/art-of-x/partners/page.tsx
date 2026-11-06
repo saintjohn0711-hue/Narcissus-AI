@@ -39,6 +39,7 @@ export default function PartnersPage() {
   const [storeMode, setStoreMode] = useState<StoreMode>("local");
   const [ready, setReady] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,9 +74,22 @@ export default function PartnersPage() {
 
   useEffect(() => {
     if (!ready) return;
-    void persistPartners(partners).catch(() => {
-      /* keep UI responsive if save fails */
-    });
+    let cancelled = false;
+    void persistPartners(partners)
+      .then(() => {
+        if (!cancelled) setSaveError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setSaveError(
+          err instanceof Error
+            ? err.message
+            : "Could not save partners to your account",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [partners, ready]);
 
   const visible = useMemo(
@@ -85,7 +99,7 @@ export default function PartnersPage() {
   );
 
   function openNew() {
-    setEditing(emptyPartner(""));
+    setEditing(emptyPartner("", partners));
     setLooksFromIdx([]);
     setLooksNote(null);
   }
@@ -286,6 +300,14 @@ export default function PartnersPage() {
           className="mb-4 rounded-sm border border-[var(--ok)]/35 bg-[var(--ok)]/10 px-3 py-2 text-sm text-[var(--ok)]"
         >
           {importNote}
+        </p>
+      )}
+      {saveError && (
+        <p
+          role="alert"
+          className="mb-4 rounded-sm border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]"
+        >
+          Save failed: {saveError}
         </p>
       )}
 
