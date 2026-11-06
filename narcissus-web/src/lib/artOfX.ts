@@ -140,7 +140,7 @@ export const ART_OF_X_NAV = [
     id: "chat",
     href: "/art-of-x/chat",
     label: "AI chat",
-    blurb: "Chat with partner cards (local personality stub → real LLM next).",
+    blurb: "Chat with partner cards via xAI Grok (in character, streaming).",
   },
   {
     id: "circle",
