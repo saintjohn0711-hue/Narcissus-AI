@@ -80,6 +80,10 @@ body {
   animation: echo-pulse 2.4s ease-in-out infinite;
 }
 
+.partner-card {
+  animation: echo-rise 480ms ease-out both;
+}
+
 /* —— Brand home —— */
 .home-hero-atmosphere {
   position: absolute;
@@ -180,7 +184,8 @@ body {
   .home-fade-up,
   .home-logo-hero,
   .echo-card,
-  .echo-cloud-dot {
+  .echo-cloud-dot,
+  .partner-card {
     animation: none !important;
   }
 }
