@@ -1,9 +1,12 @@
 /**
- * Client store for Art of X — uses Neon-backed API when signed in + DB ready,
- * otherwise localStorage (existing MVP behavior).
+ * Client store for Art of X — Neon-backed API when signed in + DB ready,
+ * otherwise localStorage as unsigned fallback.
+ *
+ * Signed-in path never writes partner/scene/chat primary data to localStorage.
  */
 
 import {
+  STORAGE,
   loadChats as loadChatsLocal,
   loadPartners as loadPartnersLocal,
   loadScenes as loadScenesLocal,
@@ -17,6 +20,12 @@ import {
 
 export type StoreMode = "database" | "local";
 
+export type LocalArtOfXCounts = {
+  partners: number;
+  scenes: number;
+  chats: number;
+};
+
 let cachedMode: StoreMode | null = null;
 
 export async function getStoreMode(): Promise<StoreMode> {
@@ -24,8 +33,7 @@ export async function getStoreMode(): Promise<StoreMode> {
   try {
     const res = await fetch("/api/art-of-x/status", { cache: "no-store" });
     if (res.ok) {
-      const data = (await res.json()) as { cloud?: boolean; database?: boolean };
-      // Prefer cloud when signed in; otherwise local until login
+      const data = (await res.json()) as { cloud?: boolean };
       cachedMode = data.cloud ? "database" : "local";
       return cachedMode;
     }
@@ -39,6 +47,35 @@ export async function getStoreMode(): Promise<StoreMode> {
 /** Clear cached mode after login/logout so the next read re-probes status. */
 export function resetStoreMode() {
   cachedMode = null;
+}
+
+/** Peek browser-local Art of X counts without mutating anything. */
+export function peekLocalArtOfX(): LocalArtOfXCounts {
+  if (typeof window === "undefined") {
+    return { partners: 0, scenes: 0, chats: 0 };
+  }
+  return {
+    partners: loadPartnersLocal().length,
+    scenes: loadScenesLocal().length,
+    chats: Object.keys(loadChatsLocal()).length,
+  };
+}
+
+export function hasLocalArtOfXData(): boolean {
+  const c = peekLocalArtOfX();
+  return c.partners > 0 || c.scenes > 0 || c.chats > 0;
+}
+
+/** Drop browser-local partners/scenes/chats after a successful account import. */
+export function clearLocalArtOfX(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(STORAGE.partners);
+    localStorage.removeItem(STORAGE.scenes);
+    localStorage.removeItem(STORAGE.chats);
+  } catch {
+    // ignore quota / private mode
+  }
 }
 
 export async function fetchPartners(): Promise<PartnerRecord[]> {
@@ -67,8 +104,8 @@ export async function persistPartners(
   });
   if (res.status === 401) {
     resetStoreMode();
-    savePartnersLocal(partners);
-    return;
+    // Do not silently write account edits to localStorage while signed-out mid-session.
+    throw new Error("Session expired — sign in to save to your account");
   }
   if (!res.ok) throw new Error("Failed to save partners");
 }
@@ -97,8 +134,7 @@ export async function persistScenes(scenes: SavedScene[]): Promise<void> {
   });
   if (res.status === 401) {
     resetStoreMode();
-    saveScenesLocal(scenes);
-    return;
+    throw new Error("Session expired — sign in to save to your account");
   }
   if (!res.ok) throw new Error("Failed to save scenes");
 }
@@ -129,29 +165,126 @@ export async function persistChats(
   });
   if (res.status === 401) {
     resetStoreMode();
-    saveChatsLocal(chats);
-    return;
+    throw new Error("Session expired — sign in to save to your account");
   }
   if (!res.ok) throw new Error("Failed to save chats");
 }
 
-/** One-shot: upload current localStorage into the signed-in account database. */
-export async function migrateLocalToDatabase(): Promise<{
-  partners: number;
-  scenes: number;
-  chats: number;
-}> {
-  const partners = loadPartnersLocal();
-  const scenes = loadScenesLocal();
-  const chats = loadChatsLocal();
+function nextFreeNumericId(
+  used: Set<number>,
+  preferred: number,
+  fallback: number,
+): number {
+  if (Number.isFinite(preferred) && preferred > 0 && !used.has(preferred)) {
+    return preferred;
+  }
+  let id = fallback;
+  while (used.has(id)) id += 1;
+  used.add(id);
+  return id;
+}
+
+function nextFreeSceneId(used: Set<string>, preferred: string): string {
+  if (preferred && !used.has(preferred)) return preferred;
+  let n = Date.now();
+  let id = `scene_${n}`;
+  while (used.has(id)) {
+    n += 1;
+    id = `scene_${n}`;
+  }
+  return id;
+}
+
+/**
+ * Merge browser-local Art of X into the signed-in Neon account.
+ * Cloud wins on id/key conflicts; local-only rows are appended (ids remapped if needed).
+ * Clears localStorage after a successful write so we stop dual-sourcing.
+ */
+export async function mergeLocalIntoDatabase(): Promise<LocalArtOfXCounts> {
+  const localPartners = loadPartnersLocal();
+  const localScenes = loadScenesLocal();
+  const localChats = loadChatsLocal();
+
   resetStoreMode();
   cachedMode = "database";
-  await persistPartners(partners);
-  await persistScenes(scenes);
-  await persistChats(chats);
+
+  const cloudPartners = await fetchPartners();
+  const usedPartnerIds = new Set(cloudPartners.map((p) => p.id));
+  const cloudPartnerNames = new Set(
+    cloudPartners.map((p) => p.name.trim().toLowerCase()).filter(Boolean),
+  );
+  let idSeed = Date.now();
+  const addedPartners: PartnerRecord[] = [];
+  for (const p of localPartners) {
+    const nameKey = p.name.trim().toLowerCase();
+    // Already on account (same id or same name) — keep cloud row.
+    if (usedPartnerIds.has(p.id) || (nameKey && cloudPartnerNames.has(nameKey))) {
+      continue;
+    }
+    const id = nextFreeNumericId(usedPartnerIds, p.id, idSeed++);
+    usedPartnerIds.add(id);
+    if (nameKey) cloudPartnerNames.add(nameKey);
+    addedPartners.push({ ...p, id });
+  }
+  const mergedPartners = [...cloudPartners, ...addedPartners];
+
+  const cloudScenes = await fetchScenes();
+  const usedSceneIds = new Set(cloudScenes.map((s) => s.id));
+  const cloudSceneTitles = new Set(
+    cloudScenes.map((s) => s.title.trim().toLowerCase()).filter(Boolean),
+  );
+  const addedScenes: SavedScene[] = [];
+  for (const s of localScenes) {
+    const titleKey = s.title.trim().toLowerCase();
+    if (usedSceneIds.has(s.id) || (titleKey && cloudSceneTitles.has(titleKey))) {
+      continue;
+    }
+    const id = nextFreeSceneId(usedSceneIds, s.id);
+    usedSceneIds.add(id);
+    if (titleKey) cloudSceneTitles.add(titleKey);
+    addedScenes.push({ ...s, id });
+  }
+  const mergedScenes = [...cloudScenes, ...addedScenes];
+
+  const cloudChats = await fetchChats();
+  const mergedChats: Record<string, ChatMessage[]> = { ...cloudChats };
+  let addedChatThreads = 0;
+  for (const [key, msgs] of Object.entries(localChats)) {
+    if (!mergedChats[key] || mergedChats[key].length === 0) {
+      mergedChats[key] = msgs;
+      addedChatThreads += 1;
+    }
+  }
+
+  await persistPartners(mergedPartners);
+  await persistScenes(mergedScenes);
+  await persistChats(mergedChats);
+  clearLocalArtOfX();
+
   return {
-    partners: partners.length,
-    scenes: scenes.length,
-    chats: Object.keys(chats).length,
+    partners: addedPartners.length,
+    scenes: addedScenes.length,
+    chats: addedChatThreads,
   };
+}
+
+/**
+ * After auth: offer to move browser-local data into the account.
+ * Returns import counts when the user accepts (or autoImport), else null.
+ */
+export async function promptImportLocalIfNeeded(opts?: {
+  /** New accounts: import without asking when local data exists. */
+  autoImport?: boolean;
+}): Promise<LocalArtOfXCounts | null> {
+  if (!hasLocalArtOfXData()) return null;
+  const auto = Boolean(opts?.autoImport);
+  if (!auto) {
+    const ok =
+      typeof window !== "undefined" &&
+      window.confirm(
+        "Move partners saved on this browser into your Narcissus account?",
+      );
+    if (!ok) return null;
+  }
+  return mergeLocalIntoDatabase();
 }

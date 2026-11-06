@@ -5,7 +5,10 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { authClient } from "@/lib/auth-client";
-import { migrateLocalToDatabase, resetStoreMode } from "@/lib/artOfXStore";
+import {
+  promptImportLocalIfNeeded,
+  resetStoreMode,
+} from "@/lib/artOfXStore";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -13,7 +16,6 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [adultsOk, setAdultsOk] = useState(false);
-  const [migrateLocal, setMigrateLocal] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,14 +42,19 @@ export default function SignUpPage() {
         return;
       }
       resetStoreMode();
-      if (migrateLocal) {
-        try {
-          await migrateLocalToDatabase();
-        } catch {
-          // Non-fatal — account still created; local data stays in browser
-        }
+      let importedPartners = 0;
+      try {
+        // New account is empty — auto-merge any browser-local draft once.
+        const imported = await promptImportLocalIfNeeded({ autoImport: true });
+        importedPartners = imported?.partners ?? 0;
+      } catch {
+        // Non-fatal — account still created; local data stays in browser
       }
-      router.push("/art-of-x/partners");
+      const dest =
+        importedPartners > 0
+          ? `/art-of-x/partners?imported=${importedPartners}`
+          : "/art-of-x/partners";
+      router.push(dest);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed");
@@ -70,8 +77,8 @@ export default function SignUpPage() {
           Create account
         </h1>
         <p className="mt-3 text-sm font-light leading-relaxed text-[#c4b7a8]">
-          Partner data, stories, and chats save to your Narcissus account in the
-          cloud — not only this browser.
+          Partner data, stories, chats, Circle, and Echo save to your Narcissus
+          account in the cloud — not only this browser.
         </p>
       </header>
 
@@ -82,7 +89,7 @@ export default function SignUpPage() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
-            className="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--ink)] outline-none focus:border-[var(--accent)]/60"
+            className="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2.5 text-[var(--ink)] outline-none focus:border-[var(--accent)]/60"
           />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
@@ -93,7 +100,7 @@ export default function SignUpPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-            className="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--ink)] outline-none focus:border-[var(--accent)]/60"
+            className="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2.5 text-[var(--ink)] outline-none focus:border-[var(--accent)]/60"
           />
         </label>
         <label className="flex flex-col gap-1.5 text-sm">
@@ -105,7 +112,7 @@ export default function SignUpPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
-            className="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--ink)] outline-none focus:border-[var(--accent)]/60"
+            className="rounded-sm border border-[var(--line)] bg-[var(--bg-elevated)] px-3 py-2.5 text-[var(--ink)] outline-none focus:border-[var(--accent)]/60"
           />
         </label>
 
@@ -122,25 +129,13 @@ export default function SignUpPage() {
           </span>
         </label>
 
-        <label className="flex items-start gap-3 text-sm text-[#c4b7a8]">
-          <input
-            type="checkbox"
-            checked={migrateLocal}
-            onChange={(e) => setMigrateLocal(e.target.checked)}
-            className="mt-1"
-          />
-          <span>
-            Upload partners / stories / chats already saved in this browser to my
-            new account.
-          </span>
-        </label>
-
         {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
 
         <button
           type="submit"
+          name="sign-up"
           disabled={busy || !adultsOk}
-          className="mt-2 rounded-sm bg-[var(--accent)]/90 px-4 py-2.5 text-sm font-medium text-[#1a120c] transition hover:bg-[var(--accent-strong)] disabled:opacity-50"
+          className="mt-3 w-full rounded-sm bg-[var(--accent)] px-4 py-3.5 text-base font-semibold tracking-wide text-[#1a120c] shadow-[0_0_0_1px_rgba(232,168,124,0.35)] transition hover:bg-[var(--accent-strong)] disabled:opacity-50"
         >
           {busy ? "Creating…" : "Create account"}
         </button>
@@ -148,8 +143,11 @@ export default function SignUpPage() {
 
       <p className="mt-6 text-sm text-[var(--muted)]">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-[var(--accent-strong)] underline-offset-2 hover:underline">
-          Sign in
+        <Link
+          href="/sign-in"
+          className="font-medium text-[var(--accent-strong)] underline-offset-2 hover:underline"
+        >
+          Log in
         </Link>
       </p>
     </div>
