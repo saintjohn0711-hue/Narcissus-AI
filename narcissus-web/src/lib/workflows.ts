@@ -18,6 +18,21 @@ const CKPT_UNDRESS_CANDIDATES = [
   "dreamshaper_8.safetensors",
   CKPT_SD15,
 ];
+/**
+ * NA-75 InstantID is SDXL-only. Prefer RealVisXL when present on the volume.
+ * Falls back to SD1.5 realism + FaceID Plus V2 / ReActor if missing.
+ */
+export const INSTANTID_CKPTS = [
+  "RealVisXL_V4.0.safetensors",
+  "juggernautXL_v9Rdphoto2Lightning.safetensors",
+];
+export const FACEID_SD15_CKPTS = [
+  "epicrealism_naturalSinRC1VAE.safetensors",
+  "dreamshaper_8.safetensors",
+  CKPT_SD15,
+];
+
+export type IdentityEngine = "instantid" | "faceid" | "reactor";
 
 const NEGATIVE =
   "child, minor, underage, baby, toddler, teen, different person, face change, identity change, blurry, low quality, deformed, extra limbs, watermark, text";
@@ -57,7 +72,8 @@ export function denoiseForIdentity(
   const clamped = Math.min(1, Math.max(0.35, identity));
   const factor = 1.35 - clamped; // 0.35..1.0
   if (mode === "undress") {
-    return Math.max(0.4, Math.min(0.52, base * (0.95 + factor * 0.1)));
+    // InstantID+SDXL needs a higher floor to actually strip clothes.
+    return Math.max(0.48, Math.min(0.64, base * (1.05 + factor * 0.12)));
   }
   if (mode === "scene") {
     // Floor high enough that SD1.5 actually reshapes the frame (acts/outfits).
@@ -82,6 +98,165 @@ export function sceneDenoise(stillDenoise: number, identity = 0.9): number {
 export function undressCheckpoint(preferred?: string): string {
   if (preferred && preferred.trim()) return preferred.trim();
   return CKPT_UNDRESS_CANDIDATES[0]!;
+}
+
+/** Upper-body face crop → 512/640 square for InsightFace / InstantID / ReActor. */
+function wireUpperFaceCrop(
+  graph: Record<string, unknown>,
+  width: number,
+  height: number,
+  outSize = 640,
+) {
+  const faceX = Math.round(width * 0.18);
+  const faceY = Math.round(height * 0.0);
+  const faceW = Math.round(width * 0.64);
+  const faceH = Math.round(height * 0.48);
+  graph["16"] = {
+    class_type: "ImageCrop",
+    inputs: {
+      image: ["3", 0],
+      width: faceW,
+      height: faceH,
+      x: faceX,
+      y: faceY,
+    },
+  };
+  graph["17"] = {
+    class_type: "ImageScale",
+    inputs: {
+      image: ["16", 0],
+      upscale_method: "lanczos",
+      width: outSize,
+      height: outSize,
+      crop: "disabled",
+    },
+  };
+}
+
+/** ReActor polish: raw inswapper, no GFPGAN (NA-73). */
+function wireReactorPolish(
+  graph: Record<string, unknown>,
+  inputImage: [string, number],
+  sourceImage: [string, number],
+  savePrefix: string,
+) {
+  graph["9"] = {
+    class_type: "ReActorOptions",
+    inputs: {
+      input_faces_order: "large-small",
+      input_faces_index: "0",
+      detect_gender_input: "no",
+      source_faces_order: "large-small",
+      source_faces_index: "0",
+      detect_gender_source: "no",
+      console_log_level: 1,
+      restore_swapped_only: true,
+    },
+  };
+  graph["12"] = {
+    class_type: "ReActorFaceSwapOpt",
+    inputs: {
+      enabled: true,
+      input_image: inputImage,
+      source_image: sourceImage,
+      swap_model: "inswapper_128.onnx",
+      facedetection: "retinaface_resnet50",
+      face_restore_model: "none",
+      face_restore_visibility: 0.35,
+      codeformer_weight: 0.0,
+      options: ["9", 0],
+    },
+  };
+  graph["15"] = {
+    class_type: "SaveImage",
+    inputs: {
+      filename_prefix: savePrefix,
+      images: ["12", 0],
+    },
+  };
+}
+
+/**
+ * NA-75 InstantID conditioning (SDXL). Mutates graph: adds InstantID loaders +
+ * ApplyInstantIDAdvanced. Returns { model, positive, negative } node refs for
+ * KSampler. Requires RealVisXL (or other SDXL) checkpoint already on node "1".
+ */
+function wireInstantId(
+  graph: Record<string, unknown>,
+  identity: number,
+): { model: [string, number]; positive: [string, number]; negative: [string, number] } {
+  const id = Math.min(1, Math.max(0.35, identity));
+  const ipWeight = 0.75 + id * 0.25; // ~0.97 at 0.9
+  const cnStrength = 0.45 + id * 0.1;
+  graph["30"] = {
+    class_type: "InstantIDModelLoader",
+    inputs: { instantid_file: "ip-adapter.bin" },
+  };
+  graph["31"] = {
+    class_type: "InstantIDFaceAnalysis",
+    inputs: { provider: "CUDA" },
+  };
+  graph["32"] = {
+    class_type: "ControlNetLoader",
+    inputs: { control_net_name: "instantid-controlnet.safetensors" },
+  };
+  graph["33"] = {
+    class_type: "ApplyInstantIDAdvanced",
+    inputs: {
+      instantid: ["30", 0],
+      insightface: ["31", 0],
+      control_net: ["32", 0],
+      image: ["17", 0],
+      model: ["1", 0],
+      positive: ["4", 0],
+      negative: ["5", 0],
+      ip_weight: ipWeight,
+      cn_strength: cnStrength,
+      start_at: 0.0,
+      end_at: 0.85,
+      noise: 0.4,
+      combine_embeds: "average",
+      image_kps: ["3", 0],
+    },
+  };
+  return {
+    model: ["33", 0],
+    positive: ["33", 1],
+    negative: ["33", 2],
+  };
+}
+
+/** NA-75 FaceID Plus V2 on SD1.5 (epicrealism). Returns conditioned MODEL ref. */
+function wireFaceIdPlus(
+  graph: Record<string, unknown>,
+  identity: number,
+): [string, number] {
+  const id = Math.min(1, Math.max(0.35, identity));
+  graph["20"] = {
+    class_type: "IPAdapterUnifiedLoaderFaceID",
+    inputs: {
+      model: ["1", 0],
+      preset: "FACEID PLUS V2",
+      lora_strength: 0.7 + id * 0.15,
+      provider: "CUDA",
+    },
+  };
+  graph["21"] = {
+    class_type: "IPAdapterFaceID",
+    inputs: {
+      model: ["20", 0],
+      ipadapter: ["20", 1],
+      image: ["17", 0],
+      weight: 0.85 + id * 0.25,
+      weight_faceidv2: 1.1 + id * 0.4,
+      weight_type: "linear",
+      combine_embeds: "concat",
+      start_at: 0.0,
+      end_at: 0.9,
+      embeds_scaling: "V only",
+    },
+  };
+  return ["21", 0];
 }
 
 /**
@@ -190,6 +365,12 @@ export function buildUndressPrompt(
     checkpoint?: string;
     /** When false, skip ReActor (avoids black frames if face was lost). */
     faceLock?: boolean;
+    /**
+     * NA-75 identity engine. Default `instantid` (SDXL RealVis + InstantID +
+     * ReActor polish). `faceid` = SD1.5 FaceID Plus V2 + ReActor. `reactor` =
+     * legacy ReActor-only after img2img.
+     */
+    identityEngine?: IdentityEngine;
   },
 ): Record<string, unknown> {
   const body = getBodyType(opts?.bodyType);
@@ -200,12 +381,23 @@ export function buildUndressPrompt(
   );
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
   const identity = opts?.identity ?? 0.85;
-  const denoise = opts?.denoise ?? denoiseForIdentity("undress", identity);
-  const width = opts?.width ?? 768;
-  const height = opts?.height ?? 768;
-  const ckpt = opts?.checkpoint?.trim() || CKPT_SD15;
+  const engine: IdentityEngine = opts?.identityEngine ?? "instantid";
+  const useInstantId = engine === "instantid";
+  const useFaceId = engine === "faceid";
+  // InstantID prefers non-1024 square (watermark avoidance in training data).
+  const width = opts?.width ?? (useInstantId ? 1016 : 768);
+  const height = opts?.height ?? (useInstantId ? 1016 : 768);
+  const denoise =
+    opts?.denoise ??
+    (useInstantId
+      ? Math.max(0.55, Math.min(0.66, denoiseForIdentity("undress", identity) + 0.08))
+      : denoiseForIdentity("undress", identity));
+  const ckpt =
+    opts?.checkpoint?.trim() ||
+    (useInstantId ? INSTANTID_CKPTS[0]! : CKPT_SD15);
   const faceLock = opts?.faceLock !== false;
   const stamp = Date.now().toString(36);
+  const savePrefix = `narcissus_undress_${body.id}_${stamp}`;
 
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.undress,
@@ -223,7 +415,10 @@ export function buildUndressPrompt(
     "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed",
     "blank, black image, empty frame",
     "different face, different person, different hairstyle, hair cut, bald, wrong hair color, face morph",
-  ].join(", ");
+    useInstantId ? "watermark, text, logo" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const graph: Record<string, unknown> = {
     "1": {
@@ -256,97 +451,60 @@ export function buildUndressPrompt(
       class_type: "VAEEncode",
       inputs: { pixels: ["3", 0], vae: ["1", 2] },
     },
-    "7": {
-      class_type: "KSampler",
-      inputs: {
-        seed,
-        steps: 32,
-        cfg: body.needsCock ? 6.5 : 5.5,
-        sampler_name: "euler",
-        scheduler: "normal",
-        denoise,
-        model: ["1", 0],
-        positive: ["4", 0],
-        negative: ["5", 0],
-        latent_image: ["6", 0],
-      },
+  };
+
+  // Face crop always when identity conditioning is on (InstantID / FaceID / ReActor).
+  if (faceLock || useInstantId || useFaceId) {
+    wireUpperFaceCrop(graph, width, height, useInstantId ? 640 : 512);
+  }
+
+  let modelRef: [string, number] = ["1", 0];
+  let posRef: [string, number] = ["4", 0];
+  let negRef: [string, number] = ["5", 0];
+  let cfg = body.needsCock ? 6.5 : 5.5;
+  let steps = 32;
+
+  if (faceLock && useInstantId) {
+    const iid = wireInstantId(graph, identity);
+    modelRef = iid.model;
+    posRef = iid.positive;
+    negRef = iid.negative;
+    cfg = 3.5; // InstantID burns at high CFG
+    steps = 30;
+  } else if (faceLock && useFaceId) {
+    modelRef = wireFaceIdPlus(graph, identity);
+    cfg = 5.0;
+  }
+
+  graph["7"] = {
+    class_type: "KSampler",
+    inputs: {
+      seed,
+      steps,
+      cfg,
+      sampler_name: "euler",
+      scheduler: "normal",
+      denoise,
+      model: modelRef,
+      positive: posRef,
+      negative: negRef,
+      latent_image: ["6", 0],
     },
-    "8": {
-      class_type: "VAEDecode",
-      inputs: { samples: ["7", 0], vae: ["1", 2] },
-    },
+  };
+  graph["8"] = {
+    class_type: "VAEDecode",
+    inputs: { samples: ["7", 0], vae: ["1", 2] },
   };
 
   if (faceLock) {
-    // Identity-first ReActor path (NA-73):
-    // - Upper-body crop as face source (dead-center crop on full-body shots
-    //   often has no face; tiny full-frame faces embed weakly)
-    // - No GFPGAN FaceBoost / RestoreFace — they "beautify" away likeness
-    //   (insightface cosine ~0.62 with GFPGAN stack vs ~0.88 with none)
-    // - face_restore_model "none" keeps the raw inswapper identity
-    const faceX = Math.round(width * 0.18);
-    const faceY = Math.round(height * 0.0);
-    const faceW = Math.round(width * 0.64);
-    const faceH = Math.round(height * 0.48);
-    graph["16"] = {
-      class_type: "ImageCrop",
-      inputs: {
-        image: ["3", 0],
-        width: faceW,
-        height: faceH,
-        x: faceX,
-        y: faceY,
-      },
-    };
-    graph["17"] = {
-      class_type: "ImageScale",
-      inputs: {
-        image: ["16", 0],
-        upscale_method: "lanczos",
-        width: 512,
-        height: 512,
-        crop: "disabled",
-      },
-    };
-    graph["9"] = {
-      class_type: "ReActorOptions",
-      inputs: {
-        input_faces_order: "large-small",
-        input_faces_index: "0",
-        detect_gender_input: "no",
-        source_faces_order: "large-small",
-        source_faces_index: "0",
-        detect_gender_source: "no",
-        console_log_level: 1,
-        restore_swapped_only: true,
-      },
-    };
-    graph["12"] = {
-      class_type: "ReActorFaceSwapOpt",
-      inputs: {
-        enabled: true,
-        input_image: ["8", 0],
-        source_image: ["17", 0],
-        swap_model: "inswapper_128.onnx",
-        facedetection: "retinaface_resnet50",
-        face_restore_model: "none",
-        face_restore_visibility: 0.35,
-        codeformer_weight: 0.0,
-        options: ["9", 0],
-      },
-    };
-    graph["15"] = {
-      class_type: "SaveImage",
-      inputs: {
-        filename_prefix: `narcissus_undress_${body.id}_${stamp}`,
-        images: ["12", 0],
-      },
-    };
+    // InstantID/FaceID condition generation; ReActor polish locks likeness
+    // without GFPGAN wash (smoke: InstantID+ReActor ~0.91 cosine, no paste).
+    wireReactorPolish(graph, ["8", 0], ["17", 0], savePrefix);
   } else {
     graph["10"] = {
       class_type: "SaveImage",
       inputs: {
-        filename_prefix: `narcissus_undress_${body.id}_${stamp}`,
+        filename_prefix: savePrefix,
         images: ["8", 0],
       },
     };
@@ -372,18 +530,24 @@ export function buildScenePrompt(
     checkpoint?: string;
     /** ReActor face lock from the upload. Skip for face-effect templates (facial). */
     faceLock?: boolean;
+    identityEngine?: IdentityEngine;
   },
 ): Record<string, unknown> {
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
   const identity = opts?.identity ?? 0.9;
-  const denoise =
-    opts?.denoise ?? sceneDenoise(0.42, identity);
-  const width = opts?.width ?? 768;
-  const height = opts?.height ?? 768;
-  const ckpt = opts?.checkpoint?.trim() || CKPT_SD15;
+  const engine: IdentityEngine = opts?.identityEngine ?? "instantid";
+  const useInstantId = engine === "instantid";
+  const useFaceId = engine === "faceid";
+  const denoise = opts?.denoise ?? sceneDenoise(0.42, identity);
+  const width = opts?.width ?? (useInstantId ? 1016 : 768);
+  const height = opts?.height ?? (useInstantId ? 1016 : 768);
+  const ckpt =
+    opts?.checkpoint?.trim() ||
+    (useInstantId ? INSTANTID_CKPTS[0]! : CKPT_SD15);
   const faceLock = opts?.faceLock !== false;
   const prefix = opts?.prefix ?? "narcissus_scene";
   const stamp = Date.now().toString(36);
+  const savePrefix = `${prefix}_${stamp}`;
 
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.scene,
@@ -399,7 +563,10 @@ export function buildScenePrompt(
     "identical to input, unchanged photo, passthrough, no change",
     "blank, black image, empty frame",
     "different face, different person, different hairstyle, wrong hair color",
-  ].join(", ");
+    useInstantId ? "watermark, text, logo" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const graph: Record<string, unknown> = {
     "1": {
@@ -432,92 +599,57 @@ export function buildScenePrompt(
       class_type: "VAEEncode",
       inputs: { pixels: ["3", 0], vae: ["1", 2] },
     },
-    "7": {
-      class_type: "KSampler",
-      inputs: {
-        seed,
-        steps: 36,
-        cfg: 7,
-        sampler_name: "euler",
-        scheduler: "normal",
-        denoise,
-        model: ["1", 0],
-        positive: ["4", 0],
-        negative: ["5", 0],
-        latent_image: ["6", 0],
-      },
+  };
+
+  if (faceLock || useInstantId || useFaceId) {
+    wireUpperFaceCrop(graph, width, height, useInstantId ? 640 : 512);
+  }
+
+  let modelRef: [string, number] = ["1", 0];
+  let posRef: [string, number] = ["4", 0];
+  let negRef: [string, number] = ["5", 0];
+  let cfg = 7;
+  let steps = 36;
+
+  if (faceLock && useInstantId) {
+    const iid = wireInstantId(graph, identity);
+    modelRef = iid.model;
+    posRef = iid.positive;
+    negRef = iid.negative;
+    cfg = 3.5;
+    steps = 30;
+  } else if (faceLock && useFaceId) {
+    modelRef = wireFaceIdPlus(graph, identity);
+    cfg = 5.5;
+  }
+
+  graph["7"] = {
+    class_type: "KSampler",
+    inputs: {
+      seed,
+      steps,
+      cfg,
+      sampler_name: "euler",
+      scheduler: "normal",
+      denoise,
+      model: modelRef,
+      positive: posRef,
+      negative: negRef,
+      latent_image: ["6", 0],
     },
-    "8": {
-      class_type: "VAEDecode",
-      inputs: { samples: ["7", 0], vae: ["1", 2] },
-    },
+  };
+  graph["8"] = {
+    class_type: "VAEDecode",
+    inputs: { samples: ["7", 0], vae: ["1", 2] },
   };
 
   if (faceLock) {
-    // Same identity-first ReActor as undress (upper-face crop, no GFPGAN).
-    const faceX = Math.round(width * 0.18);
-    const faceY = Math.round(height * 0.0);
-    const faceW = Math.round(width * 0.64);
-    const faceH = Math.round(height * 0.48);
-    graph["16"] = {
-      class_type: "ImageCrop",
-      inputs: {
-        image: ["3", 0],
-        width: faceW,
-        height: faceH,
-        x: faceX,
-        y: faceY,
-      },
-    };
-    graph["17"] = {
-      class_type: "ImageScale",
-      inputs: {
-        image: ["16", 0],
-        upscale_method: "lanczos",
-        width: 512,
-        height: 512,
-        crop: "disabled",
-      },
-    };
-    graph["9"] = {
-      class_type: "ReActorOptions",
-      inputs: {
-        input_faces_order: "large-small",
-        input_faces_index: "0",
-        detect_gender_input: "no",
-        source_faces_order: "large-small",
-        source_faces_index: "0",
-        detect_gender_source: "no",
-        console_log_level: 1,
-        restore_swapped_only: true,
-      },
-    };
-    graph["12"] = {
-      class_type: "ReActorFaceSwapOpt",
-      inputs: {
-        enabled: true,
-        input_image: ["8", 0],
-        source_image: ["17", 0],
-        swap_model: "inswapper_128.onnx",
-        facedetection: "retinaface_resnet50",
-        face_restore_model: "none",
-        face_restore_visibility: 0.35,
-        codeformer_weight: 0.0,
-        options: ["9", 0],
-      },
-    };
-    graph["15"] = {
-      class_type: "SaveImage",
-      inputs: {
-        filename_prefix: `${prefix}_${stamp}`,
-        images: ["12", 0],
-      },
-    };
+    wireReactorPolish(graph, ["8", 0], ["17", 0], savePrefix);
   } else {
     graph["10"] = {
       class_type: "SaveImage",
       inputs: {
-        filename_prefix: `${prefix}_${stamp}`,
+        filename_prefix: savePrefix,
         images: ["8", 0],
       },
     };
