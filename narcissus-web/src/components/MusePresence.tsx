@@ -13,6 +13,17 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
+  COMPANION_BODY,
+  COMPANION_CLOTHING,
+  COMPANION_EXPRESSION,
+  COMPANION_EYES,
+  COMPANION_HAIR,
+  COMPANION_LOOK_STYLES,
+  loadCompanionWardrobe,
+  saveCompanionWardrobe,
+  type CompanionWardrobe,
+} from "@/lib/companionWardrobe";
+import {
   buildStyledCssFallback,
   loadCachedPortrait,
   loadPresenceStyle,
@@ -25,18 +36,27 @@ import {
 type MusePresenceProps = {
   partner: PartnerRecord;
   /** Fill the chat hero rail (taller, sticky on desktop). */
-  variant?: "rail" | "compact";
+  variant?: "rail" | "compact" | "full";
+  /** Notify parent when Look changes (for Companion full-stage layout). */
+  onStyleChange?: (style: MusePresenceStyle) => void;
 };
 
 type MatchSource = "xai" | "local" | null;
 
+type WardrobeTab = "features" | "style" | "clothing";
+
 export function MusePresence({
   partner,
   variant = "rail",
+  onStyleChange,
 }: MusePresenceProps) {
   const photo = mainPhoto(partner);
   const photos = partner.photos || [];
   const [style, setStyle] = useState<MusePresenceStyle>("realistic");
+  const [wardrobe, setWardrobe] = useState<CompanionWardrobe>(() =>
+    loadCompanionWardrobe(partner.id),
+  );
+  const [wardrobeTab, setWardrobeTab] = useState<WardrobeTab>("clothing");
   const [generated, setGenerated] = useState<string | null>(null);
   const [matchSource, setMatchSource] = useState<MatchSource>(null);
   const [busy, setBusy] = useState(false);
@@ -52,10 +72,17 @@ export function MusePresence({
 
   useEffect(() => {
     const next = loadPresenceStyle(partner.id);
+    const nextWardrobe = loadCompanionWardrobe(partner.id);
     setStyle(next);
-    const cached = loadCachedPortrait(partner.id, next, mainPhoto(partner));
+    setWardrobe(nextWardrobe);
+    onStyleChange?.(next);
+    const cached = loadCachedPortrait(
+      partner.id,
+      next,
+      mainPhoto(partner),
+      next === "cartoon" ? nextWardrobe : null,
+    );
     setGenerated(cached);
-    // v3 cache only persists xAI results — local cel is never saved.
     setMatchSource(cached ? "xai" : null);
     setGenError(null);
     setPhotoIndex(
@@ -65,6 +92,7 @@ export function MusePresence({
       ),
     );
     autoKey.current = "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- parent callback stable enough
   }, [partner.id, partner.mainPhotoIndex, photos.length]);
 
   const displaySrc = useMemo(() => {
@@ -93,8 +121,6 @@ export function MusePresence({
     if (!fallback) return false;
     setGenerated(fallback);
     setMatchSource("local");
-    // Do not persist provisional cel as if it were a finished Companion.
-    // Leave cache empty so a later keyed session can auto-generate for real.
     setGenError(
       targetStyle === "cartoon"
         ? `${message} Provisional cel sketch only — not a finished Ani companion. Set XAI_API_KEY for the real illustrated avatar.`
@@ -106,6 +132,7 @@ export function MusePresence({
   async function generateStyled(
     targetStyle: MusePresenceStyle,
     sourcePhoto: string,
+    nextWardrobe: CompanionWardrobe = wardrobe,
   ) {
     if (!sourcePhoto || targetStyle === "realistic" || busy) return;
     setBusy(true);
@@ -119,6 +146,7 @@ export function MusePresence({
           photo: sourcePhoto,
           name: displayName(partner),
           looks: partner.looks,
+          wardrobe: targetStyle === "cartoon" ? nextWardrobe : undefined,
         }),
       });
       if (!res.ok) {
@@ -156,7 +184,13 @@ export function MusePresence({
       if (data.image) {
         setGenerated(data.image);
         setMatchSource("xai");
-        saveCachedPortrait(partner.id, targetStyle, data.image, sourcePhoto);
+        saveCachedPortrait(
+          partner.id,
+          targetStyle,
+          data.image,
+          sourcePhoto,
+          targetStyle === "cartoon" ? nextWardrobe : null,
+        );
         setGenError(null);
       }
     } catch {
@@ -176,25 +210,47 @@ export function MusePresence({
   function pickStyle(next: MusePresenceStyle) {
     setStyle(next);
     savePresenceStyle(partner.id, next);
+    onStyleChange?.(next);
     setGenError(null);
     if (next === "realistic") {
       setGenerated(null);
       setMatchSource(null);
       return;
     }
-    const cached = loadCachedPortrait(partner.id, next, livePhoto);
+    const cached = loadCachedPortrait(
+      partner.id,
+      next,
+      livePhoto,
+      next === "cartoon" ? wardrobe : null,
+    );
     setGenerated(cached);
     setMatchSource(cached ? "xai" : null);
     const meta = MUSE_PRESENCE_STYLES.find((s) => s.id === next);
+    const autoToken = `${partner.id}:${next}:${livePhoto?.length || 0}:${next === "cartoon" ? JSON.stringify(wardrobe) : ""}`;
     if (
       meta?.autoGenerate &&
       livePhoto &&
       !cached &&
-      autoKey.current !== `${partner.id}:${next}:${livePhoto.length}`
+      autoKey.current !== autoToken
     ) {
-      autoKey.current = `${partner.id}:${next}:${livePhoto.length}`;
-      void generateStyled(next, livePhoto);
+      autoKey.current = autoToken;
+      void generateStyled(next, livePhoto, wardrobe);
     }
+  }
+
+  function applyWardrobePatch(patch: Partial<CompanionWardrobe>) {
+    const next = { ...wardrobe, ...patch };
+    setWardrobe(next);
+    saveCompanionWardrobe(partner.id, next);
+    if (style !== "cartoon" || !livePhoto) return;
+    const cached = loadCachedPortrait(partner.id, "cartoon", livePhoto, next);
+    if (cached) {
+      setGenerated(cached);
+      setMatchSource("xai");
+      setGenError(null);
+      return;
+    }
+    void generateStyled("cartoon", livePhoto, next);
   }
 
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
@@ -210,6 +266,34 @@ export function MusePresence({
 
   const styleLabel =
     MUSE_PRESENCE_STYLES.find((s) => s.id === style)?.label ?? style;
+
+  const featureChips =
+    wardrobeTab === "features"
+      ? [
+          { title: "Hair", options: COMPANION_HAIR, key: "hair" as const },
+          { title: "Eyes", options: COMPANION_EYES, key: "eyes" as const },
+          { title: "Body", options: COMPANION_BODY, key: "body" as const },
+          {
+            title: "Expression",
+            options: COMPANION_EXPRESSION,
+            key: "expression" as const,
+          },
+        ]
+      : wardrobeTab === "style"
+        ? [
+            {
+              title: "Anime look",
+              options: COMPANION_LOOK_STYLES,
+              key: "look" as const,
+            },
+          ]
+        : [
+            {
+              title: "Outfit",
+              options: COMPANION_CLOTHING,
+              key: "clothing" as const,
+            },
+          ];
 
   return (
     <aside
@@ -286,7 +370,9 @@ export function MusePresence({
                 : matchSource === "local" &&
                     (style === "cartoon" || style === "anime")
                   ? `${styleLabel} · provisional`
-                  : styleLabel}
+                  : style === "cartoon"
+                    ? `${styleLabel} · ${wardrobe.clothing}`
+                    : styleLabel}
           </p>
         </div>
       </div>
@@ -351,10 +437,94 @@ export function MusePresence({
             </button>
           ))}
         </div>
+
+        {style === "cartoon" && (
+          <div className="muse-companion-customize space-y-2 border-t border-[var(--line)] pt-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--glow)]/90">
+                Customize
+              </p>
+              <p className="text-[10px] text-[var(--muted)]">
+                Adults 18+ · Muse identity locked
+              </p>
+            </div>
+            <div
+              className="flex gap-1"
+              role="tablist"
+              aria-label="Companion customize"
+            >
+              {(
+                [
+                  ["features", "Features"],
+                  ["style", "Style"],
+                  ["clothing", "Clothing"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={wardrobeTab === id}
+                  onClick={() => setWardrobeTab(id)}
+                  className={`flex-1 rounded-sm border px-2 py-1.5 text-[11px] font-medium transition ${
+                    wardrobeTab === id
+                      ? "border-[var(--glow)]/50 bg-[var(--glow)]/10 text-[var(--ink)]"
+                      : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--soft)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {featureChips.map((group) => (
+              <div key={group.key} className="space-y-1.5">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--soft)]">
+                  {group.title}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.options.map((opt) => {
+                    const selected = wardrobe[group.key] === opt.id;
+                    const isNude = opt.id === "nude";
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        title={opt.hint}
+                        disabled={busy}
+                        onClick={() =>
+                          applyWardrobePatch({ [group.key]: opt.id })
+                        }
+                        className={`rounded-sm border px-2 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
+                          selected
+                            ? isNude
+                              ? "border-[var(--danger)]/55 bg-[var(--danger)]/15 text-[#f0c4b8]"
+                              : "border-[var(--accent)]/55 bg-[var(--accent)]/12 text-[var(--ink)]"
+                            : "border-[var(--line)] text-[var(--muted)] hover:border-[var(--accent)]/40 hover:text-[var(--soft)]"
+                        }`}
+                      >
+                        <span className="block font-medium">{opt.label}</span>
+                        <span className="mt-0.5 block text-[9px] leading-snug opacity-75">
+                          {opt.hint}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {wardrobe.clothing === "nude" && (
+              <p className="text-[10px] leading-snug text-[#f0c4b8]/90">
+                Nude is adults 18+ only — explicit illustrated companion, same
+                Muse face identity.
+              </p>
+            )}
+          </div>
+        )}
+
         {style !== "realistic" && livePhoto && (
           <button
             type="button"
-            onClick={() => void generateStyled(style, livePhoto)}
+            onClick={() => void generateStyled(style, livePhoto, wardrobe)}
             disabled={busy}
             className="w-full rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] transition hover:border-[var(--accent)]/60 hover:bg-[var(--accent)]/16 disabled:opacity-50"
           >

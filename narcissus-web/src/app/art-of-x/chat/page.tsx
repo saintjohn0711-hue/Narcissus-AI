@@ -26,6 +26,7 @@ import {
   fetchPartners,
   persistChats,
 } from "@/lib/artOfXStore";
+import type { MusePresenceStyle } from "@/lib/musePresence";
 import type { ChatPov } from "@/lib/xai";
 
 async function readXaiSseStream(
@@ -81,6 +82,9 @@ function ChatPageInner() {
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelLabel, setModelLabel] = useState<string | null>(null);
+  const [presenceStyle, setPresenceStyle] =
+    useState<MusePresenceStyle>("realistic");
+  const [chatOpen, setChatOpen] = useState(true);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const skipPersist = useRef(false);
   const pickedFromUrl = useRef(false);
@@ -135,6 +139,7 @@ function ChatPageInner() {
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],
   );
+  const companionFull = Boolean(partner) && presenceStyle === "cartoon";
   const threadKey = activeId != null ? String(activeId) : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
 
@@ -294,23 +299,31 @@ function ChatPageInner() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-7 sm:px-8 sm:py-10">
-      <AppNav />
-      <header className="mb-6">
-        <p className="mb-2 text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
-          {PERSON_LABEL.plural} · Grok
-        </p>
-        <h1
-          className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Muse chat
-        </h1>
-        <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          Her living portrait sits with you while you talk
-          {modelLabel ? ` · ${modelLabel}` : ""}. Adults 18+ only.
-        </p>
-      </header>
+    <div
+      className={
+        companionFull
+          ? "muse-chat-page muse-chat-page--companion-full flex min-h-[100dvh] flex-col"
+          : "mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-7 sm:px-8 sm:py-10"
+      }
+    >
+      {!companionFull && <AppNav />}
+      {!companionFull && (
+        <header className="mb-6">
+          <p className="mb-2 text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
+            {PERSON_LABEL.plural} · Grok
+          </p>
+          <h1
+            className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
+            style={{ fontFamily: "var(--font-display), serif" }}
+          >
+            Muse chat
+          </h1>
+          <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
+            Her living portrait sits with you while you talk
+            {modelLabel ? ` · ${modelLabel}` : ""}. Adults 18+ only.
+          </p>
+        </header>
+      )}
 
       {partners.length === 0 ? (
         <div className="border border-[var(--line)] bg-[var(--bg-elevated)]/35 p-8 sm:p-10">
@@ -332,11 +345,29 @@ function ChatPageInner() {
           </Link>
         </div>
       ) : (
-        <div className="flex flex-col gap-4">
+        <div
+          className={
+            companionFull
+              ? "relative flex min-h-0 flex-1 flex-col"
+              : "flex flex-col gap-4"
+          }
+        >
           <aside
-            className="flex gap-2 overflow-x-auto pb-1"
+            className={`flex gap-2 overflow-x-auto pb-1 ${
+              companionFull
+                ? "absolute left-0 right-0 top-0 z-30 bg-gradient-to-b from-[#05070e]/92 to-transparent px-3 pb-4 pt-3 sm:px-5"
+                : ""
+            }`}
             aria-label={`${PERSON_LABEL.singular} picker`}
           >
+            {companionFull && (
+              <Link
+                href="/art-of-x"
+                className="mr-2 shrink-0 rounded-sm border border-[var(--line)] bg-[#080b14]/70 px-2.5 py-2 text-[10px] uppercase tracking-[0.16em] text-[var(--soft)]"
+              >
+                Art of X
+              </Link>
+            )}
             {partners.map((p) => (
               <button
                 key={p.id}
@@ -345,10 +376,10 @@ function ChatPageInner() {
                   setActiveId(p.id);
                   setError(null);
                 }}
-                className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm ${
+                className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm backdrop-blur-sm ${
                   activeId === p.id
                     ? "border-[var(--glow)]/50 bg-[var(--glow)]/10"
-                    : "border-[var(--line)]"
+                    : "border-[var(--line)] bg-[#080b14]/55"
                 }`}
               >
                 {mainPhoto(p) ? (
@@ -375,10 +406,26 @@ function ChatPageInner() {
             ))}
           </aside>
 
-          <section className="muse-chat-stage grid overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/40 lg:grid-cols-[minmax(300px,38%)_minmax(0,1fr)]">
+          <section
+            className={
+              companionFull
+                ? "muse-chat-stage muse-chat-stage--companion-full relative flex min-h-[100dvh] flex-1 overflow-hidden"
+                : "muse-chat-stage grid overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/40 lg:grid-cols-[minmax(300px,38%)_minmax(0,1fr)]"
+            }
+          >
             {partner ? (
-              <div className="muse-chat-presence border-b border-[var(--line)] p-3 sm:p-4 lg:sticky lg:top-0 lg:self-start lg:border-b-0 lg:border-r">
-                <MusePresence partner={partner} variant="rail" />
+              <div
+                className={
+                  companionFull
+                    ? "muse-chat-presence muse-chat-presence--full absolute inset-0 z-0"
+                    : "muse-chat-presence border-b border-[var(--line)] p-3 sm:p-4 lg:sticky lg:top-0 lg:self-start lg:border-b-0 lg:border-r"
+                }
+              >
+                <MusePresence
+                  partner={partner}
+                  variant={companionFull ? "full" : "rail"}
+                  onStyleChange={setPresenceStyle}
+                />
               </div>
             ) : (
               <div className="flex min-h-64 items-center justify-center border-b border-[var(--line)] p-6 text-sm text-[var(--muted)] lg:border-b-0 lg:border-r">
@@ -386,7 +433,25 @@ function ChatPageInner() {
               </div>
             )}
 
-            <div className="flex min-h-[22rem] flex-col lg:min-h-[36rem]">
+            {companionFull && (
+              <button
+                type="button"
+                className="muse-chat-drawer-toggle absolute bottom-4 right-4 z-40 rounded-sm border border-[var(--glow)]/40 bg-[#080b14]/85 px-3 py-2 text-xs font-medium text-[var(--glow)] backdrop-blur-md lg:hidden"
+                onClick={() => setChatOpen((v) => !v)}
+              >
+                {chatOpen ? "Hide chat" : "Open chat"}
+              </button>
+            )}
+
+            <div
+              className={
+                companionFull
+                  ? `muse-chat-drawer z-20 flex flex-col border border-[var(--line)] bg-[#080b14]/88 backdrop-blur-md ${
+                      chatOpen ? "muse-chat-drawer--open" : "muse-chat-drawer--closed"
+                    }`
+                  : "flex min-h-[22rem] flex-col lg:min-h-[36rem]"
+              }
+            >
               {partner && (
                 <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] px-4 py-3 sm:px-5">
                   <div className="min-w-0">
@@ -397,8 +462,11 @@ function ChatPageInner() {
                       {displayName(partner)}
                     </h2>
                     <p className="mt-1 text-xs text-[#c4b7a8]">
-                      {partner.dynTags.slice(0, 3).join(" · ") ||
-                        "No dynamics tagged"}
+                      {companionFull
+                        ? "Companion · Adults 18+"
+                        : partner.dynTags.slice(0, 3).join(" · ") ||
+                          "No dynamics tagged"}
+                      {modelLabel ? ` · ${modelLabel}` : ""}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
