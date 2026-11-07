@@ -121,14 +121,109 @@ export const STORAGE = {
   scenes: "narcissus.artOfX.scenes.v2",
   self: "narcissus.artOfX.self.v2",
   chats: "narcissus.artOfX.chats.v1",
+  /** Client-side Muse list order (id sequence) for “Your order” sort */
+  museOrder: "narcissus.artOfX.museOrder.v1",
 } as const;
+
+/**
+ * User-facing label for Art of X people.
+ * Swap these strings to rebrand (API/DB stay `partners`).
+ * Alts considered: Intimates, Lovers — default Muses.
+ */
+export const PERSON_LABEL = {
+  singular: "Muse",
+  plural: "Muses",
+  singularLower: "muse",
+  pluralLower: "muses",
+} as const;
+
+export type MuseSortMode =
+  | "manual"
+  | "name-asc"
+  | "name-desc"
+  | "updated-desc"
+  | "newest";
+
+export const MUSE_SORT_OPTIONS: { value: MuseSortMode; label: string }[] = [
+  { value: "manual", label: "Your order" },
+  { value: "name-asc", label: "Name A–Z" },
+  { value: "name-desc", label: "Name Z–A" },
+  { value: "updated-desc", label: "Recently updated" },
+  { value: "newest", label: "Newest added" },
+];
+
+export function samePartnerId(a: unknown, b: unknown): boolean {
+  return Number(a) === Number(b) && Number.isFinite(Number(a));
+}
+
+export function sortMuses(
+  list: PartnerRecord[],
+  mode: MuseSortMode,
+  manualOrder: number[] = [],
+): PartnerRecord[] {
+  const copy = [...list];
+  if (mode === "manual") {
+    if (!manualOrder.length) return copy;
+    const rank = new Map(manualOrder.map((id, i) => [Number(id), i]));
+    return copy.sort((a, b) => {
+      const ra = rank.has(Number(a.id))
+        ? rank.get(Number(a.id))!
+        : Number.MAX_SAFE_INTEGER;
+      const rb = rank.has(Number(b.id))
+        ? rank.get(Number(b.id))!
+        : Number.MAX_SAFE_INTEGER;
+      if (ra !== rb) return ra - rb;
+      return Number(a.id) - Number(b.id);
+    });
+  }
+  if (mode === "name-asc") {
+    return copy.sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+  }
+  if (mode === "name-desc") {
+    return copy.sort((a, b) =>
+      b.name.localeCompare(a.name, undefined, { sensitivity: "base" }),
+    );
+  }
+  if (mode === "updated-desc") {
+    return copy.sort((a, b) =>
+      String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")),
+    );
+  }
+  // newest by createdAt, then id
+  return copy.sort((a, b) => {
+    const c = String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    return c !== 0 ? c : Number(b.id) - Number(a.id);
+  });
+}
+
+export function loadMuseOrder(): number[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE.museOrder) || "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw.map((id) => Number(id)).filter((id) => Number.isFinite(id));
+  } catch {
+    return [];
+  }
+}
+
+export function saveMuseOrder(ids: number[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(STORAGE.museOrder, JSON.stringify(ids));
+  } catch {
+    // ignore quota
+  }
+}
 
 export const ART_OF_X_NAV = [
   {
     id: "partners",
     href: "/art-of-x/partners",
-    label: "Partners",
-    blurb: "Sex tracker — people, acts, kinks, dynamics, photos.",
+    label: PERSON_LABEL.plural,
+    blurb: `${PERSON_LABEL.plural} — who, acts, kinks, dynamics, photos.`,
   },
   {
     id: "stories",
@@ -140,7 +235,7 @@ export const ART_OF_X_NAV = [
     id: "chat",
     href: "/art-of-x/chat",
     label: "AI chat",
-    blurb: "Chat with partner cards via xAI Grok (in character, streaming).",
+    blurb: `Chat with ${PERSON_LABEL.singularLower} cards via xAI Grok (in character, streaming).`,
   },
   {
     id: "circle",
@@ -366,7 +461,7 @@ export function nextPartnerId(existing: { id: number }[] = []): number {
 }
 
 export function emptyPartner(
-  name = "New partner",
+  name = "",
   existing: { id: number }[] = [],
 ): PartnerRecord {
   const now = new Date().toISOString();
@@ -733,17 +828,22 @@ export function loadPartners(): PartnerRecord[] {
           })(),
           doneActs: Array.isArray(p.doneActs) ? p.doneActs : [],
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
-        })).map((p) =>
-          p.photos.length
+        })).map((p) => {
+          const id = Number(p.id);
+          const base = {
+            ...p,
+            id: Number.isFinite(id) && id > 0 ? id : nextPartnerId([]),
+          };
+          return base.photos.length
             ? {
-                ...p,
+                ...base,
                 mainPhotoIndex: Math.min(
-                  Math.max(0, p.mainPhotoIndex),
-                  p.photos.length - 1,
+                  Math.max(0, base.mainPhotoIndex),
+                  base.photos.length - 1,
                 ),
               }
-            : { ...p, mainPhotoIndex: 0 },
-        )
+            : { ...base, mainPhotoIndex: 0 };
+        })
       : [];
   } catch {
     return [];

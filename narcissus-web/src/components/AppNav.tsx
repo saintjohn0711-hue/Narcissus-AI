@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthControls } from "@/components/AuthControls";
+import { PERSON_LABEL } from "@/lib/artOfX";
 
 const LINKS = [
   { href: "/", label: "Home" },
   { href: "/studio", label: "Studio" },
   { href: "/art-of-x", label: "Art of X" },
-  { href: "/art-of-x/partners", label: "Partners" },
+  { href: "/art-of-x/partners", label: PERSON_LABEL.plural },
   { href: "/art-of-x/stories", label: "Stories" },
   { href: "/art-of-x/chat", label: "AI chat" },
   { href: "/circle", label: "Circle" },

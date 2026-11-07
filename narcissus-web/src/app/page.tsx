@@ -6,7 +6,7 @@ import { AuthControls } from "@/components/AuthControls";
 export const metadata: Metadata = {
   title: "Narcissus — Adult desire studio",
   description:
-    "Studio likeness edits, Art of X partners and stories, Circle discovery, Echo account.",
+    "Studio likeness edits, Art of X Muses and stories, Circle discovery, Echo account.",
 };
 
 const SECTIONS = [
@@ -20,7 +20,7 @@ const SECTIONS = [
     id: "art-of-x",
     href: "/art-of-x",
     name: "Art of X",
-    line: "Partners, stories, and AI chat — craft the people and scenes that stay with you.",
+    line: "Muses, stories, and AI chat — craft the people and scenes that stay with you.",
   },
   {
     id: "circle",

@@ -235,7 +235,7 @@ export default function ChatPage() {
           AI chat
         </h1>
         <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          Chat with partner cards via xAI Grok
+          Chat with Muse cards via xAI Grok
           {modelLabel ? ` · ${modelLabel}` : ""}. Grounded in looks, kinks,
           dynamics, and history — witty, vivid, adults 18+ only.
         </p>
@@ -243,7 +243,7 @@ export default function ChatPage() {
 
       {partners.length === 0 ? (
         <p className="text-sm text-[#c4b7a8]">
-          Add partners first, then come back to chat with them.
+          Add Muses first, then come back to chat with them.
         </p>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[240px_1fr]">

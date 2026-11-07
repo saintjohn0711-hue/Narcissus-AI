@@ -20,6 +20,11 @@ type PartnerCardProps = {
   onRemove: () => void;
   /** Persist featured/main photo when the viewer picks one */
   onSelectPhoto?: (index: number) => void;
+  /** Manual sort controls (Your order) */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 };
 
 function Section({
@@ -170,6 +175,10 @@ export function PartnerCard({
   onEdit,
   onRemove,
   onSelectPhoto,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
 }: PartnerCardProps) {
   const photos = p.photos || [];
   const mainIdx = Math.min(
@@ -332,7 +341,29 @@ export function PartnerCard({
                 {metaBits.join(" · ")}
               </p>
             </div>
-            <div className="flex shrink-0 gap-4 pt-1 text-xs">
+            <div className="flex shrink-0 flex-wrap items-center gap-3 pt-1 text-xs">
+              {(onMoveUp || onMoveDown) && (
+                <span className="flex gap-2 text-[var(--muted)]">
+                  <button
+                    type="button"
+                    onClick={onMoveUp}
+                    disabled={!canMoveUp}
+                    className="underline-offset-2 hover:text-[var(--ink)] hover:underline disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onMoveDown}
+                    disabled={!canMoveDown}
+                    className="underline-offset-2 hover:text-[var(--ink)] hover:underline disabled:cursor-not-allowed disabled:opacity-30"
+                    aria-label="Move down"
+                  >
+                    ↓
+                  </button>
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onEdit}

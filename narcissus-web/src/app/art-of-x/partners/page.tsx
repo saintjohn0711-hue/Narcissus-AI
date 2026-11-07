@@ -7,15 +7,22 @@ import {
   ALL_KINKS,
   DONE_ACTS,
   DYN_TAGS,
+  MUSE_SORT_OPTIONS,
   PARTNER_PHOTO_LIMITS,
   PERSON_GENDERS,
+  PERSON_LABEL,
   arkDemoRoster,
   emptyPartner,
   fileToPartnerPhoto,
   genderLabel,
+  loadMuseOrder,
   mainPhoto,
   normalizeKinks,
+  samePartnerId,
+  saveMuseOrder,
+  sortMuses,
   withMainPhoto,
+  type MuseSortMode,
   type PartnerRecord,
   type PersonType,
 } from "@/lib/artOfX";
@@ -32,6 +39,8 @@ const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
 export default function PartnersPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [filter, setFilter] = useState<"all" | PersonType>("all");
+  const [sortMode, setSortMode] = useState<MuseSortMode>("manual");
+  const [manualOrder, setManualOrder] = useState<number[]>([]);
   const [editing, setEditing] = useState<PartnerRecord | null>(null);
   /** Photo indexes chosen as sources for “Pull looks” */
   const [looksFromIdx, setLooksFromIdx] = useState<number[]>([]);
@@ -43,6 +52,7 @@ export default function PartnersPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   /** Skip the persist effect when applying server-returned ids. */
   const syncingFromServer = useRef(false);
+  const editorRef = useRef<HTMLFormElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -52,7 +62,7 @@ export default function PartnersPage() {
     const n = Number(raw);
     if (Number.isFinite(n) && n > 0) {
       setImportNote(
-        `Imported ${n} partner${n === 1 ? "" : "s"} to your account`,
+        `Imported ${n} ${n === 1 ? PERSON_LABEL.singularLower : PERSON_LABEL.pluralLower} to your account`,
       );
     }
     window.history.replaceState({}, "", "/art-of-x/partners");
@@ -67,6 +77,14 @@ export default function PartnersPage() {
       setStoreMode(mode);
       syncingFromServer.current = true;
       setPartners(list);
+      const stored = loadMuseOrder();
+      const ids = list.map((p) => Number(p.id));
+      const merged = [
+        ...stored.filter((id) => ids.includes(id)),
+        ...ids.filter((id) => !stored.includes(id)),
+      ];
+      setManualOrder(merged);
+      saveMuseOrder(merged);
       setReady(true);
     })().catch(() => {
       if (!cancelled) setReady(true);
@@ -89,10 +107,32 @@ export default function PartnersPage() {
         setSaveError(null);
         const sameIds =
           saved.length === partners.length &&
-          saved.every((p) => partners.some((q) => q.id === p.id));
+          saved.every((p) =>
+            partners.some((q) => samePartnerId(q.id, p.id)),
+          );
         if (!sameIds) {
           syncingFromServer.current = true;
           setPartners(saved);
+          // Keep the open editor pointed at the remapped row
+          setEditing((ed) => {
+            if (!ed) return ed;
+            if (saved.some((p) => samePartnerId(p.id, ed.id))) return ed;
+            const match = saved.find(
+              (p) =>
+                p.createdAt === ed.createdAt &&
+                p.name.trim().toLowerCase() === ed.name.trim().toLowerCase(),
+            );
+            return match ? { ...ed, id: Number(match.id) } : ed;
+          });
+          const ids = saved.map((p) => Number(p.id));
+          setManualOrder((prev) => {
+            const next = [
+              ...prev.filter((id) => ids.includes(id)),
+              ...ids.filter((id) => !prev.includes(id)),
+            ];
+            saveMuseOrder(next);
+            return next;
+          });
         }
       })
       .catch((err: unknown) => {
@@ -100,7 +140,7 @@ export default function PartnersPage() {
         setSaveError(
           err instanceof Error
             ? err.message
-            : "Could not save partners to your account",
+            : `Could not save ${PERSON_LABEL.pluralLower} to your account`,
         );
       });
     return () => {
@@ -108,22 +148,30 @@ export default function PartnersPage() {
     };
   }, [partners, ready]);
 
-  const visible = useMemo(
-    () =>
-      filter === "all" ? partners : partners.filter((p) => p.type === filter),
-    [partners, filter],
-  );
+  const visible = useMemo(() => {
+    const filtered =
+      filter === "all" ? partners : partners.filter((p) => p.type === filter);
+    return sortMuses(filtered, sortMode, manualOrder);
+  }, [partners, filter, sortMode, manualOrder]);
+
+  function scrollEditorIntoView() {
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   function openNew() {
     setEditing(emptyPartner("", partners));
     setLooksFromIdx([]);
     setLooksNote(null);
+    scrollEditorIntoView();
   }
 
   function openEdit(p: PartnerRecord) {
     const main = p.mainPhotoIndex ?? 0;
     setEditing({
       ...p,
+      id: Number(p.id),
       kinks: normalizeKinks(p.kinks),
       photos: [...(p.photos || [])],
       mainPhotoIndex: main,
@@ -132,6 +180,7 @@ export default function PartnersPage() {
     });
     setLooksFromIdx(p.photos?.length ? [main] : []);
     setLooksNote(null);
+    scrollEditorIntoView();
   }
 
   function persistEditor(e: FormEvent) {
@@ -139,16 +188,22 @@ export default function PartnersPage() {
     if (!editing || !editing.name.trim()) return;
     const next = {
       ...editing,
+      id: Number(editing.id),
       name: editing.name.trim(),
       updatedAt: new Date().toISOString(),
     };
     setPartners((prev) => {
-      const i = prev.findIndex((p) => p.id === next.id);
+      const i = prev.findIndex((p) => samePartnerId(p.id, next.id));
       if (i >= 0) {
         const copy = [...prev];
         copy[i] = next;
         return copy;
       }
+      setManualOrder((order) => {
+        const ids = [Number(next.id), ...order.filter((id) => id !== Number(next.id))];
+        saveMuseOrder(ids);
+        return ids;
+      });
       return [next, ...prev];
     });
     setEditing(null);
@@ -157,12 +212,41 @@ export default function PartnersPage() {
   }
 
   function remove(id: number) {
-    setPartners((prev) => prev.filter((p) => p.id !== id));
-    if (editing?.id === id) {
+    setPartners((prev) => prev.filter((p) => !samePartnerId(p.id, id)));
+    setManualOrder((prev) => {
+      const next = prev.filter((x) => !samePartnerId(x, id));
+      saveMuseOrder(next);
+      return next;
+    });
+    if (editing && samePartnerId(editing.id, id)) {
       setEditing(null);
       setLooksFromIdx([]);
       setLooksNote(null);
     }
+  }
+
+  function moveMuse(id: number, dir: -1 | 1) {
+    setSortMode("manual");
+    setManualOrder((prev) => {
+      const ids = prev.length
+        ? [...prev]
+        : partners.map((p) => Number(p.id));
+      // Ensure every current muse is represented
+      for (const p of partners) {
+        const n = Number(p.id);
+        if (!ids.includes(n)) ids.push(n);
+      }
+      const i = ids.findIndex((x) => samePartnerId(x, id));
+      if (i < 0) return prev;
+      const j = i + dir;
+      if (j < 0 || j >= ids.length) return prev;
+      const copy = [...ids];
+      const tmp = copy[i]!;
+      copy[i] = copy[j]!;
+      copy[j] = tmp;
+      saveMuseOrder(copy);
+      return copy;
+    });
   }
 
   function setFeaturedPhoto(id: number, index: number) {
@@ -306,11 +390,17 @@ export default function PartnersPage() {
   function loadDemo() {
     if (
       partners.length &&
-      !confirm("Replace current partners with ArkOfX demo people?")
+      !confirm(
+        `Replace current ${PERSON_LABEL.pluralLower} with ArkOfX demo people?`,
+      )
     ) {
       return;
     }
-    setPartners(arkDemoRoster());
+    const demo = arkDemoRoster();
+    setPartners(demo);
+    const ids = demo.map((p) => Number(p.id));
+    setManualOrder(ids);
+    saveMuseOrder(ids);
   }
 
   return (
@@ -339,10 +429,10 @@ export default function PartnersPage() {
             className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
-            Partners
+            {PERSON_LABEL.plural}
           </h1>
           <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-            Sex tracker — who, what you&apos;ve done, kinks, dynamics, photos.
+            Desire ledger — who, what you&apos;ve done, kinks, dynamics, photos.
             {storeMode === "database"
               ? " Saved to your Narcissus account."
               : " Stored on this device — "}
@@ -370,40 +460,61 @@ export default function PartnersPage() {
             onClick={openNew}
             className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
           >
-            Add partner
+            Add {PERSON_LABEL.singularLower}
           </button>
         </div>
       </header>
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {(["all", ...TYPES] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            onClick={() => setFilter(f)}
-            className={`rounded-sm border px-3 py-1.5 text-sm ${
-              filter === f
-                ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                : "border-[var(--line)] text-[#c4b7a8]"
-            }`}
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap gap-2">
+          {(["all", ...TYPES] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setFilter(f)}
+              className={`rounded-sm border px-3 py-1.5 text-sm ${
+                filter === f
+                  ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                  : "border-[var(--line)] text-[#c4b7a8]"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <label className="grid gap-1.5 text-xs text-[#c4b7a8]">
+          <span className="uppercase tracking-[0.18em] text-[var(--muted)]">
+            Sort
+          </span>
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as MuseSortMode)}
+            className="rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm text-[var(--ink)]"
           >
-            {f}
-          </button>
-        ))}
+            {MUSE_SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {editing && (
         <form
+          ref={editorRef}
           onSubmit={persistEditor}
-          className="mb-10 grid gap-4 border border-[var(--accent)]/40 bg-[var(--bg-elevated)]/60 p-6"
+          className="mb-10 scroll-mt-6 grid gap-4 border border-[var(--accent)]/40 bg-[var(--bg-elevated)]/60 p-6"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2
               className="text-2xl text-[var(--ink)]"
               style={{ fontFamily: "var(--font-display), serif" }}
             >
-              {partners.some((p) => p.id === editing.id) ? "Edit" : "New"}{" "}
-              partner
+              {partners.some((p) => samePartnerId(p.id, editing.id))
+                ? "Edit"
+                : "New"}{" "}
+              {PERSON_LABEL.singularLower}
             </h2>
             <button
               type="button"
@@ -738,7 +849,7 @@ export default function PartnersPage() {
             type="submit"
             className="justify-self-start rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
           >
-            Save partner
+            Save {PERSON_LABEL.singularLower}
           </button>
         </form>
       )}
@@ -746,16 +857,26 @@ export default function PartnersPage() {
       <div className="space-y-5">
         {visible.length === 0 && (
           <p className="text-sm text-[#c4b7a8]">
-            No partners yet. Add one or load Ark demo people.
+            No {PERSON_LABEL.pluralLower} yet. Add one or load Ark demo people.
           </p>
         )}
-        {visible.map((p) => (
+        {visible.map((p, cardIndex) => (
           <PartnerCard
             key={p.id}
             partner={p}
             onEdit={() => openEdit(p)}
             onRemove={() => remove(p.id)}
-            onSelectPhoto={(index) => setFeaturedPhoto(p.id, index)}
+            onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}
+            onMoveUp={
+              sortMode === "manual" ? () => moveMuse(p.id, -1) : undefined
+            }
+            onMoveDown={
+              sortMode === "manual" ? () => moveMuse(p.id, 1) : undefined
+            }
+            canMoveUp={sortMode === "manual" && cardIndex > 0}
+            canMoveDown={
+              sortMode === "manual" && cardIndex < visible.length - 1
+            }
           />
         ))}
       </div>
