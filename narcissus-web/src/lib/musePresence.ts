@@ -1,7 +1,6 @@
 /**
  * Muse chat presence — style ids, CSS look maps, and local portrait cache.
- * v1 animates uploaded photos with CSS (no Comfy). Optional xAI image edit
- * can mint a styled portrait via /api/art-of-x/muse-portrait.
+ * Optional xAI image edit via /api/art-of-x/muse-portrait (no Comfy).
  */
 
 export type MusePresenceStyle =
@@ -14,6 +13,8 @@ export const MUSE_PRESENCE_STYLES: Array<{
   id: MusePresenceStyle;
   label: string;
   blurb: string;
+  /** Auto-request xAI restyle when picked (if photo + no cache). */
+  autoGenerate?: boolean;
 }> = [
   {
     id: "realistic",
@@ -24,21 +25,24 @@ export const MUSE_PRESENCE_STYLES: Array<{
     id: "soft-glam",
     label: "Soft glam",
     blurb: "Warm rose-gold light",
+    autoGenerate: true,
   },
   {
     id: "anime",
-    label: "Anime glow",
-    blurb: "Illustrated, still her",
+    label: "Anime match",
+    blurb: "Her face → sexy anime",
+    autoGenerate: true,
   },
   {
     id: "cyberpunk",
     label: "Cyber neon",
     blurb: "Navy + electric blue",
+    autoGenerate: true,
   },
 ];
 
 const STYLE_STORAGE = "narcissus.artOfX.musePresenceStyle.v1";
-const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v1";
+const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v2";
 
 export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
   if (typeof window === "undefined") return "realistic";
@@ -77,20 +81,42 @@ export function savePresenceStyle(
 
 type PortraitCache = Record<string, string>;
 
-function portraitKey(partnerId: number, style: MusePresenceStyle): string {
-  return `${partnerId}:${style}`;
+/** Short stable fingerprint so cache invalidates when the Muse photo changes. */
+export function photoFingerprint(photo: string | null | undefined): string {
+  if (!photo) return "none";
+  const len = photo.length;
+  const head = photo.slice(0, 48);
+  const mid = photo.slice(Math.floor(len / 2), Math.floor(len / 2) + 24);
+  const tail = photo.slice(-24);
+  let h = 2166136261;
+  const s = `${len}:${head}:${mid}:${tail}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+function portraitKey(
+  partnerId: number,
+  style: MusePresenceStyle,
+  photoFp: string,
+): string {
+  return `${partnerId}:${style}:${photoFp}`;
 }
 
 export function loadCachedPortrait(
   partnerId: number,
   style: MusePresenceStyle,
+  photo?: string | null,
 ): string | null {
   if (typeof window === "undefined") return null;
   if (style === "realistic") return null;
   try {
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     const map = raw ? (JSON.parse(raw) as PortraitCache) : {};
-    const url = map[portraitKey(partnerId, style)];
+    const fp = photoFingerprint(photo);
+    const url = map[portraitKey(partnerId, style, fp)];
     return typeof url === "string" && url.startsWith("data:image/")
       ? url
       : null;
@@ -103,14 +129,15 @@ export function saveCachedPortrait(
   partnerId: number,
   style: MusePresenceStyle,
   dataUrl: string,
+  photo?: string | null,
 ): void {
   if (typeof window === "undefined") return;
   if (style === "realistic") return;
   try {
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     const map = raw ? (JSON.parse(raw) as PortraitCache) : {};
-    map[portraitKey(partnerId, style)] = dataUrl;
-    // Keep cache lean — drop oldest-ish keys if oversized
+    const fp = photoFingerprint(photo);
+    map[portraitKey(partnerId, style, fp)] = dataUrl;
     const keys = Object.keys(map);
     if (keys.length > 24) {
       for (const k of keys.slice(0, keys.length - 20)) {
@@ -130,17 +157,102 @@ export function styleEditPrompt(
   looks?: string,
 ): string {
   const looksBit = looks?.trim()
-    ? ` Keep their real features: ${looks.trim().slice(0, 280)}.`
-    : " Preserve face identity, hair, skin tone, and body shape from the reference.";
+    ? ` Match these notes exactly where visible: ${looks.trim().slice(0, 320)}.`
+    : "";
 
   switch (style) {
     case "soft-glam":
-      return `Restyle this adult woman portrait of ${museName} into soft glam editorial photography: warm rose-gold rim light, creamy skin, subtle metallic copper highlights, sensual but tasteful, shallow depth of field, premium fashion magazine quality.${looksBit} Same person, same pose family. Adults 18+ only.`;
+      return [
+        `Edit this reference photo of adult ${museName} into soft glam editorial photography.`,
+        `IDENTITY LOCK: keep the exact same face structure, eye shape, nose, mouth, skin tone, hair color, hair length/style, body proportions, and pose family from the reference — she must be recognizably the same person.`,
+        `Look: warm rose-gold rim light, creamy skin, subtle metallic copper highlights, sensual premium fashion still.${looksBit}`,
+        `Adults 18+ only. Single portrait, no collage, no text.`,
+      ].join(" ");
     case "anime":
-      return `Restyle this adult portrait of ${museName} into a high-quality anime-adjacent illustration: soft cel shading, luminous eyes, refined line work, sensual figure, still clearly the same face and hair.${looksBit} Elegant, not chibi. Adults 18+ only.`;
+      return [
+        `Identity-preserving anime stylization of this exact reference photo of adult ${museName}.`,
+        `CRITICAL IDENTITY LOCK: preserve her unique face — forehead, brow, eye spacing/shape/color, nose bridge, lips, jawline, cheekbones, skin undertone, hair color, hairline, hair length and parting from the reference. Do NOT invent a generic anime face.`,
+        `Style: high-quality sensual anime / modern seinen illustration — clean line art, soft cel shading, luminous eyes that still match her real eyes, refined hair strands matching her real hair, flattering figure, intimate premium look.`,
+        `Not chibi, not moe-blob, not a different character. Same woman as the photo, rendered as sexy anime.${looksBit}`,
+        `Adults 18+ only. Single portrait, no watermark, no text.`,
+      ].join(" ");
     case "cyberpunk":
-      return `Restyle this adult portrait of ${museName} into cyberpunk neon: deep navy shadows, electric cyan rim light, subtle rose-gold metal accents, rain-haze bokeh, sensual futuristic glamour, same face and body.${looksBit} Cinematic still. Adults 18+ only.`;
+      return [
+        `Edit this reference photo of adult ${museName} into cyberpunk neon glamour.`,
+        `IDENTITY LOCK: same face, hair, body, and pose family as the reference — clearly the same person.`,
+        `Look: deep navy shadows, electric cyan rim light, subtle rose-gold metal accents, rain-haze bokeh, sensual futuristic still.${looksBit}`,
+        `Adults 18+ only. Single portrait, no text.`,
+      ].join(" ");
     default:
-      return `Photorealistic portrait of ${museName}, natural light, same person as the reference.${looksBit}`;
+      return `Photorealistic portrait of ${museName}, same person as the reference.${looksBit}`;
   }
+}
+
+/**
+ * Client CSS/canvas fallback when xAI is unavailable: mild cel posterize
+ * that keeps the photo recognizable (not a generic tint-only look).
+ */
+export async function buildAnimeCssFallback(
+  photoDataUrl: string,
+): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const img = await loadImage(photoDataUrl);
+    const maxW = 720;
+    const scale = Math.min(1, maxW / img.width);
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, w, h);
+    const image = ctx.getImageData(0, 0, w, h);
+    const d = image.data;
+    const levels = 6;
+    const step = 255 / (levels - 1);
+    for (let i = 0; i < d.length; i += 4) {
+      // Soft posterize toward cel color
+      d[i] = Math.round(d[i]! / step) * step;
+      d[i + 1] = Math.round(d[i + 1]! / step) * step;
+      d[i + 2] = Math.round(d[i + 2]! / step) * step;
+      // Slight cool lift + saturation bump via mix toward cyan-rose
+      const r = d[i]!;
+      const g = d[i + 1]!;
+      const b = d[i + 2]!;
+      d[i] = Math.min(255, Math.round(r * 1.06 + 6));
+      d[i + 1] = Math.min(255, Math.round(g * 1.02));
+      d[i + 2] = Math.min(255, Math.round(b * 1.08 + 10));
+    }
+    ctx.putImageData(image, 0, 0);
+    // Soft glow pass
+    ctx.globalCompositeOperation = "soft-light";
+    const grd = ctx.createRadialGradient(
+      w * 0.5,
+      h * 0.35,
+      w * 0.1,
+      w * 0.5,
+      h * 0.4,
+      w * 0.7,
+    );
+    grd.addColorStop(0, "rgba(255, 190, 220, 0.35)");
+    grd.addColorStop(0.55, "rgba(120, 180, 255, 0.12)");
+    grd.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = "source-over";
+    return canvas.toDataURL("image/jpeg", 0.9);
+  } catch {
+    return null;
+  }
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image_load_failed"));
+    img.src = src;
+  });
 }

@@ -80,6 +80,8 @@ export async function POST(req: NextRequest) {
   const model =
     process.env.XAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const apiKey = getXaiApiKey();
+  // Anime identity match benefits from medium quality when available.
+  const quality = style === "anime" ? "medium" : "low";
 
   try {
     const upstream = await fetch(XAI_IMAGE_EDITS_URL, {
@@ -93,7 +95,7 @@ export async function POST(req: NextRequest) {
         prompt,
         image: { url: photo, type: "image_url" },
         aspect_ratio: "3:4",
-        quality: "low",
+        quality,
         response_format: "b64_json",
         n: 1,
       }),

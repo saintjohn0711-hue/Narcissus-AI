@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import {
   displayName,
   mainPhoto,
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
+  buildAnimeCssFallback,
   loadCachedPortrait,
   loadPresenceStyle,
   MUSE_PRESENCE_STYLES,
@@ -33,11 +40,17 @@ export function MusePresence({
   const [genError, setGenError] = useState<string | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   const [photoIndex, setPhotoIndex] = useState(0);
+  const autoKey = useRef<string>("");
+
+  const livePhoto = useMemo(() => {
+    if (!photos.length) return photo;
+    return photos[photoIndex] || photo;
+  }, [photos, photoIndex, photo]);
 
   useEffect(() => {
     const next = loadPresenceStyle(partner.id);
     setStyle(next);
-    setGenerated(loadCachedPortrait(partner.id, next));
+    setGenerated(loadCachedPortrait(partner.id, next, mainPhoto(partner)));
     setGenError(null);
     setPhotoIndex(
       Math.min(
@@ -45,17 +58,80 @@ export function MusePresence({
         Math.max(0, photos.length - 1),
       ),
     );
+    autoKey.current = "";
   }, [partner.id, partner.mainPhotoIndex, photos.length]);
-
-  const livePhoto = useMemo(() => {
-    if (!photos.length) return photo;
-    return photos[photoIndex] || photo;
-  }, [photos, photoIndex, photo]);
 
   const displaySrc = useMemo(() => {
     if (style !== "realistic" && generated) return generated;
     return livePhoto;
   }, [style, generated, livePhoto]);
+
+  async function generateStyled(
+    targetStyle: MusePresenceStyle,
+    sourcePhoto: string,
+  ) {
+    if (!sourcePhoto || targetStyle === "realistic" || busy) return;
+    setBusy(true);
+    setGenError(null);
+    try {
+      const res = await fetch("/api/art-of-x/muse-portrait", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          style: targetStyle,
+          photo: sourcePhoto,
+          name: displayName(partner),
+          looks: partner.looks,
+        }),
+      });
+      if (!res.ok) {
+        let message = "Couldn’t restyle — using local anime match.";
+        try {
+          const data = (await res.json()) as {
+            message?: string;
+            error?: string;
+          };
+          if (data.error === "xai_not_configured") {
+            message =
+              "No XAI_API_KEY — showing local anime match from her photo.";
+          } else if (data.message) {
+            message = data.message;
+          }
+        } catch {
+          // keep default
+        }
+        if (targetStyle === "anime") {
+          const fallback = await buildAnimeCssFallback(sourcePhoto);
+          if (fallback) {
+            setGenerated(fallback);
+            saveCachedPortrait(partner.id, targetStyle, fallback, sourcePhoto);
+            setGenError(message);
+            return;
+          }
+        }
+        setGenError(message);
+        return;
+      }
+      const data = (await res.json()) as { image?: string };
+      if (data.image) {
+        setGenerated(data.image);
+        saveCachedPortrait(partner.id, targetStyle, data.image, sourcePhoto);
+      }
+    } catch {
+      if (targetStyle === "anime") {
+        const fallback = await buildAnimeCssFallback(sourcePhoto);
+        if (fallback) {
+          setGenerated(fallback);
+          saveCachedPortrait(partner.id, targetStyle, fallback, sourcePhoto);
+          setGenError("AI restyle failed — local anime match from her photo.");
+          return;
+        }
+      }
+      setGenError("Restyle failed — CSS look stays on.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function pickStyle(next: MusePresenceStyle) {
     setStyle(next);
@@ -65,53 +141,31 @@ export function MusePresence({
       setGenerated(null);
       return;
     }
-    setGenerated(loadCachedPortrait(partner.id, next));
-  }
-
-  async function generateStyled() {
-    if (!livePhoto || style === "realistic" || busy) return;
-    setBusy(true);
-    setGenError(null);
-    try {
-      const res = await fetch("/api/art-of-x/muse-portrait", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          style,
-          photo: livePhoto,
-          name: displayName(partner),
-          looks: partner.looks,
-        }),
-      });
-      if (!res.ok) {
-        let message = "Couldn’t restyle — using live photo filters.";
-        try {
-          const data = (await res.json()) as {
-            message?: string;
-            error?: string;
-          };
-          if (data.error === "xai_not_configured") {
-            message = "Add XAI_API_KEY for AI restyles — filters still work.";
-          } else if (data.message) {
-            message = data.message;
-          }
-        } catch {
-          // keep default
-        }
-        setGenError(message);
-        return;
-      }
-      const data = (await res.json()) as { image?: string };
-      if (data.image) {
-        setGenerated(data.image);
-        saveCachedPortrait(partner.id, style, data.image);
-      }
-    } catch {
-      setGenError("Restyle failed — CSS look stays on.");
-    } finally {
-      setBusy(false);
+    const cached = loadCachedPortrait(partner.id, next, livePhoto);
+    setGenerated(cached);
+    const meta = MUSE_PRESENCE_STYLES.find((s) => s.id === next);
+    if (
+      meta?.autoGenerate &&
+      livePhoto &&
+      !cached &&
+      autoKey.current !== `${partner.id}:${next}:${livePhoto.length}`
+    ) {
+      autoKey.current = `${partner.id}:${next}:${livePhoto.length}`;
+      void generateStyled(next, livePhoto);
     }
   }
+
+  // Auto anime/styled generate when landing on a saved non-realistic style with photo but no cache
+  useEffect(() => {
+    if (!livePhoto || style === "realistic" || generated || busy) return;
+    const meta = MUSE_PRESENCE_STYLES.find((s) => s.id === style);
+    if (!meta?.autoGenerate) return;
+    const key = `${partner.id}:${style}:${livePhoto.length}`;
+    if (autoKey.current === key) return;
+    autoKey.current = key;
+    void generateStyled(style, livePhoto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot when style+photo ready
+  }, [partner.id, style, livePhoto, generated, busy]);
 
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -130,7 +184,9 @@ export function MusePresence({
       aria-label={`${displayName(partner)} living portrait`}
     >
       <div
-        className={`muse-presence-stage muse-presence-style-${style}`}
+        className={`muse-presence-stage muse-presence-style-${style}${
+          style === "anime" && generated ? " muse-presence-style-anime-matched" : ""
+        }`}
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
       >
@@ -176,9 +232,11 @@ export function MusePresence({
             {displayName(partner)}
           </p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--soft)]">
-            {style === "realistic"
-              ? "Breathing photo"
-              : MUSE_PRESENCE_STYLES.find((s) => s.id === style)?.label}
+            {busy
+              ? "Matching her look…"
+              : style === "realistic"
+                ? "Breathing photo"
+                : MUSE_PRESENCE_STYLES.find((s) => s.id === style)?.label}
           </p>
         </div>
       </div>
@@ -246,15 +304,19 @@ export function MusePresence({
         {style !== "realistic" && livePhoto && (
           <button
             type="button"
-            onClick={() => void generateStyled()}
+            onClick={() => void generateStyled(style, livePhoto)}
             disabled={busy}
             className="w-full rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] transition hover:border-[var(--accent)]/60 hover:bg-[var(--accent)]/16 disabled:opacity-50"
           >
             {busy
-              ? "Restyling…"
+              ? style === "anime"
+                ? "Matching anime…"
+                : "Restyling…"
               : generated
                 ? "Regenerate AI look"
-                : "Generate AI look"}
+                : style === "anime"
+                  ? "Match anime to her photo"
+                  : "Generate AI look"}
           </button>
         )}
         {genError && (
