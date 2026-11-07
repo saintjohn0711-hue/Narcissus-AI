@@ -1,8 +1,11 @@
 /**
  * Optional styled Muse portrait via xAI image edits.
  * Does NOT use Comfy — GPU pod may be offline. Falls back is client CSS.
+ * Companion / Anime attach JuicyChat style-ref as a second edit image.
  */
 
+import { readFile } from "fs/promises";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import {
   getXaiApiKey,
@@ -11,6 +14,7 @@ import {
 } from "@/lib/xai";
 import {
   styleEditPrompt,
+  styleUsesAnimeStyleRef,
   type MusePresenceStyle,
 } from "@/lib/musePresence";
 
@@ -19,6 +23,7 @@ export const maxDuration = 90;
 
 const XAI_IMAGE_EDITS_URL = "https://api.x.ai/v1/images/edits";
 const DEFAULT_IMAGE_MODEL = "grok-imagine-image-2.0";
+const STYLE_REF_REL = path.join("public", "muse-styles", "juichat-anime-ref.jpg");
 
 const STYLES: MusePresenceStyle[] = [
   "realistic",
@@ -34,6 +39,23 @@ type Body = {
   name?: string;
   looks?: string;
 };
+
+type ImageRef = { url: string; type: "image_url" };
+
+let styleRefDataUrl: string | null | undefined;
+
+async function loadAnimeStyleRef(): Promise<string | null> {
+  if (styleRefDataUrl !== undefined) return styleRefDataUrl;
+  try {
+    const abs = path.join(process.cwd(), STYLE_REF_REL);
+    const buf = await readFile(abs);
+    styleRefDataUrl = `data:image/jpeg;base64,${buf.toString("base64")}`;
+    return styleRefDataUrl;
+  } catch {
+    styleRefDataUrl = null;
+    return null;
+  }
+}
 
 export async function POST(req: NextRequest) {
   if (!isXaiConfigured()) {
@@ -84,9 +106,41 @@ export async function POST(req: NextRequest) {
   const model =
     process.env.XAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const apiKey = getXaiApiKey();
-  // Anime / Cartoon AI identity stylization benefits from medium quality.
+  // Companion / Anime identity stylization benefits from medium quality.
   const quality =
     style === "anime" || style === "cartoon" ? "medium" : "low";
+
+  const museImage: ImageRef = { url: photo, type: "image_url" };
+  let editBody: Record<string, unknown> = {
+    model,
+    prompt,
+    image: museImage,
+    aspect_ratio: "3:4",
+    quality,
+    response_format: "b64_json",
+    n: 1,
+  };
+
+  let usedStyleRef = false;
+  if (styleUsesAnimeStyleRef(style)) {
+    const styleRef = await loadAnimeStyleRef();
+    if (styleRef) {
+      usedStyleRef = true;
+      // Multi-image: Image 1 = Muse identity, Image 2 = JuicyChat style bible
+      editBody = {
+        model,
+        prompt,
+        images: [
+          museImage,
+          { url: styleRef, type: "image_url" } satisfies ImageRef,
+        ],
+        aspect_ratio: "3:4",
+        quality,
+        response_format: "b64_json",
+        n: 1,
+      };
+    }
+  }
 
   try {
     const upstream = await fetch(XAI_IMAGE_EDITS_URL, {
@@ -95,15 +149,7 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model,
-        prompt,
-        image: { url: photo, type: "image_url" },
-        aspect_ratio: "3:4",
-        quality,
-        response_format: "b64_json",
-        n: 1,
-      }),
+      body: JSON.stringify(editBody),
     });
 
     if (!upstream.ok) {
@@ -114,6 +160,7 @@ export async function POST(req: NextRequest) {
           status: upstream.status,
           detail: detail.slice(0, 500),
           model,
+          usedStyleRef,
         },
         { status: 502 },
       );
@@ -137,7 +184,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ image: imageUrl, style, model });
+    return NextResponse.json({
+      image: imageUrl,
+      style,
+      model,
+      usedStyleRef,
+      source: "xai",
+    });
   } catch (err) {
     return NextResponse.json(
       {
