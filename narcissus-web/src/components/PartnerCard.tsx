@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -364,6 +365,12 @@ export function PartnerCard({
                   </button>
                 </span>
               )}
+              <Link
+                href={`/art-of-x/chat?muse=${p.id}`}
+                className="text-[var(--glow-mid)] underline-offset-2 hover:text-[var(--glow)] hover:underline"
+              >
+                Chat
+              </Link>
               <button
                 type="button"
                 onClick={onEdit}
