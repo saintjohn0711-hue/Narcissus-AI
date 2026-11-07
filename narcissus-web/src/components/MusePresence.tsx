@@ -109,6 +109,7 @@ export function MusePresence({
     targetStyle: MusePresenceStyle,
     sourcePhoto: string,
     message: string,
+    opts?: { missingKey?: boolean },
   ): Promise<boolean> {
     if (targetStyle !== "anime" && targetStyle !== "cartoon") return false;
     const fallback = await buildStyledCssFallback(
@@ -118,12 +119,84 @@ export function MusePresence({
     if (!fallback) return false;
     setGenerated(fallback);
     setMatchSource("local");
-    setGenError(
+    const provisional =
       targetStyle === "cartoon"
-        ? `${message} Provisional cel sketch only — not a finished Ani companion. Set XAI_API_KEY for the real illustrated avatar.`
-        : `${message} Provisional cel sketch only — not a finished anime match. Set XAI_API_KEY for the real illustrated look.`,
-    );
+        ? "Provisional cel sketch only — not a finished Ani companion."
+        : "Provisional cel sketch only — not a finished anime match.";
+    // Only blame the env key when the API actually reported it missing.
+    const keyHint = opts?.missingKey
+      ? targetStyle === "cartoon"
+        ? " Set XAI_API_KEY on Vercel Production for the real illustrated avatar."
+        : " Set XAI_API_KEY on Vercel Production for the real illustrated look."
+      : " Try again in a moment, or pick another Muse photo.";
+    setGenError(`${message} ${provisional}${keyHint}`);
     return true;
+  }
+
+  function restyleErrorMessage(
+    targetStyle: MusePresenceStyle,
+    data: {
+      message?: string;
+      error?: string;
+      status?: number;
+      detail?: string;
+    },
+  ): { message: string; missingKey: boolean } {
+    const err = data.error || "";
+    if (err === "xai_not_configured") {
+      return {
+        missingKey: true,
+        message:
+          targetStyle === "cartoon"
+            ? "No XAI_API_KEY — Companion needs xAI for Ani-style anime."
+            : targetStyle === "anime"
+              ? "No XAI_API_KEY — Anime match needs xAI."
+              : "No XAI_API_KEY — CSS look stays on.",
+      };
+    }
+    if (err === "xai_image_failed") {
+      const status = data.status;
+      if (status === 401 || status === 403) {
+        return {
+          missingKey: false,
+          message:
+            "xAI rejected the API key — rotate XAI_API_KEY in Vercel Project → Settings → Environment Variables → Production, then redeploy.",
+        };
+      }
+      const detail = (data.detail || "").toLowerCase();
+      if (detail.includes("too small") || detail.includes("dimensions")) {
+        return {
+          missingKey: false,
+          message: "Muse photo is too small for xAI — use a clearer full-body photo.",
+        };
+      }
+      if (detail.includes("too large") || detail.includes("payload")) {
+        return {
+          missingKey: false,
+          message: "Muse photo is too large for restyle — try a smaller upload.",
+        };
+      }
+      return {
+        missingKey: false,
+        message: "xAI image restyle failed — Companion API is configured; retry shortly.",
+      };
+    }
+    if (err === "empty_image") {
+      return {
+        missingKey: false,
+        message: "xAI returned an empty image — retry Companion restyle.",
+      };
+    }
+    if (err === "photo_required" || err === "photo_too_large" || err === "style_required") {
+      return {
+        missingKey: false,
+        message: data.message || "Couldn’t restyle — check the Muse photo and Look.",
+      };
+    }
+    if (data.message) {
+      return { missingKey: false, message: data.message };
+    }
+    return { missingKey: false, message: "Couldn’t restyle." };
   }
 
   async function generateStyled(
@@ -147,29 +220,23 @@ export function MusePresence({
         }),
       });
       if (!res.ok) {
-        let message = "Couldn’t restyle.";
+        let parsed: {
+          message?: string;
+          error?: string;
+          status?: number;
+          detail?: string;
+        } = {};
         try {
-          const data = (await res.json()) as {
-            message?: string;
-            error?: string;
-          };
-          if (data.error === "xai_not_configured") {
-            message =
-              targetStyle === "cartoon"
-                ? "No XAI_API_KEY — Companion needs xAI for Ani-style anime."
-                : targetStyle === "anime"
-                  ? "No XAI_API_KEY — Anime match needs xAI."
-                  : "No XAI_API_KEY — CSS look stays on.";
-          } else if (data.message) {
-            message = data.message;
-          }
+          parsed = (await res.json()) as typeof parsed;
         } catch {
-          // keep default
+          // keep empty
         }
+        const { message, missingKey } = restyleErrorMessage(targetStyle, parsed);
         const used = await applyLocalFallback(
           targetStyle,
           sourcePhoto,
           message,
+          { missingKey },
         );
         if (!used) setGenError(message);
         return;
@@ -189,14 +256,23 @@ export function MusePresence({
           targetStyle === "cartoon" ? nextWardrobe : null,
         );
         setGenError(null);
+      } else {
+        const used = await applyLocalFallback(
+          targetStyle,
+          sourcePhoto,
+          "xAI returned no image.",
+          { missingKey: false },
+        );
+        if (!used) setGenError("xAI returned no image — retry Companion restyle.");
       }
     } catch {
       const used = await applyLocalFallback(
         targetStyle,
         sourcePhoto,
         targetStyle === "cartoon"
-          ? "AI companion restyle failed."
-          : "AI anime restyle failed.",
+          ? "AI companion restyle failed (network or timeout)."
+          : "AI anime restyle failed (network or timeout).",
+        { missingKey: false },
       );
       if (!used) setGenError("Restyle failed — CSS look stays on.");
     } finally {

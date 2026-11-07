@@ -168,6 +168,7 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const detail = await upstream.text().catch(() => "");
+      const authRejected = upstream.status === 401 || upstream.status === 403;
       return NextResponse.json(
         {
           error: "xai_image_failed",
@@ -175,6 +176,10 @@ export async function POST(req: NextRequest) {
           detail: detail.slice(0, 500),
           model,
           usedStyleRef,
+          // Never include the key. Auth failures → rotate env; other failures ≠ missing key.
+          message: authRejected
+            ? "xAI rejected the API key — rotate XAI_API_KEY in Vercel Production env and redeploy."
+            : "xAI image restyle failed — API key is present; retry or use another Muse photo.",
         },
         { status: 502 },
       );
