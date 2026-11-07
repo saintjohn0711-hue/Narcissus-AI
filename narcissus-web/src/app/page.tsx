@@ -4,7 +4,7 @@ import Link from "next/link";
 import { AuthControls } from "@/components/AuthControls";
 
 export const metadata: Metadata = {
-  title: "Narcissus — Adult desire studio",
+  title: "Narcissus AI — Your Reflection, Your Rules",
   description:
     "Studio likeness edits, Art of X Muses and stories, Circle discovery, Echo account.",
 };
@@ -43,26 +43,26 @@ export default function HomePage() {
         <Link
           href="/"
           className="flex items-center gap-3 text-[var(--ink)] no-underline"
-          aria-label="Narcissus home"
+          aria-label="Narcissus AI home"
         >
-          <span className="home-logo-slot relative inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden">
+          <span className="relative inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--line)]">
             <Image
-              src="/narcissus-logo.svg"
+              src="/brand/narcissus-logo.jpg"
               alt=""
               width={36}
               height={36}
               priority
-              className="h-9 w-9 object-contain"
+              className="h-9 w-9 object-cover object-[center_30%]"
             />
           </span>
           <span
-            className="text-lg tracking-[0.08em] text-[var(--ink)]"
+            className="text-lg tracking-[0.06em] text-[var(--accent-strong)]"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
-            Narcissus
+            Narcissus AI
           </span>
         </Link>
-        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#c4b7a8]">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--soft)]">
           <Link href="/studio" className="transition hover:text-[var(--ink)]">
             Studio
           </Link>
@@ -81,53 +81,58 @@ export default function HomePage() {
 
       <section className="home-hero relative flex min-h-[100svh] flex-col justify-end overflow-hidden px-6 pb-16 pt-28 sm:px-10 sm:pb-20">
         <div className="home-hero-atmosphere" aria-hidden="true">
+          <div className="home-hero-art">
+            <Image
+              src="/brand/narcissus-logo.jpg"
+              alt=""
+              fill
+              priority
+              sizes="100vw"
+              className="select-none"
+            />
+          </div>
+          <div className="home-hero-glow" />
           <div className="home-hero-wash" />
           <div className="home-hero-grain" />
-          <div className="home-hero-mirror" />
         </div>
 
         <div className="home-hero-copy relative z-10 mx-auto w-full max-w-4xl">
           <div className="home-brand-block home-fade-up">
-            <span className="home-logo-hero relative mb-6 inline-flex h-16 w-16 items-center justify-center sm:h-20 sm:w-20">
+            <span className="home-brand-mark relative mb-5 inline-flex h-[4.5rem] w-[4.5rem] overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25 sm:mb-6 sm:h-24 sm:w-24">
               <Image
-                src="/narcissus-logo.svg"
-                alt="Narcissus logo"
-                width={80}
-                height={80}
+                src="/brand/narcissus-logo.jpg"
+                alt="Narcissus AI"
+                width={96}
+                height={96}
                 priority
-                className="h-full w-full object-contain"
+                className="h-full w-full object-cover object-[center_28%]"
               />
             </span>
             <h1
-              className="text-[clamp(3.25rem,12vw,7.5rem)] font-semibold leading-[0.92] tracking-tight text-[var(--ink)]"
+              className="text-[clamp(2.75rem,11vw,6.75rem)] font-semibold leading-[0.92] tracking-tight text-[var(--accent-strong)]"
               style={{ fontFamily: "var(--font-display), serif" }}
             >
-              Narcissus
+              Narcissus AI
             </h1>
           </div>
 
           <p
-            className="home-fade-up home-fade-up-delay-1 mt-6 max-w-xl text-xl font-light leading-snug text-[#e8ddd0] sm:text-2xl"
+            className="home-fade-up home-fade-up-delay-1 mt-5 max-w-xl text-xl font-light leading-snug text-[var(--ink)] sm:text-2xl"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
-            Desire, composed — likeness held.
+            Your Reflection, Your Rules
           </p>
 
-          <p className="home-fade-up home-fade-up-delay-2 mt-4 max-w-md text-base font-light leading-relaxed text-[#c4b7a8]">
-            An adults-only space for photo and video craft, partners and stories,
-            and discovery with people who want the same.
-          </p>
-
-          <div className="home-fade-up home-fade-up-delay-3 mt-10 flex flex-wrap items-center gap-4">
+          <div className="home-fade-up home-fade-up-delay-2 mt-10 flex flex-wrap items-center gap-4">
             <Link
               href="/studio"
-              className="home-cta-primary inline-flex items-center border border-[var(--accent)] bg-[var(--accent)]/15 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:bg-[var(--accent)]/25"
+              className="home-cta-primary inline-flex items-center border border-[var(--glow)]/50 bg-[var(--glow)]/10 px-6 py-3 text-sm tracking-[0.14em] text-[var(--glow)] transition hover:bg-[var(--glow)]/20"
             >
               Enter Studio
             </Link>
             <Link
               href="/art-of-x"
-              className="inline-flex items-center border border-[var(--line)] px-6 py-3 text-sm tracking-[0.14em] text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+              className="inline-flex items-center border border-[var(--accent)]/45 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
             >
               Explore Art of X
             </Link>
@@ -146,8 +151,8 @@ export default function HomePage() {
           >
             Four rooms. One house of desire.
           </h2>
-          <p className="mt-3 max-w-md text-base font-light leading-relaxed text-[#c4b7a8]">
-            Start where you need — edits, partners, discovery, or your account.
+          <p className="mt-3 max-w-md text-base font-light leading-relaxed text-[var(--soft)]">
+            Start where you need — edits, Muses, discovery, or your account.
           </p>
 
           <ul className="mt-14 space-y-0 divide-y divide-[var(--line)] border-y border-[var(--line)]">
@@ -163,7 +168,7 @@ export default function HomePage() {
                   >
                     {section.name}
                   </span>
-                  <span className="max-w-md text-sm font-light leading-relaxed text-[#c4b7a8] sm:text-right">
+                  <span className="max-w-md text-sm font-light leading-relaxed text-[var(--soft)] sm:text-right">
                     {section.line}
                   </span>
                 </Link>
@@ -184,14 +189,14 @@ export default function HomePage() {
           >
             Built for consenting adults.
           </h2>
-          <p className="mt-3 max-w-lg text-base font-light leading-relaxed text-[#c4b7a8]">
-            Narcissus is 18+. Sign in when you want cloud-saved partners and Circle
+          <p className="mt-3 max-w-lg text-base font-light leading-relaxed text-[var(--soft)]">
+            Narcissus is 18+. Sign in when you want cloud-saved Muses and Circle
             links — or open Studio and start composing.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <Link
               href="/sign-in"
-              className="inline-flex items-center border border-[var(--line)] px-6 py-3 text-sm tracking-[0.14em] text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+              className="inline-flex items-center border border-[var(--line)] px-6 py-3 text-sm tracking-[0.14em] text-[var(--soft)] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
             >
               Sign in
             </Link>
@@ -207,7 +212,7 @@ export default function HomePage() {
 
       <footer className="border-t border-[var(--line)] px-6 py-8 sm:px-10">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 text-sm text-[var(--muted)]">
-          <span style={{ fontFamily: "var(--font-display), serif" }}>Narcissus</span>
+          <span style={{ fontFamily: "var(--font-display), serif" }}>Narcissus AI</span>
           <span>Adults only · 18+</span>
         </div>
       </footer>

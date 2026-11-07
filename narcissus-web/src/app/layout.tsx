@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: "%s · Narcissus",
   },
   description:
-    "Adult desire studio — likeness edits, partners, stories, and discovery",
+    "Your Reflection, Your Rules — likeness edits, Muses, stories, and discovery",
 };
 
 export default function RootLayout({
