@@ -49,7 +49,8 @@ export const maxDuration = 60;
 const MAX_BYTES = 12 * 1024 * 1024;
 const MODES: JobMode[] = ["faceswap", "undress", "custom", "scene", "video"];
 
-const UNDRESS_CKPTS = [
+/** Prefer NSFW realism when present on the Comfy pod (still + video still-pass). */
+const REALISM_CKPTS = [
   "epicrealism_naturalSinRC1VAE.safetensors",
   "realisticVisionV60B1_v51VAE.safetensors",
   "dreamshaper_8.safetensors",
@@ -186,13 +187,14 @@ export async function POST(req: NextRequest) {
       faceUploadedName = faceUploaded.filename;
     }
 
-    const undressCkpt =
-      mode === "undress"
-        ? await resolveCheckpoint(
-            UNDRESS_CKPTS,
+    const realismCkpt =
+      mode === "faceswap"
+        ? null
+        : await resolveCheckpoint(
+            REALISM_CKPTS,
             "v1-5-pruned-emaonly-fp16.safetensors",
-          )
-        : null;
+          );
+    const undressCkpt = mode === "undress" ? realismCkpt : null;
 
     const graph =
       mode === "faceswap" && faceUploadedName
@@ -217,6 +219,7 @@ export async function POST(req: NextRequest) {
                 identity,
                 seconds: 5,
                 fps: 8,
+                checkpoint: realismCkpt || undefined,
               })
             : mode === "scene" && sceneTpl
               ? buildScenePrompt(uploaded.filename, {
@@ -231,6 +234,7 @@ export async function POST(req: NextRequest) {
                   // Facial needs the generated face effect — don't ReActor it away.
                   faceLock: sceneTpl.id !== "facial",
                   prefix: `narcissus_scene_${sceneTpl.id}`,
+                  checkpoint: realismCkpt || undefined,
                 })
               : buildImg2ImgPrompt(mode, uploaded.filename, {
                   promptOverride,
@@ -239,6 +243,7 @@ export async function POST(req: NextRequest) {
                     mode === "custom" ? "custom" : "faceswap",
                     identity,
                   ),
+                  checkpoint: realismCkpt || undefined,
                 });
 
     let result = await runPromptToImages(graph, {
@@ -385,7 +390,7 @@ export async function POST(req: NextRequest) {
       faceFilename: faceFile?.name ?? null,
       bytes: file.size,
       prompt: promptOverride || sceneTpl?.stillPrompt || null,
-      checkpoint: undressCkpt,
+      checkpoint: realismCkpt,
       faceLockFallback,
       message:
         mode === "faceswap"
