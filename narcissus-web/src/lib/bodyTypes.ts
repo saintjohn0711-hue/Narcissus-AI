@@ -55,9 +55,9 @@ export const BODY_TYPES: BodyType[] = [
     blurb: "Feminine body with breasts and a visible penis.",
     needsCock: true,
     anatomyPrompt:
-      "adult transgender woman nude body, feminine face and body, natural female breasts, nipples, soft feminine hips, clearly visible penis and testicles, shemale, no vagina",
+      "adult transgender woman fully nude, feminine breasts and nipples, soft feminine hips, add a clearly visible penis and testicles on the crotch, hard or soft cock hanging or erect between the legs, shemale futa anatomy, no vagina, genitals not censored",
     anatomyNegative:
-      "vagina, vulva, pussy, flat male chest only, no breasts, cis man only, cis woman only, crotch covered, no penis, missing penis, smoothed crotch",
+      "vagina, vulva, pussy, Barbie crotch, smooth featureless groin, flat male chest only, no breasts, cis man only, cis woman only, crotch covered, no penis, missing penis, smoothed crotch, censored",
   },
   {
     id: "cross_dresser",
@@ -65,9 +65,9 @@ export const BODY_TYPES: BodyType[] = [
     blurb: "Male body under feminine clothing — penis visible once undressed.",
     needsCock: true,
     anatomyPrompt:
-      "adult male crossdresser now nude, male body underneath feminine clothes removed, flat male chest, clearly visible penis and testicles between the legs, masculine body, no female breasts, no vagina",
+      "adult male crossdresser fully nude after clothes removed, flat male chest, masculine body, add a clearly visible penis and testicles between the legs, cock and balls fully in frame, no female breasts, no vagina, genitals not censored",
     anatomyNegative:
-      "female breasts, boobs, vagina, vulva, pussy, feminine nude woman, shemale breasts with penis, crotch covered, no penis, missing penis, smoothed crotch",
+      "female breasts, boobs, vagina, vulva, pussy, Barbie crotch, smooth featureless groin, feminine nude woman, crotch covered, no penis, missing penis, smoothed crotch, censored",
   },
 ];
 
@@ -153,7 +153,12 @@ export function anatomyPromptFor(
       size.prompt,
       state.prompt,
       "genitals fully visible and detailed, penis in frame, not cropped, not covered",
+      "explicit nude crotch with cock, photo-real penis shaft and glans, scrotum visible",
     ].join(", "),
-    negative: [body.anatomyNegative, state.negative].join(", "),
+    negative: [
+      body.anatomyNegative,
+      state.negative,
+      "Barbie doll crotch, blank groin, no genitals, censored genitals",
+    ].join(", "),
   };
 }
