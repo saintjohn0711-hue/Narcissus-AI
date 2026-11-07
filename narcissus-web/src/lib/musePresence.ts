@@ -5,6 +5,7 @@
 
 import {
   companionWardrobePromptBits,
+  isSoftClothing,
   wardrobeKey,
   type CompanionWardrobe,
   type WardrobePromptMode,
@@ -307,10 +308,15 @@ function companionPrompt(
     ? ` Character notes: ${looks.trim().slice(0, 320)}.`
     : "";
 
+  const soft = isSoftClothing(wardrobe?.clothing);
+  const tone = soft
+    ? "Tasteful illustrated anime fashion — not photoreal, not 3D doll, not chibi."
+    : "Illustrated anime companion — not photoreal, not 3D doll, not chibi.";
+
   if (mode === "generate") {
     return [
       `Create a brand-new premium FULL-LENGTH standing anime companion named ${museName} in JuicyChat / Grok Ani class — invent her face and body from the design traits (no real photograph).`,
-      `Vertical 9:16, crown-to-feet visible, flirty eye contact, elegant stance. Sexy illustrated anime — not photoreal, not 3D doll, not chibi.`,
+      `Vertical 9:16, crown-to-feet visible, warm eye contact, elegant stance. ${tone}`,
       COMPANION_QUALITY_BAR,
       `FORBIDDEN: photoreal selfie, watermark, signature, UI chrome, text, collage.${looksBit}`,
       wardrobeBits,
@@ -322,7 +328,7 @@ function companionPrompt(
     return [
       `Image 1 is the CURRENT illustrated companion of adult ${museName}. Image 2 (when present) is STYLE craft only — ignore Image 2 face/outfit.`,
       `Redraw her as the SAME anime companion with the requested trait/outfit updates — keep face identity, hair vibe, and body continuity from Image 1 unless the user overrode those traits.`,
-      `FULL-LENGTH standing 9:16, crown-to-feet. Do not switch to a different character.`,
+      `FULL-LENGTH standing 9:16, crown-to-feet. Do not switch to a different character. ${tone}`,
       COMPANION_QUALITY_BAR,
       `FORBIDDEN: photoreal conversion, watermark, text, collage.${looksBit}`,
       wardrobeBits,
@@ -333,7 +339,7 @@ function companionPrompt(
   // likeness — optional Muse photo lock
   return [
     `Image 1 is the likeness photo of adult ${museName}. Image 2 (when present) is STYLE ONLY — JuicyChat / Ani craft. Keep Image 1's face. NEVER copy Image 2's face, hair, body, or outfit.`,
-    `Paint a premium FULL-LENGTH standing anime companion of the SAME woman: crown-to-feet in 9:16, flirty eye contact — NOT a bust crop, NOT a muddy photo filter.`,
+    `Paint a premium FULL-LENGTH standing anime companion of the SAME woman: crown-to-feet in 9:16, warm eye contact — NOT a bust crop, NOT a muddy photo filter. ${tone}`,
     `CRITICAL IDENTITY LOCK from Image 1: facial proportions, eyes, nose, mouth, jaw, skin undertone, and Natural traits unless user overrode them.`,
     COMPANION_QUALITY_BAR,
     `FORBIDDEN: photoreal selfie, CSS posterize, 3D doll, chibi, collage, watermark, text.${looksBit}`,

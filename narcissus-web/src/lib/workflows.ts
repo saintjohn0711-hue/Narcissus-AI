@@ -7,7 +7,13 @@ import {
 } from "./bodyTypes";
 import { getVideoTemplate, type VideoTemplateId } from "./templates";
 
-export type JobMode = "faceswap" | "undress" | "custom" | "scene" | "video";
+export type JobMode =
+  | "faceswap"
+  | "undress"
+  | "custom"
+  | "scene"
+  | "video"
+  | "toy";
 
 const CKPT_SD15 = "v1-5-pruned-emaonly-fp16.safetensors";
 const CKPT_SVD = "svd_xt.safetensors";
@@ -37,7 +43,7 @@ export type IdentityEngine = "instantid" | "faceid" | "reactor";
 const NEGATIVE =
   "child, minor, underage, baby, toddler, teen, different person, face change, identity change, blurry, low quality, deformed, extra limbs, watermark, text";
 
-const DEFAULT_PROMPTS: Record<Exclude<JobMode, "video">, string> = {
+const DEFAULT_PROMPTS: Record<Exclude<JobMode, "video" | "toy">, string> = {
   faceswap:
     "photorealistic adult portrait of the exact same person as the reference, identical face, same eyes nose mouth bone structure, natural skin, studio soft light",
   undress:
@@ -49,13 +55,331 @@ const DEFAULT_PROMPTS: Record<Exclude<JobMode, "video">, string> = {
 };
 
 export function defaultPromptFor(mode: JobMode): string {
-  if (mode === "video") return "";
+  if (mode === "video" || mode === "toy") return "";
   return DEFAULT_PROMPTS[mode];
+}
+
+export type ToyKind = "strap-on" | "dildo" | "vibrator";
+
+/** Deterministic seeds that smoked as object-only products on epicrealism. */
+export function toyProductSeed(kind: ToyKind, color: string): number {
+  const base =
+    kind === "strap-on" ? 12345 : kind === "dildo" ? 22222 : 33333;
+  const colorBump =
+    color === "pink"
+      ? 0
+      : color === "black"
+        ? 100
+        : color === "purple"
+          ? 200
+          : color === "red"
+            ? 300
+            : color === "clear"
+              ? 400
+              : color === "blue"
+                ? 500
+                : 50;
+  return base + colorBump;
+}
+
+function toyProductPromptBits(
+  kind: ToyKind,
+  size: string,
+  color: string,
+  promptOverride?: string,
+): { positive: string; negative: string } {
+  const negative =
+    "person, woman, man, girl, guy, face, eyes, lips, hands, fingers, legs, body, nude, lingerie, clothing, dress, catsuit, latex outfit, panties, bra, sitting, posing, child, cartoon, anime, text, watermark, logo, collage";
+  if (promptOverride?.trim()) {
+    return { positive: promptOverride.trim(), negative };
+  }
+  if (kind === "vibrator") {
+    return {
+      positive: [
+        `photorealistic ${size} ${color} silicone vibrator wand sex toy`,
+        "isolated product photo on pure white seamless background",
+        "studio lighting, detailed silicone texture, adults only",
+      ].join(", "),
+      negative,
+    };
+  }
+  if (kind === "dildo") {
+    return {
+      positive: [
+        `photorealistic ${size} ${color} silicone dildo sex toy`,
+        "isolated product photo on pure white seamless background",
+        "studio lighting, detailed silicone texture, adults only",
+      ].join(", "),
+      negative,
+    };
+  }
+  return {
+    positive: [
+      `photorealistic ${size} ${color} silicone strap-on dildo with black leather harness straps and silver buckles`,
+      "isolated sex toy product photo on pure white seamless background",
+      "studio lighting, detailed silicone texture, adults only",
+    ].join(", "),
+    negative,
+  };
+}
+
+/** txt2img isolated toy product (white studio bg). */
+export function buildToyProductPrompt(opts?: {
+  seed?: number;
+  toyKind?: ToyKind;
+  toySize?: string;
+  toyColor?: string;
+  promptOverride?: string;
+  checkpoint?: string;
+}): Record<string, unknown> {
+  const kind = opts?.toyKind ?? "strap-on";
+  const size = (opts?.toySize || "medium").trim() || "medium";
+  const color = (opts?.toyColor || "pink").trim() || "pink";
+  const seed = opts?.seed ?? toyProductSeed(kind, color);
+  const ckpt = opts?.checkpoint?.trim() || FACEID_SD15_CKPTS[0]!;
+  const stamp = Date.now().toString(36);
+  const { positive, negative } = toyProductPromptBits(
+    kind,
+    size,
+    color,
+    opts?.promptOverride,
+  );
+  const toyW = 512;
+  const toyH = kind === "strap-on" ? 640 : 512;
+  return {
+    "1": {
+      class_type: "CheckpointLoaderSimple",
+      inputs: { ckpt_name: ckpt },
+    },
+    "10": {
+      class_type: "EmptyLatentImage",
+      inputs: { width: toyW, height: toyH, batch_size: 1 },
+    },
+    "11": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: positive, clip: ["1", 1] },
+    },
+    "12": {
+      class_type: "CLIPTextEncode",
+      inputs: { text: negative, clip: ["1", 1] },
+    },
+    "13": {
+      class_type: "KSampler",
+      inputs: {
+        seed,
+        steps: 30,
+        cfg: 7.5,
+        sampler_name: "euler",
+        scheduler: "normal",
+        denoise: 1.0,
+        model: ["1", 0],
+        positive: ["11", 0],
+        negative: ["12", 0],
+        latent_image: ["10", 0],
+      },
+    },
+    "14": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["13", 0], vae: ["1", 2] },
+    },
+    "20": {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `narcissus_toy_product_${kind.replace(/[^a-z0-9]+/gi, "_")}_${stamp}`,
+        images: ["14", 0],
+      },
+    },
+  };
+}
+
+/**
+ * Composite a generated toy product onto the companion hips.
+ * ColorToMask knocks out white studio bg — real toy pixels, not CSS.
+ */
+export function buildToyCompositePrompt(
+  companionImageName: string,
+  productImageName: string,
+  opts?: {
+    toyKind?: ToyKind;
+    width?: number;
+    height?: number;
+  },
+): Record<string, unknown> {
+  const kind = opts?.toyKind ?? "strap-on";
+  const width = opts?.width ?? 768;
+  const height = opts?.height ?? 1024;
+  const stamp = Date.now().toString(36);
+  const placeW = kind === "strap-on" ? 340 : 260;
+  const placeH = kind === "strap-on" ? 440 : 320;
+  const placeX = Math.max(0, Math.floor((width - placeW) / 2));
+  const placeY = Math.floor(height * (kind === "strap-on" ? 0.52 : 0.55));
+  return {
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: companionImageName },
+    },
+    "3": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["2", 0],
+        upscale_method: "lanczos",
+        width,
+        height,
+        crop: "disabled",
+      },
+    },
+    "4": {
+      class_type: "LoadImage",
+      inputs: { image: productImageName },
+    },
+    "15": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["4", 0],
+        upscale_method: "lanczos",
+        width: placeW,
+        height: placeH,
+        crop: "disabled",
+      },
+    },
+    "16": {
+      class_type: "ColorToMask",
+      inputs: {
+        images: ["15", 0],
+        invert: true,
+        red: 255,
+        green: 255,
+        blue: 255,
+        threshold: 32,
+        per_batch: 16,
+      },
+    },
+    "17": {
+      class_type: "GrowMask",
+      inputs: { mask: ["16", 0], expand: 2, tapered_corners: true },
+    },
+    "18": {
+      class_type: "FeatherMask",
+      inputs: {
+        mask: ["17", 0],
+        left: 3,
+        top: 3,
+        right: 3,
+        bottom: 3,
+      },
+    },
+    "19": {
+      class_type: "ImageCompositeMasked",
+      inputs: {
+        destination: ["3", 0],
+        source: ["15", 0],
+        x: placeX,
+        y: placeY,
+        resize_source: false,
+        mask: ["18", 0],
+      },
+    },
+    "20": {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `narcissus_toy_${kind.replace(/[^a-z0-9]+/gi, "_")}_${stamp}`,
+        images: ["19", 0],
+      },
+    },
+  };
+}
+
+/** @deprecated use product + composite; kept for callers expecting one graph. */
+export function buildToyAttachPrompt(
+  imageName: string,
+  opts?: {
+    seed?: number;
+    toyKind?: ToyKind;
+    toySize?: string;
+    toyColor?: string;
+    promptOverride?: string;
+    checkpoint?: string;
+    width?: number;
+    height?: number;
+  },
+): Record<string, unknown> {
+  // Single-graph fallback: product then composite in one prompt (no white-ratio gate).
+  const kind = opts?.toyKind ?? "strap-on";
+  const product = buildToyProductPrompt(opts);
+  const width = opts?.width ?? 768;
+  const height = opts?.height ?? 1024;
+  const placeW = kind === "strap-on" ? 340 : 260;
+  const placeH = kind === "strap-on" ? 440 : 320;
+  const placeX = Math.max(0, Math.floor((width - placeW) / 2));
+  const placeY = Math.floor(height * (kind === "strap-on" ? 0.52 : 0.55));
+  const stamp = Date.now().toString(36);
+  return {
+    ...product,
+    "2": { class_type: "LoadImage", inputs: { image: imageName } },
+    "3": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["2", 0],
+        upscale_method: "lanczos",
+        width,
+        height,
+        crop: "disabled",
+      },
+    },
+    "15": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["14", 0],
+        upscale_method: "lanczos",
+        width: placeW,
+        height: placeH,
+        crop: "disabled",
+      },
+    },
+    "16": {
+      class_type: "ColorToMask",
+      inputs: {
+        images: ["15", 0],
+        invert: true,
+        red: 255,
+        green: 255,
+        blue: 255,
+        threshold: 32,
+        per_batch: 16,
+      },
+    },
+    "17": {
+      class_type: "GrowMask",
+      inputs: { mask: ["16", 0], expand: 2, tapered_corners: true },
+    },
+    "18": {
+      class_type: "FeatherMask",
+      inputs: { mask: ["17", 0], left: 3, top: 3, right: 3, bottom: 3 },
+    },
+    "19": {
+      class_type: "ImageCompositeMasked",
+      inputs: {
+        destination: ["3", 0],
+        source: ["15", 0],
+        x: placeX,
+        y: placeY,
+        resize_source: false,
+        mask: ["18", 0],
+      },
+    },
+    "20": {
+      class_type: "SaveImage",
+      inputs: {
+        filename_prefix: `narcissus_toy_${kind.replace(/[^a-z0-9]+/gi, "_")}_${stamp}`,
+        images: ["19", 0],
+      },
+    },
+  };
 }
 
 /** Map UI identity 0–1 → denoise (higher identity = lower denoise). */
 export function denoiseForIdentity(
-  mode: Exclude<JobMode, "video">,
+  mode: Exclude<JobMode, "video" | "toy">,
   identity = 0.85,
 ): number {
   // Undress: body can change; ReActor (+ light head-lock) restores identity.
@@ -805,7 +1129,7 @@ export function buildScenePrompt(
 }
 
 export function buildImg2ImgPrompt(
-  mode: Exclude<JobMode, "video">,
+  mode: Exclude<JobMode, "video" | "toy">,
   imageName: string,
   opts?: {
     seed?: number;
