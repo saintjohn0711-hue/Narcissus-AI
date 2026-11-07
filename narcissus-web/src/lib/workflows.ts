@@ -413,15 +413,13 @@ export function buildUndressPrompt(
   // InstantID prefers non-1024 square (watermark avoidance in training data).
   const width = opts?.width ?? (useInstantId ? 1016 : 768);
   const height = opts?.height ?? (useInstantId ? 1016 : 768);
-  // NA-79: InstantID undress needs high denoise once clothing silhouette lock
-  // is off; clothes-on failures were denoise ~0.55–0.61 fighting ControlNet.
+  // InstantID soft-censors lingerie at low denoise; FaceID+epicrealism smoke
+  // needed ~0.78 for a true nude. Keep FaceID undress high for all body types.
   const denoise =
     opts?.denoise ??
     (useInstantId
       ? Math.max(0.7, Math.min(0.8, denoiseForIdentity("undress", identity) + 0.22))
-      : needsCock
-        ? Math.max(0.6, Math.min(0.72, denoiseForIdentity("undress", identity) + 0.16))
-        : Math.max(0.55, Math.min(0.68, denoiseForIdentity("undress", identity) + 0.1)));
+      : Math.max(0.7, Math.min(0.8, denoiseForIdentity("undress", identity) + 0.22)));
   const ckpt =
     opts?.checkpoint?.trim() ||
     (useInstantId
@@ -580,7 +578,8 @@ export function buildUndressPrompt(
         cfg: useInstantId ? 5.0 : 6.5,
         sampler_name: "euler",
         scheduler: "normal",
-        denoise: useInstantId ? 0.55 : 0.48,
+        // FaceID strip needs higher denoise — 0.48 left lingerie intact in smoke.
+        denoise: useInstantId ? 0.55 : 0.62,
         // Raw ckpt — InstantID/FaceID MODEL fights clothing removal.
         model: ["1", 0],
         positive: ["34", 0],

@@ -45,7 +45,10 @@ export type CompanionBodyType =
   | "athletic"
   | "soft-curves"
   | "curvy"
-  | "petite";
+  | "petite"
+  | "plus-curvy"
+  | "chubby"
+  | "soft-thick";
 
 export type CompanionBust =
   | "from-photo"
@@ -76,11 +79,26 @@ export type CompanionClothing =
   | "micro-bikini"
   | "leather-harness"
   | "silk-slip"
+  | "strap-on"
+  | "collar-leash"
+  | "ball-gag"
   | "casual"
   | "dress"
   | "goth"
   | "swimsuit"
   | "nude";
+
+/** Strap-on size — only used when clothing is strap-on. */
+export type CompanionToySize = "small" | "medium" | "large" | "xl";
+
+/** Strap-on / toy accent color — only used when clothing is strap-on. */
+export type CompanionToyColor =
+  | "black"
+  | "pink"
+  | "purple"
+  | "red"
+  | "clear"
+  | "blue";
 
 export type CompanionWardrobe = {
   eyeColor: CompanionEyeColor;
@@ -92,6 +110,8 @@ export type CompanionWardrobe = {
   expression: CompanionExpression;
   look: CompanionLookStyle;
   clothing: CompanionClothing;
+  toySize: CompanionToySize;
+  toyColor: CompanionToyColor;
 };
 
 export const DEFAULT_COMPANION_WARDROBE: CompanionWardrobe = {
@@ -106,6 +126,8 @@ export const DEFAULT_COMPANION_WARDROBE: CompanionWardrobe = {
   /** Casual first — lingerie/nude via Adjust after a finished Companion exists
    * (xAI text-to-image often moderates NSFW on cold generate). */
   clothing: "casual",
+  toySize: "medium",
+  toyColor: "black",
 };
 
 type Opt<T extends string> = {
@@ -163,6 +185,9 @@ export const COMPANION_BODY_TYPE: Opt<CompanionBodyType>[] = [
   { id: "soft-curves", label: "Soft curves", hint: "Gentle curves" },
   { id: "curvy", label: "Curvy", hint: "Full curves" },
   { id: "petite", label: "Petite", hint: "Small frame" },
+  { id: "plus-curvy", label: "Plus curvy", hint: "Fuller hourglass" },
+  { id: "chubby", label: "Chubby", hint: "Soft chubby figure" },
+  { id: "soft-thick", label: "Soft thick", hint: "Thick soft thighs & hips" },
 ];
 
 export const COMPANION_BUST: Opt<CompanionBust>[] = [
@@ -197,6 +222,21 @@ export const COMPANION_CLOTHING: Opt<CompanionClothing>[] = [
   { id: "micro-bikini", label: "Micro bikini", hint: "Sling / tiny set" },
   { id: "leather-harness", label: "Harness", hint: "Leather straps" },
   { id: "silk-slip", label: "Silk slip", hint: "Bias silk chemise" },
+  {
+    id: "strap-on",
+    label: "Strap-on",
+    hint: "Harness + toy — pick size & color",
+  },
+  {
+    id: "collar-leash",
+    label: "Collar + leash",
+    hint: "Choker collar with leash",
+  },
+  {
+    id: "ball-gag",
+    label: "Ball gag",
+    hint: "Ball gag + soft restraints vibe",
+  },
   { id: "casual", label: "Casual", hint: "Soft tee & shorts" },
   { id: "dress", label: "Dress", hint: "Flirty cocktail" },
   { id: "goth", label: "Goth", hint: "Black lace / straps" },
@@ -204,9 +244,44 @@ export const COMPANION_CLOTHING: Opt<CompanionClothing>[] = [
   { id: "nude", label: "Nude", hint: "Adults 18+ explicit" },
 ];
 
+export const COMPANION_TOY_SIZE: Opt<CompanionToySize>[] = [
+  { id: "small", label: "Small", hint: "Petite toy" },
+  { id: "medium", label: "Medium", hint: "Average" },
+  { id: "large", label: "Large", hint: "Substantial" },
+  { id: "xl", label: "XL", hint: "Extra large" },
+];
+
+export const COMPANION_TOY_COLOR: Opt<CompanionToyColor>[] = [
+  { id: "black", label: "Black", hint: "Matte black", swatch: "#1a1a1c" },
+  { id: "pink", label: "Pink", hint: "Hot pink", swatch: "#e85a9b" },
+  { id: "purple", label: "Purple", hint: "Deep purple", swatch: "#7b3fa0" },
+  { id: "red", label: "Red", hint: "Cherry red", swatch: "#c04030" },
+  { id: "clear", label: "Clear", hint: "Translucent", swatch: "#c8d4e0" },
+  { id: "blue", label: "Blue", hint: "Electric blue", swatch: "#3a6ea5" },
+];
+
 /** True when clothing is fully nude (no garments). */
 export function isNudeClothing(c: CompanionClothing | string | undefined): boolean {
   return c === "nude";
+}
+
+/** Fetish outfits that need adult action chips / explicit prompts. */
+export function isFetishClothing(
+  c: CompanionClothing | string | undefined,
+): boolean {
+  return (
+    c === "strap-on" ||
+    c === "collar-leash" ||
+    c === "ball-gag" ||
+    c === "leather-harness"
+  );
+}
+
+/** True when strap-on size/color chips should show. */
+export function clothingUsesToyOptions(
+  c: CompanionClothing | string | undefined,
+): boolean {
+  return c === "strap-on";
 }
 
 /** Feature groups shown under Customize → Features */
@@ -285,11 +360,17 @@ export function normalizeWardrobe(
     clothing: isId(src.clothing, COMPANION_CLOTHING)
       ? src.clothing!
       : d.clothing,
+    toySize: isId(src.toySize, COMPANION_TOY_SIZE) ? src.toySize! : d.toySize,
+    toyColor: isId(src.toyColor, COMPANION_TOY_COLOR)
+      ? src.toyColor!
+      : d.toyColor,
   };
 }
 
 export function wardrobeKey(w: CompanionWardrobe): string {
   const n = normalizeWardrobe(w);
+  const toyBit =
+    n.clothing === "strap-on" ? `${n.toySize}.${n.toyColor}` : "none";
   return [
     n.eyeColor,
     n.hairColor,
@@ -300,6 +381,7 @@ export function wardrobeKey(w: CompanionWardrobe): string {
     n.expression,
     n.look,
     n.clothing,
+    toyBit,
   ].join(".");
 }
 
@@ -409,6 +491,12 @@ function bodyTypeDirective(b: CompanionBodyType, hasRef: boolean): string {
       return "Body type: curvy hourglass full-body.";
     case "petite":
       return "Body type: petite small-frame full-body.";
+    case "plus-curvy":
+      return "Body type: plus-size curvy hourglass — fuller bust, soft waist, wide hips, clearly fuller than slim, full-body standing.";
+    case "chubby":
+      return "Body type: chubby soft round figure — soft belly, chubby cheeks optional, plush arms/thighs, cute fuller anime companion, full-body standing.";
+    case "soft-thick":
+      return "Body type: soft thick — thick thighs, soft hips, plush butt and tummy, strong curves without looking skinny, full-body standing.";
     default:
       return hasRef
         ? "Body type: preserve her proportions from Image 1 in a full-body standing pose."
@@ -459,7 +547,41 @@ function lookDirective(l: CompanionLookStyle): string {
   }
 }
 
-function clothingDirective(c: CompanionClothing): string {
+function toySizeLabel(s: CompanionToySize): string {
+  switch (s) {
+    case "small":
+      return "small";
+    case "large":
+      return "large";
+    case "xl":
+      return "extra-large XL";
+    default:
+      return "medium";
+  }
+}
+
+function toyColorLabel(c: CompanionToyColor): string {
+  switch (c) {
+    case "pink":
+      return "hot pink";
+    case "purple":
+      return "deep purple";
+    case "red":
+      return "cherry red";
+    case "clear":
+      return "clear translucent";
+    case "blue":
+      return "electric blue";
+    default:
+      return "matte black";
+  }
+}
+
+function clothingDirective(
+  c: CompanionClothing,
+  toySize: CompanionToySize = "medium",
+  toyColor: CompanionToyColor = "black",
+): string {
   switch (c) {
     case "casual":
       return "Clothing: casual soft tee and shorts, full-body visible.";
@@ -485,6 +607,22 @@ function clothingDirective(c: CompanionClothing): string {
       return "Clothing: black leather body harness straps (not a full catsuit), sensual companion look, full-body standing adults 18+.";
     case "silk-slip":
       return "Clothing: bias-cut silk slip chemise, thin straps, clinging fabric, full-body standing adults 18+.";
+    case "strap-on":
+      return [
+        `CLOTHING (adults 18+ fetish): adult anime companion wearing a strap-on harness with a clearly visible ${toySizeLabel(toySize)} ${toyColorLabel(toyColor)} strap-on dildo attached at the hips.`,
+        "Show the full harness straps around hips/waist and the toy silhouette — not censored, not hidden behind fabric.",
+        "Optional minimal lingerie under the harness OK. Full-body standing, premium anime illustration (not photoreal). No minors.",
+      ].join(" ");
+    case "collar-leash":
+      return [
+        "CLOTHING (adults 18+ fetish): adult anime companion in sensual lingerie with a fitted collar and attached leash held or draped.",
+        "Collar + leash clearly readable as fetish gear; elegant Ani-style illustration. Full-body standing. No minors.",
+      ].join(" ");
+    case "ball-gag":
+      return [
+        "CLOTHING (adults 18+ fetish): adult anime companion with a classic ball gag (strap around head, ball in mouth) plus soft wrist restraints / cuffs vibe.",
+        "Fetish gear clearly illustrated, still premium sexy anime companion art — not gore. Full-body standing. No minors.",
+      ].join(" ");
     case "nude":
       return [
         "CLOTHING: fully nude adult anime companion (18+), tasteful illustrated figure study — bare skin, no lingerie, no towels, no steam bars.",
@@ -527,7 +665,7 @@ export function companionWardrobePromptBits(
     bustDirective(w.bust, hasRef),
     expressionDirective(w.expression),
     lookDirective(w.look),
-    clothingDirective(w.clothing),
+    clothingDirective(w.clothing, w.toySize, w.toyColor),
     looksBit,
   ]
     .filter(Boolean)

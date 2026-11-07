@@ -13,9 +13,13 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
+  clothingUsesToyOptions,
   COMPANION_CLOTHING,
   COMPANION_FEATURE_GROUPS,
   COMPANION_LOOK_STYLES,
+  COMPANION_TOY_COLOR,
+  COMPANION_TOY_SIZE,
+  isFetishClothing,
   isNudeClothing,
   loadCompanionWardrobe,
   saveCompanionWardrobe,
@@ -31,6 +35,7 @@ import {
 import {
   buildStyledCssFallback,
   bustCompanionClothingCache,
+  DEFAULT_MUSE_PRESENCE_STYLE,
   loadCachedPortrait,
   loadPresenceStyle,
   MUSE_PRESENCE_STYLES,
@@ -74,7 +79,9 @@ export function MusePresence({
 }: MusePresenceProps) {
   const photo = mainPhoto(partner);
   const photos = partner.photos || [];
-  const [style, setStyle] = useState<MusePresenceStyle>("realistic");
+  const [style, setStyle] = useState<MusePresenceStyle>(
+    DEFAULT_MUSE_PRESENCE_STYLE,
+  );
   const [wardrobe, setWardrobe] = useState<CompanionWardrobe>(() =>
     loadCompanionWardrobe(partner.id),
   );
@@ -194,7 +201,9 @@ export function MusePresence({
       setMatchSource(null);
       const nudeBit = isNudeClothing(opts?.clothing)
         ? " Nude needs a finished xAI illustration — never a CSS fake. Try Lingerie, or start Comfy for true nude."
-        : " Companion needs a finished xAI illustration — not a provisional cel.";
+        : isFetishClothing(opts?.clothing)
+          ? " Fetish look needs a finished xAI illustration — never a CSS fake. If moderated, try Lingerie or Comfy undress when the GPU pod is up."
+          : " Companion needs a finished xAI illustration — not a provisional cel.";
       const keyBit = opts?.missingKey
         ? " Set XAI_API_KEY on Vercel Production."
         : "";
@@ -267,7 +276,7 @@ export function MusePresence({
           missingKey: false,
           message:
             data.message ||
-            "xAI blocked Nude (moderation). Lingerie still works — or start the Comfy/RunPod undress pod for true nude. Never faking nude.",
+            "xAI blocked this adult look (moderation). Lingerie usually still works — or start the Comfy/RunPod undress pod. Never faking with a filter.",
         };
       }
       if (detail.includes("too small") || detail.includes("dimensions")) {
@@ -321,7 +330,7 @@ export function MusePresence({
       form.set("bodyType", "female");
       form.set(
         "prompt",
-        "Tasteful full-length adult nude anime companion illustration, coherent anatomy, same face identity, standing pose, clean background.",
+        "completely naked adult woman, fully nude, bare breasts, bare nipples, bare hips, bare crotch, no lingerie, no bra, no panties, no lace, skin only, coherent anatomy, same face identity, standing pose, clean background",
       );
       const res = await fetch("/api/jobs", { method: "POST", body: form });
       const data = (await res.json()) as {
@@ -538,7 +547,12 @@ export function MusePresence({
   function applyWardrobePatch(patch: Partial<CompanionWardrobe>) {
     const next = { ...wardrobe, ...patch };
     const clothingChanged =
-      typeof patch.clothing === "string" && patch.clothing !== wardrobe.clothing;
+      (typeof patch.clothing === "string" &&
+        patch.clothing !== wardrobe.clothing) ||
+      (typeof patch.toySize === "string" &&
+        patch.toySize !== wardrobe.toySize) ||
+      (typeof patch.toyColor === "string" &&
+        patch.toyColor !== wardrobe.toyColor);
     setWardrobe(next);
     saveCompanionWardrobe(partner.id, next);
     if (style !== "cartoon") return;
@@ -548,7 +562,9 @@ export function MusePresence({
       setGenError(
         isNudeClothing(next.clothing)
           ? "Updating Companion to Nude…"
-          : "Updating Companion outfit…",
+          : next.clothing === "strap-on"
+            ? `Updating strap-on (${next.toySize}, ${next.toyColor})…`
+            : "Updating Companion outfit…",
       );
       void generateStyled("cartoon", livePhoto, next, {
         forceMode:
@@ -607,6 +623,20 @@ export function MusePresence({
               options: COMPANION_CLOTHING,
               key: "clothing" as const,
             },
+            ...(clothingUsesToyOptions(wardrobe.clothing)
+              ? [
+                  {
+                    title: "Strap-on size",
+                    options: COMPANION_TOY_SIZE,
+                    key: "toySize" as const,
+                  },
+                  {
+                    title: "Strap-on color",
+                    options: COMPANION_TOY_COLOR,
+                    key: "toyColor" as const,
+                  },
+                ]
+              : []),
           ];
 
   const isFullCompanion = variant === "full" && style === "cartoon";
@@ -966,7 +996,10 @@ export function MusePresence({
                               [group.key]: opt.id,
                             } as Partial<CompanionWardrobe>)
                           }
-                          className={chipClass(selected, opt.id === "nude")}
+                          className={chipClass(
+                            selected,
+                            opt.id === "nude" || isFetishClothing(opt.id),
+                          )}
                         >
                           {"swatch" in opt && typeof opt.swatch === "string" ? (
                             <span className="inline-flex items-center gap-1.5">
