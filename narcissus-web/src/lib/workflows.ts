@@ -181,21 +181,21 @@ function wireReactorPolish(
  * ApplyInstantIDAdvanced. Returns { model, positive, negative } node refs for
  * KSampler. Requires RealVisXL (or other SDXL) checkpoint already on node "1".
  *
- * When `reshapeBody` is true (add-penis / cock undress), do NOT keypoint-lock
- * the full clothed frame — that freezes a smooth feminine crotch and ignores
- * anatomy prompts. Use the face crop for kps + weaker ControlNet so genitals
- * can appear while face identity still holds.
+ * Undress must NOT keypoint-lock the full clothed frame (`image_kps` = body):
+ * that freezes fabric silhouettes so clothes stay on (NA-79) and blocks cock
+ * anatomy (NA-78). Face-crop kps + softer ControlNet keeps InstantID face
+ * while the body can go nude.
  */
 function wireInstantId(
   graph: Record<string, unknown>,
   identity: number,
-  opts?: { reshapeBody?: boolean },
+  opts?: { undressBody?: boolean },
 ): { model: [string, number]; positive: [string, number]; negative: [string, number] } {
   const id = Math.min(1, Math.max(0.35, identity));
-  const reshape = opts?.reshapeBody === true;
-  // Face IP stays strong; body ControlNet loosens when anatomy must change.
-  const ipWeight = reshape ? 0.7 + id * 0.2 : 0.75 + id * 0.25;
-  const cnStrength = reshape ? 0.22 + id * 0.08 : 0.45 + id * 0.1;
+  const undress = opts?.undressBody === true;
+  // Face IP stays strong; body ControlNet loosens on undress so fabric can go.
+  const ipWeight = undress ? 0.72 + id * 0.18 : 0.75 + id * 0.25;
+  const cnStrength = undress ? 0.2 + id * 0.08 : 0.45 + id * 0.1;
   graph["30"] = {
     class_type: "InstantIDModelLoader",
     inputs: { instantid_file: "ip-adapter.bin" },
@@ -221,11 +221,11 @@ function wireInstantId(
       ip_weight: ipWeight,
       cn_strength: cnStrength,
       start_at: 0.0,
-      end_at: reshape ? 0.75 : 0.85,
-      noise: reshape ? 0.5 : 0.4,
+      end_at: undress ? 0.72 : 0.85,
+      noise: undress ? 0.45 : 0.4,
       combine_embeds: "average",
-      // Face crop for kps when reshaping body; full frame otherwise (pose lock).
-      image_kps: reshape ? ["17", 0] : ["3", 0],
+      // Face crop for undress (no clothing silhouette lock); full frame else.
+      image_kps: undress ? ["17", 0] : ["3", 0],
     },
   };
   return {
@@ -378,6 +378,9 @@ export function buildUndressPrompt(
      * NA-75 identity engine. Default `instantid` (SDXL RealVis + InstantID +
      * ReActor polish). `faceid` = SD1.5 FaceID Plus V2 + ReActor. `reactor` =
      * legacy ReActor-only after img2img.
+     *
+     * NA-78: `needsCock` bodies always force FaceID + epicrealism — RealVisXL
+     * InstantID soft-censors penises even with explicit prompts.
      */
     identityEngine?: IdentityEngine;
   },
@@ -390,41 +393,50 @@ export function buildUndressPrompt(
   );
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
   const identity = opts?.identity ?? 0.85;
-  const engine: IdentityEngine = opts?.identityEngine ?? "instantid";
+  const needsCock = body.needsCock;
+  // Cock undress: RealVisXL InstantID will strip clothes but keep a vagina /
+  // Barbie crotch. Route to NSFW SD1.5 epicrealism + FaceID instead.
+  let engine: IdentityEngine = opts?.identityEngine ?? "instantid";
+  if (needsCock && engine === "instantid") {
+    engine = "faceid";
+  }
   const useInstantId = engine === "instantid";
   const useFaceId = engine === "faceid";
   // InstantID prefers non-1024 square (watermark avoidance in training data).
   const width = opts?.width ?? (useInstantId ? 1016 : 768);
   const height = opts?.height ?? (useInstantId ? 1016 : 768);
-  // Cock/penis undress needs higher denoise so crotch can change (InstantID
-  // otherwise keeps the clothed silhouette and "add penis" never lands).
-  const needsCock = body.needsCock;
+  // NA-79: InstantID undress needs high denoise once clothing silhouette lock
+  // is off; clothes-on failures were denoise ~0.55–0.61 fighting ControlNet.
   const denoise =
     opts?.denoise ??
     (useInstantId
-      ? needsCock
-        ? Math.max(0.68, Math.min(0.78, denoiseForIdentity("undress", identity) + 0.2))
-        : Math.max(0.55, Math.min(0.66, denoiseForIdentity("undress", identity) + 0.08))
+      ? Math.max(0.64, Math.min(0.74, denoiseForIdentity("undress", identity) + 0.16))
       : needsCock
-        ? Math.max(0.52, Math.min(0.62, denoiseForIdentity("undress", identity) + 0.08))
-        : denoiseForIdentity("undress", identity));
+        ? Math.max(0.58, Math.min(0.7, denoiseForIdentity("undress", identity) + 0.14))
+        : Math.max(0.52, Math.min(0.64, denoiseForIdentity("undress", identity) + 0.06)));
   const ckpt =
     opts?.checkpoint?.trim() ||
-    (useInstantId ? INSTANTID_CKPTS[0]! : CKPT_SD15);
+    (useInstantId
+      ? INSTANTID_CKPTS[0]!
+      : needsCock || useFaceId
+        ? FACEID_SD15_CKPTS[0]!
+        : CKPT_SD15);
   const faceLock = opts?.faceLock !== false;
   const stamp = Date.now().toString(36);
   const savePrefix = `narcissus_undress_${body.id}_${stamp}`;
 
-  // Front-load anatomy when adding a cock — CLIP/InstantID otherwise bury it
-  // under face-identity tokens and clothing-removal alone "succeeds".
+  // Strip clothes first in the prompt (NA-79); cock anatomy front-loaded (NA-78).
+  const stripClothes =
+    "completely naked, fully nude, all clothing removed, no fabric, no shirt, no pants, no dress, no bra, no panties, bare skin only";
   const positive = [
+    stripClothes,
     needsCock ? anatomy.positive : "",
     needsCock
       ? "mandatory visible penis and testicles in the crotch, cock fully rendered, not smoothed flat, not censored, not hidden"
       : "",
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.undress,
     needsCock ? "" : anatomy.positive,
-    "completely remove all clothing and fabric, nude skin only where clothes were",
+    "nude skin only where clothes were, clothing fully erased",
     "maintain identical subject placement, camera angle, framing, and perspective",
     "exact same face as the reference photo, identical eyes nose mouth bone structure",
     "exact same hairstyle hair color hair length and hairline as the reference photo",
@@ -437,7 +449,7 @@ export function buildUndressPrompt(
   const negative = [
     NEGATIVE,
     anatomy.negative,
-    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed",
+    "clothes, clothing, shirt, pants, dress, bra, panties, underwear, lingerie, pantyhose, stockings, fabric, covered, dressed, clothed, outfit, garment, textile, leotard, swimsuit, singlet",
     "blank, black image, empty frame",
     "different face, different person, different hairstyle, hair cut, bald, wrong hair color, face morph",
     needsCock
@@ -489,20 +501,20 @@ export function buildUndressPrompt(
   let modelRef: [string, number] = ["1", 0];
   let posRef: [string, number] = ["4", 0];
   let negRef: [string, number] = ["5", 0];
-  let cfg = needsCock ? 6.5 : 5.5;
-  let steps = 32;
+  let cfg = needsCock ? 7.0 : 5.5;
+  let steps = needsCock ? 36 : 32;
 
   if (faceLock && useInstantId) {
-    const iid = wireInstantId(graph, identity, { reshapeBody: needsCock });
+    // All InstantID undress: face-crop kps so clothing silhouette isn't locked.
+    const iid = wireInstantId(graph, identity, { undressBody: true });
     modelRef = iid.model;
     posRef = iid.positive;
     negRef = iid.negative;
-    // InstantID burns faces above ~5; cock anatomy still needs more push than 3.5.
-    cfg = needsCock ? 4.8 : 3.5;
-    steps = needsCock ? 34 : 30;
+    cfg = 3.8;
+    steps = 32;
   } else if (faceLock && useFaceId) {
     modelRef = wireFaceIdPlus(graph, identity);
-    cfg = needsCock ? 6.0 : 5.0;
+    cfg = needsCock ? 7.0 : 5.5;
   }
 
   graph["7"] = {
@@ -525,16 +537,65 @@ export function buildUndressPrompt(
     inputs: { samples: ["7", 0], vae: ["1", 2] },
   };
 
+  // NA-78: second anatomy refine — after undress, push cock onto the nude body
+  // without InstantID clothing lock (FaceID model still on node 1 / 20).
+  let decodeRef: [string, number] = ["8", 0];
+  if (needsCock && (useFaceId || !useInstantId)) {
+    const cockPos = [
+      stripClothes,
+      anatomy.positive,
+      "close-up clear penis and testicles visible between the legs, cock in frame, photo-real genitals",
+      "exact same face and body pose as the previous frame",
+    ].join(", ");
+    const cockNeg = [
+      NEGATIVE,
+      anatomy.negative,
+      "clothes, fabric, Barbie crotch, vagina, no penis, censored",
+    ].join(", ");
+    graph["40"] = {
+      class_type: "CLIPTextEncode",
+      inputs: { text: cockPos, clip: ["1", 1] },
+    };
+    graph["41"] = {
+      class_type: "CLIPTextEncode",
+      inputs: { text: cockNeg, clip: ["1", 1] },
+    };
+    graph["42"] = {
+      class_type: "VAEEncode",
+      inputs: { pixels: ["8", 0], vae: ["1", 2] },
+    };
+    graph["43"] = {
+      class_type: "KSampler",
+      inputs: {
+        seed: (seed + 17) >>> 0,
+        steps: 24,
+        cfg: 7.5,
+        sampler_name: "euler",
+        scheduler: "normal",
+        denoise: 0.42,
+        model: modelRef,
+        positive: ["40", 0],
+        negative: ["41", 0],
+        latent_image: ["42", 0],
+      },
+    };
+    graph["44"] = {
+      class_type: "VAEDecode",
+      inputs: { samples: ["43", 0], vae: ["1", 2] },
+    };
+    decodeRef = ["44", 0];
+  }
+
   if (faceLock) {
     // InstantID/FaceID condition generation; ReActor polish locks likeness
     // without GFPGAN wash (smoke: InstantID+ReActor ~0.91 cosine, no paste).
-    wireReactorPolish(graph, ["8", 0], ["17", 0], savePrefix);
+    wireReactorPolish(graph, decodeRef, ["17", 0], savePrefix);
   } else {
     graph["10"] = {
       class_type: "SaveImage",
       inputs: {
         filename_prefix: savePrefix,
-        images: ["8", 0],
+        images: decodeRef,
       },
     };
   }

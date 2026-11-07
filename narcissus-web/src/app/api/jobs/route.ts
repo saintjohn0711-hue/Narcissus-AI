@@ -195,6 +195,8 @@ export async function POST(req: NextRequest) {
     }
 
     // NA-75: prefer InstantID (SDXL RealVis) for undress/scene identity.
+    // NA-78: cock/penis undress forces FaceID + epicrealism — RealVisXL
+    // InstantID soft-censors genitals even when prompts demand a cock.
     const sdxlCkpt = await resolveCheckpoint(
       IDENTITY_SDXL_CKPTS,
       "__missing_sdxl__",
@@ -204,8 +206,15 @@ export async function POST(req: NextRequest) {
       IDENTITY_SD15_CKPTS,
       "v1-5-pruned-emaonly-fp16.safetensors",
     );
-    const identityEngine: IdentityEngine = hasSdxl ? "instantid" : "faceid";
-    const identityCkpt = hasSdxl ? sdxlCkpt : sd15Ckpt;
+    const needsCockBody = getBodyType(bodyType).needsCock;
+    const identityEngine: IdentityEngine =
+      mode === "undress" && needsCockBody
+        ? "faceid"
+        : hasSdxl
+          ? "instantid"
+          : "faceid";
+    const identityCkpt =
+      identityEngine === "instantid" ? sdxlCkpt : sd15Ckpt;
 
     const realismCkpt =
       mode === "faceswap"
@@ -285,8 +294,8 @@ export async function POST(req: NextRequest) {
           faceLockFallback = true;
           const fallbackEngine: IdentityEngine =
             identityEngine === "instantid" ? "faceid" : "reactor";
-          // Keep cock undress denoise high on fallback — 0.52 strips clothes
-          // but won't invent a penis after InstantID body-lock failures.
+          // NA-79: keep undress denoise high on fallback — low denoise is how
+          // clothes stay on. Cock path needs even more for genital invent.
           const cockFallback = getBodyType(bodyType).needsCock;
           result = await runPromptToImages(
             buildUndressPrompt(uploaded.filename, {
@@ -300,7 +309,7 @@ export async function POST(req: NextRequest) {
                 undefined,
               faceLock: fallbackEngine !== "reactor",
               identityEngine: fallbackEngine,
-              denoise: cockFallback ? 0.65 : 0.52,
+              denoise: cockFallback ? 0.68 : 0.62,
             }),
             { timeoutMs: 240_000 },
           );
