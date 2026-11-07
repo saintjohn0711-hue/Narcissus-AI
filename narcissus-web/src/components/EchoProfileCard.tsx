@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShareCodePanel } from "@/components/ShareCodePanel";
 import { authClient } from "@/lib/auth-client";
+import { PERSON_LABEL } from "@/lib/artOfX";
 import { resetStoreMode } from "@/lib/artOfXStore";
 import type { CircleLinkRow } from "@/lib/circle";
 
@@ -200,7 +201,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
   const h = echo?.highlights;
   const stats: HighlightStat[] = [
     {
-      label: "Partners",
+      label: PERSON_LABEL.plural,
       value: h ? String(h.partners) : "—",
       href: "/art-of-x/partners",
     },
