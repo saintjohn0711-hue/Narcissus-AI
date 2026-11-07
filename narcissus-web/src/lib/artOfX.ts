@@ -128,7 +128,7 @@ export const STORAGE = {
 /**
  * User-facing label for Art of X people.
  * Swap these strings to rebrand (API/DB stay `partners`).
- * Alts considered: Intimates, Lovers — default Muses.
+ * Confirmed: Muses.
  */
 export const PERSON_LABEL = {
   singular: "Muse",
