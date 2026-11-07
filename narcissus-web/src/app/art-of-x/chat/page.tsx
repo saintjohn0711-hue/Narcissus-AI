@@ -340,8 +340,8 @@ function ChatPageInner() {
             No Muse open yet
           </p>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-[#c4b7a8]">
-            Add a Muse with photos first — chat opens a large living portrait
-            beside the thread, with Look styles you can switch anytime.
+            Add a Muse to open chat. Companion can be designed from traits —
+            a photo is optional for likeness lock.
           </p>
           <Link
             href="/art-of-x/partners"
@@ -358,59 +358,49 @@ function ChatPageInner() {
               : "flex flex-col gap-4"
           }
         >
-          <aside
-            className={`flex gap-2 overflow-x-auto pb-1 ${
-              companionFull
-                ? "muse-companion-strip absolute left-0 right-0 top-0 z-30 bg-gradient-to-b from-[#05070e]/92 via-[#05070e]/55 to-transparent px-3 pb-3 pt-2 sm:px-5"
-                : ""
-            }`}
-            aria-label={`${PERSON_LABEL.singular} picker`}
-          >
-            {companionFull && (
-              <Link
-                href="/art-of-x"
-                className="mr-2 shrink-0 rounded-sm border border-[var(--line)] bg-[#080b14]/70 px-2.5 py-2 text-[10px] uppercase tracking-[0.16em] text-[var(--soft)]"
-              >
-                Art of X
-              </Link>
-            )}
-            {partners.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  setActiveId(p.id);
-                  setError(null);
-                }}
-                className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm backdrop-blur-sm ${
-                  activeId === p.id
-                    ? "border-[var(--glow)]/50 bg-[var(--glow)]/10"
-                    : "border-[var(--line)] bg-[#080b14]/55"
-                }`}
-              >
-                {mainPhoto(p) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={mainPhoto(p)!}
-                    alt=""
-                    className="h-9 w-9 object-cover"
-                  />
-                ) : (
-                  <span className="flex h-9 w-9 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8]">
-                    {p.name.slice(0, 1)}
+          {!companionFull && (
+            <aside
+              className="flex gap-2 overflow-x-auto pb-1"
+              aria-label={`${PERSON_LABEL.singular} picker`}
+            >
+              {partners.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveId(p.id);
+                    setError(null);
+                  }}
+                  className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm backdrop-blur-sm ${
+                    activeId === p.id
+                      ? "border-[var(--glow)]/50 bg-[var(--glow)]/10"
+                      : "border-[var(--line)] bg-[#080b14]/55"
+                  }`}
+                >
+                  {mainPhoto(p) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mainPhoto(p)!}
+                      alt=""
+                      className="h-9 w-9 object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-9 w-9 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8]">
+                      {p.name.slice(0, 1)}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="block truncate text-[var(--ink)]">
+                      {p.name}
+                    </span>
+                    <span className="block truncate text-[10px] text-[var(--muted)]">
+                      {p.type} · {genderLabel(p.gender)}
+                    </span>
                   </span>
-                )}
-                <span className="min-w-0">
-                  <span className="block truncate text-[var(--ink)]">
-                    {p.name}
-                  </span>
-                  <span className="block truncate text-[10px] text-[var(--muted)]">
-                    {p.type} · {genderLabel(p.gender)}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </aside>
+                </button>
+              ))}
+            </aside>
+          )}
 
           <section
             className={
@@ -433,22 +423,25 @@ function ChatPageInner() {
                   onStyleChange={setPresenceStyle}
                   lastPartnerReply={reactionReply}
                   chatCollapsed={companionFull && !chatOpen}
+                  museOptions={companionFull ? partners : undefined}
+                  onSelectMuse={
+                    companionFull
+                      ? (id) => {
+                          setActiveId(id);
+                          setError(null);
+                        }
+                      : undefined
+                  }
+                  chatOpen={companionFull ? chatOpen : undefined}
+                  onToggleChat={
+                    companionFull ? () => setChatOpen((v) => !v) : undefined
+                  }
                 />
               </div>
             ) : (
               <div className="flex min-h-64 items-center justify-center border-b border-[var(--line)] p-6 text-sm text-[var(--muted)] lg:border-b-0 lg:border-r">
                 Select a {PERSON_LABEL.singularLower}
               </div>
-            )}
-
-            {companionFull && (
-              <button
-                type="button"
-                className="muse-chat-drawer-toggle absolute bottom-4 right-4 z-40 rounded-sm border border-[var(--glow)]/40 bg-[#080b14]/85 px-3 py-2 text-xs font-medium text-[var(--glow)] backdrop-blur-md"
-                onClick={() => setChatOpen((v) => !v)}
-              >
-                {chatOpen ? "Hide chat" : "Open chat"}
-              </button>
             )}
 
             <div

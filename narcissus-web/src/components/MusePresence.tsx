@@ -49,6 +49,12 @@ type MusePresenceProps = {
   lastPartnerReply?: { id: string; text: string } | null;
   /** Parent hid the chat drawer — reveal more of her body. */
   chatCollapsed?: boolean;
+  /** Companion dock: Muse list for a calm in-dock switcher (replaces top strip). */
+  museOptions?: PartnerRecord[];
+  onSelectMuse?: (id: number) => void;
+  /** Companion dock: chat drawer open state + toggle (replaces floating button). */
+  chatOpen?: boolean;
+  onToggleChat?: () => void;
 };
 
 type MatchSource = "xai" | "local" | null;
@@ -61,6 +67,10 @@ export function MusePresence({
   onStyleChange,
   lastPartnerReply = null,
   chatCollapsed = false,
+  museOptions,
+  onSelectMuse,
+  chatOpen,
+  onToggleChat,
 }: MusePresenceProps) {
   const photo = mainPhoto(partner);
   const photos = partner.photos || [];
@@ -295,6 +305,79 @@ export function MusePresence({
     return { missingKey: false, message: "Couldn’t restyle." };
   }
 
+  async function tryComfyNude(
+    sourcePhoto: string | null,
+    nextWardrobe: CompanionWardrobe,
+  ): Promise<boolean> {
+    const base =
+      (generated && matchSource === "xai" ? generated : null) || sourcePhoto;
+    if (!base?.startsWith("data:image/")) return false;
+    try {
+      const blob = await (await fetch(base)).blob();
+      const form = new FormData();
+      form.set("photo", blob, "companion.png");
+      form.set("mode", "undress");
+      form.set("adultsConfirmed", "true");
+      form.set("bodyType", "female");
+      form.set(
+        "prompt",
+        "Tasteful full-length adult nude anime companion illustration, coherent anatomy, same face identity, standing pose, clean background.",
+      );
+      const res = await fetch("/api/jobs", { method: "POST", body: form });
+      const data = (await res.json()) as {
+        error?: string;
+        resultUrl?: string;
+        resultUrls?: string[];
+        viewUrls?: string[];
+      };
+      if (!res.ok) {
+        setGenError(
+          data.error ||
+            "Comfy undress failed — keep Lingerie, or check the GPU pod is RUNNING.",
+        );
+        return true; // handled (show Comfy error, don't fake nude)
+      }
+      const url =
+        data.resultUrl || data.resultUrls?.[0] || data.viewUrls?.[0] || null;
+      if (!url) {
+        setGenError("Comfy returned no nude image — try again shortly.");
+        return true;
+      }
+      // Local /api/media or Comfy /view — fetch into a cacheable data URL
+      let image = url;
+      if (url.startsWith("/") || url.includes("proxy.runpod.net")) {
+        const abs = url.startsWith("/")
+          ? `${window.location.origin}${url}`
+          : url;
+        const imgRes = await fetch(abs);
+        const imgBlob = await imgRes.blob();
+        image = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error("read failed"));
+          reader.readAsDataURL(imgBlob);
+        });
+      }
+      setGenerated(image);
+      setMatchSource("xai");
+      saveCachedPortrait(
+        partner.id,
+        "cartoon",
+        image,
+        sourcePhoto,
+        nextWardrobe,
+        true,
+      );
+      setGenError(null);
+      return true;
+    } catch {
+      setGenError(
+        "Comfy undress unreachable — start the RunPod Comfy pod, or stay on Lingerie.",
+      );
+      return true;
+    }
+  }
+
   async function generateStyled(
     targetStyle: MusePresenceStyle,
     sourcePhoto: string | null,
@@ -351,11 +434,18 @@ export function MusePresence({
         }
         const { message, missingKey } = restyleErrorMessage(targetStyle, parsed);
         if (isCompanion) {
+          if (
+            (parsed.error === "nude_refused" ||
+              isNudeClothing(nextWardrobe.clothing)) &&
+            isNudeClothing(nextWardrobe.clothing)
+          ) {
+            setGenError("xAI blocked Nude — trying Comfy undress…");
+            const usedComfy = await tryComfyNude(sourcePhoto, nextWardrobe);
+            if (usedComfy) return;
+          }
           // Never CSS-fake a companion (esp. nude)
           setGenError(message);
-          if (parsed.error === "nude_refused" && nextWardrobe.clothing === "nude") {
-            // keep last clothed companion on stage if we have one
-          } else if (!generated) {
+          if (!generated) {
             await applyLocalFallback(targetStyle, sourcePhoto || "", message, {
               missingKey,
               clothing: nextWardrobe.clothing,
@@ -704,54 +794,84 @@ export function MusePresence({
       {isFullCompanion ? (
         <div className="muse-companion-dock">
           <div className="muse-companion-dock-head">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="muse-companion-dock-kicker">Companion</p>
-              <p
-                className="truncate text-base text-[var(--ink)]"
-                style={{ fontFamily: "var(--font-display), serif" }}
-              >
-                {displayName(partner)}
-              </p>
+              {museOptions && museOptions.length > 0 && onSelectMuse ? (
+                <label className="mt-0.5 block min-w-0">
+                  <span className="sr-only">Muse</span>
+                  <select
+                    className="muse-companion-muse-select"
+                    value={partner.id}
+                    onChange={(e) => onSelectMuse(Number(e.target.value))}
+                    aria-label="Switch Muse"
+                  >
+                    {museOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {displayName(p)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <p
+                  className="truncate text-base text-[var(--ink)]"
+                  style={{ fontFamily: "var(--font-display), serif" }}
+                >
+                  {displayName(partner)}
+                </p>
+              )}
               <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                 {statusLine}
               </p>
             </div>
-            <div className="muse-companion-dock-fit" role="group" aria-label="Stage fit">
-              <button
-                type="button"
-                className={fitMode === "fit" ? "is-active" : undefined}
-                aria-pressed={fitMode === "fit"}
-                onClick={() => setFitMode("fit")}
-              >
-                Fit
-              </button>
-              <button
-                type="button"
-                className={fitMode === "fill" ? "is-active" : undefined}
-                aria-pressed={fitMode === "fill"}
-                onClick={() => setFitMode("fill")}
-              >
-                Fill
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setZoom((z) => Math.min(1.6, Number((z + 0.12).toFixed(2))))
-                }
-                aria-label="Zoom in"
-              >
-                +
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setZoom((z) => Math.max(1, Number((z - 0.12).toFixed(2))))
-                }
-                aria-label="Zoom out"
-                disabled={zoom <= 1}
-              >
-                −
-              </button>
+            <div className="muse-companion-dock-tools">
+              {onToggleChat && (
+                <button
+                  type="button"
+                  className="muse-companion-chat-toggle"
+                  onClick={onToggleChat}
+                  aria-pressed={Boolean(chatOpen)}
+                >
+                  {chatOpen ? "Hide chat" : "Chat"}
+                </button>
+              )}
+              <div className="muse-companion-dock-fit" role="group" aria-label="Stage fit">
+                <button
+                  type="button"
+                  className={fitMode === "fit" ? "is-active" : undefined}
+                  aria-pressed={fitMode === "fit"}
+                  onClick={() => setFitMode("fit")}
+                >
+                  Fit
+                </button>
+                <button
+                  type="button"
+                  className={fitMode === "fill" ? "is-active" : undefined}
+                  aria-pressed={fitMode === "fill"}
+                  onClick={() => setFitMode("fill")}
+                >
+                  Fill
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setZoom((z) => Math.min(1.6, Number((z + 0.12).toFixed(2))))
+                  }
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setZoom((z) => Math.max(1, Number((z - 0.12).toFixed(2))))
+                  }
+                  aria-label="Zoom out"
+                  disabled={zoom <= 1}
+                >
+                  −
+                </button>
+              </div>
             </div>
           </div>
 

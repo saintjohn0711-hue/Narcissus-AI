@@ -490,6 +490,43 @@ body {
   accent-color: var(--glow);
 }
 
+.muse-companion-dock-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.muse-companion-muse-select {
+  width: 100%;
+  max-width: 11rem;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display), serif;
+  font-size: 1rem;
+  line-height: 1.2;
+  padding: 0;
+  cursor: pointer;
+}
+
+.muse-companion-chat-toggle {
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  background: rgba(8, 11, 20, 0.55);
+  color: var(--glow);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.55rem;
+  border-radius: 2px;
+}
+
+.muse-companion-chat-toggle[aria-pressed="true"] {
+  border-color: rgba(196, 160, 140, 0.4);
+  color: var(--soft);
+}
+
 @media (min-width: 1024px) {
   .muse-companion-dock {
     left: 1.25rem;
