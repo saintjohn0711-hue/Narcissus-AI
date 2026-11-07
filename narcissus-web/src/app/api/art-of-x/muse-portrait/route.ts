@@ -118,9 +118,17 @@ export async function POST(req: NextRequest) {
   const model =
     process.env.XAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const apiKey = getXaiApiKey();
-  // Companion / Anime identity stylization benefits from medium quality.
+  // Companion defaults to high for clean Ani-class output; override with XAI_IMAGE_QUALITY.
+  // Tradeoff: high costs more credits / latency. Fall back env: medium|low.
+  const qualityEnv = process.env.XAI_IMAGE_QUALITY?.trim().toLowerCase();
   const quality =
-    style === "anime" || style === "cartoon" ? "medium" : "low";
+    qualityEnv === "low" || qualityEnv === "medium" || qualityEnv === "high"
+      ? qualityEnv
+      : style === "cartoon"
+        ? "high"
+        : style === "anime"
+          ? "medium"
+          : "low";
 
   const museImage: ImageRef = { url: photo, type: "image_url" };
   // Companion full-length standing → tall frame; others stay 3:4

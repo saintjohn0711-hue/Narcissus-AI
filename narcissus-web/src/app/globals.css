@@ -297,92 +297,11 @@ body {
   border-radius: 0;
 }
 
-/* Look/Customize docks top-left so feet stay visible; collapsed by default */
-.muse-presence--full .muse-presence-looks {
-  position: absolute;
-  left: 0.75rem;
-  top: 4.5rem;
-  bottom: auto;
-  z-index: 25;
-  max-width: min(22rem, calc(100vw - 1.5rem));
-  max-height: min(52dvh, 420px);
-  overflow: auto;
-  margin-top: 0;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid rgba(0, 229, 255, 0.18);
-  border-radius: 2px;
-  background: rgba(8, 11, 20, 0.78);
-  backdrop-filter: blur(14px);
-}
-
-.muse-presence--full .muse-presence-looks--collapsed {
-  max-height: none;
-  overflow: visible;
-  padding: 0.35rem;
-  background: rgba(8, 11, 20, 0.55);
-}
-
-.muse-presence--full .muse-presence-looks--collapsed .muse-presence-looks-body {
-  display: none;
-}
-
-.muse-presence-panel-toggle {
-  width: 100%;
-  border: 1px solid rgba(0, 229, 255, 0.28);
-  background: rgba(0, 229, 255, 0.08);
-  color: var(--glow);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.45rem 0.6rem;
-  border-radius: 2px;
-}
-
-@media (min-width: 1024px) {
-  .muse-presence--full .muse-presence-looks {
-    left: 1.25rem;
-    top: 5rem;
-    max-width: 22rem;
-    max-height: min(62dvh, 520px);
-  }
-}
-
-/* Nameplate at top — never covers feet */
-.muse-presence--full .muse-presence-nameplate {
-  top: 0.85rem;
-  bottom: auto;
-  left: 0.85rem;
-  right: auto;
-  padding: 0.35rem 0.55rem;
-  background: linear-gradient(
-    90deg,
-    rgba(5, 8, 15, 0.55),
-    transparent 90%
-  );
-  max-width: min(18rem, 55vw);
-}
-
-.muse-presence--full .muse-presence-nameplate .text-2xl,
-.muse-presence--full .muse-presence-nameplate .sm\:text-3xl {
-  font-size: 1.35rem;
-  line-height: 1.15;
-}
-
-/* Soft top vignette only — no censor bar over the body */
+/* Product stage — soft vignette, avatar unobstructed */
 .muse-presence--full .muse-presence-veil {
   background:
-    linear-gradient(
-      180deg,
-      rgba(5, 8, 15, 0.35) 0%,
-      transparent 18%,
-      transparent 100%
-    );
-}
-
-.muse-presence--full.muse-presence--chat-collapsed .muse-presence-stage,
-.muse-presence--chat-collapsed.muse-presence--full .muse-presence-stage {
-  /* Extra breathing room when chat drawer is hidden */
-  inset: 0;
+    radial-gradient(ellipse 70% 55% at 50% 42%, transparent 55%, rgba(5, 8, 15, 0.45) 100%),
+    linear-gradient(180deg, rgba(5, 8, 15, 0.4) 0%, transparent 14%, transparent 100%);
 }
 
 .muse-presence-viewport {
@@ -398,86 +317,212 @@ body {
   overscroll-behavior: contain;
 }
 
-.muse-presence-stage-controls {
+.muse-presence-zoom {
   position: absolute;
-  top: 0.85rem;
-  right: 0.75rem;
-  z-index: 28;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  max-width: min(16rem, 48vw);
-  justify-content: flex-end;
+  inset: 0;
+  transition: transform 0.25s ease;
 }
 
-.muse-presence-stage-controls button {
-  border: 1px solid rgba(0, 229, 255, 0.28);
-  background: rgba(8, 11, 20, 0.72);
-  color: var(--soft);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 0.35rem 0.5rem;
-  border-radius: 2px;
-  backdrop-filter: blur(8px);
-}
-
-.muse-presence-stage-controls button.is-active,
-.muse-presence-stage-controls button[aria-pressed="true"] {
-  border-color: rgba(0, 229, 255, 0.55);
-  color: var(--glow);
-  background: rgba(0, 229, 255, 0.12);
-}
-
-.muse-presence-stage-controls button:disabled {
-  opacity: 0.4;
-}
-
-.muse-companion-actions {
+.muse-presence-loading {
   position: absolute;
   left: 50%;
-  bottom: 0.85rem;
-  transform: translateX(-50%);
-  z-index: 26;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  justify-content: center;
-  max-width: min(36rem, calc(100vw - 2rem));
-  padding: 0.35rem;
-  border: 1px solid rgba(0, 229, 255, 0.16);
+  top: 50%;
+  z-index: 12;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 2px;
-  background: rgba(8, 11, 20, 0.55);
+  background: rgba(8, 11, 20, 0.82);
+  color: var(--soft);
+  font-size: 12px;
+  letter-spacing: 0.04em;
   backdrop-filter: blur(10px);
 }
 
-.muse-presence--chat-collapsed .muse-companion-actions {
-  bottom: 1.25rem;
+.muse-presence-loading-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: var(--glow);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.55);
+  animation: muse-loading-pulse 1.1s ease-in-out infinite;
 }
 
-.muse-companion-actions button {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(18, 24, 42, 0.65);
-  color: var(--soft);
-  font-size: 11px;
-  padding: 0.4rem 0.55rem;
+@keyframes muse-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* One calm control dock — left, away from the body */
+.muse-companion-dock {
+  position: absolute;
+  left: 0.85rem;
+  bottom: 0.85rem;
+  z-index: 30;
+  width: min(21.5rem, calc(100vw - 1.7rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.7rem 0.75rem 0.75rem;
+  border: 1px solid rgba(0, 229, 255, 0.16);
   border-radius: 2px;
-  white-space: nowrap;
+  background: rgba(8, 11, 20, 0.88);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
 }
 
-.muse-companion-actions button.is-active {
-  border-color: rgba(0, 229, 255, 0.5);
+.muse-presence--chat-collapsed .muse-companion-dock {
+  bottom: 1.1rem;
+}
+
+.muse-companion-dock-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.muse-companion-dock-kicker {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(0, 229, 255, 0.85);
+}
+
+.muse-companion-dock-fit {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.muse-companion-dock-fit button {
+  min-width: 1.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 24, 42, 0.7);
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.4rem;
+  border-radius: 2px;
+}
+
+.muse-companion-dock-fit button.is-active,
+.muse-companion-dock-fit button[aria-pressed="true"] {
+  border-color: rgba(0, 229, 255, 0.45);
   color: var(--glow);
+  background: rgba(0, 229, 255, 0.1);
+}
+
+.muse-companion-dock-fit button:disabled {
+  opacity: 0.35;
+}
+
+.muse-companion-dock-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.3rem;
+}
+
+.muse-companion-dock-tabs button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0.45rem 0.35rem;
+  border-radius: 2px;
+}
+
+.muse-companion-dock-tabs button.is-active,
+.muse-companion-dock-tabs button[aria-selected="true"] {
+  border-color: rgba(0, 229, 255, 0.4);
+  color: var(--ink);
+  background: rgba(0, 229, 255, 0.08);
+}
+
+.muse-companion-dock-body {
+  max-height: min(36dvh, 280px);
+  overflow: auto;
+  padding-top: 0.15rem;
+}
+
+.muse-companion-dock-cta {
+  width: 100%;
+  border: 1px solid rgba(196, 160, 140, 0.45);
+  background: linear-gradient(180deg, rgba(196, 160, 140, 0.22), rgba(196, 160, 140, 0.1));
+  color: #f0e6dc;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.65rem 0.75rem;
+  border-radius: 2px;
+}
+
+.muse-companion-dock-cta:disabled {
+  opacity: 0.5;
+}
+
+.muse-companion-dock-error {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #f0c4b8;
+}
+
+@media (min-width: 1024px) {
+  .muse-companion-dock {
+    left: 1.25rem;
+    bottom: 1.25rem;
+    width: 22rem;
+  }
 }
 
 @media (max-width: 640px) {
-  .muse-companion-actions {
+  .muse-companion-dock {
     left: 0.5rem;
     right: 0.5rem;
-    transform: none;
-    max-width: none;
-    bottom: 3.5rem;
+    width: auto;
+    bottom: 3.75rem;
   }
+
+  .muse-presence--chat-collapsed .muse-companion-dock {
+    bottom: 0.85rem;
+  }
+}
+
+/* Compact Muse strip on Companion stage */
+.muse-chat-page--companion-full .muse-companion-strip {
+  max-height: 3.25rem;
+  padding-top: 0.45rem !important;
+  padding-bottom: 0.35rem !important;
+}
+
+.muse-chat-page--companion-full .muse-companion-strip button {
+  min-width: auto;
+  padding: 0.3rem 0.55rem;
+  gap: 0.4rem;
+}
+
+.muse-chat-page--companion-full .muse-companion-strip img,
+.muse-chat-page--companion-full .muse-companion-strip span.flex {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+
+.muse-chat-drawer-toggle {
+  letter-spacing: 0.04em;
 }
 
 .muse-chat-drawer {
@@ -713,8 +758,14 @@ body {
 
 /* xAI Companion result — illustrated anime, light CSS so art reads */
 .muse-presence-style-cartoon-matched .muse-presence-photo {
-  filter: contrast(1.04) saturate(1.1) brightness(1.02);
-  animation: muse-companion-breathe 5.2s ease-in-out infinite alternate;
+  filter: contrast(1.03) saturate(1.06) brightness(1.01);
+  animation: muse-companion-breathe 6s ease-in-out infinite alternate;
+}
+
+/* Keep Fit full readable — gentle breath, no aggressive crop scale */
+.muse-presence-stage--fit-fit.muse-presence-style-cartoon-matched .muse-presence-photo,
+.muse-presence-stage--fit-fit .muse-presence-photo {
+  animation: muse-companion-breathe-fit 7s ease-in-out infinite alternate;
 }
 
 .muse-presence-style-cartoon-matched .muse-presence-veil::after {
@@ -806,10 +857,19 @@ body {
 
 @keyframes muse-companion-breathe {
   from {
-    transform: scale(1.05) translate3d(0, 0.6%, 0);
+    transform: scale(1.02) translate3d(0, 0.4%, 0);
   }
   to {
-    transform: scale(1.09) translate3d(0, -1.4%, 0);
+    transform: scale(1.045) translate3d(0, -0.8%, 0);
+  }
+}
+
+@keyframes muse-companion-breathe-fit {
+  from {
+    transform: scale(1.005) translate3d(0, 0.2%, 0);
+  }
+  to {
+    transform: scale(1.02) translate3d(0, -0.45%, 0);
   }
 }
 

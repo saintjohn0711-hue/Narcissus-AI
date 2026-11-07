@@ -253,17 +253,17 @@ export function styleEditPrompt(
     case "cartoon": {
       const nude = wardrobe?.clothing === "nude";
       return [
-        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is the STYLE bible — JuicyChat / Grok Ani–class living anime companion. Match Image 2's illustration craft (line, shading, eye rendering) exactly; keep Image 1's face identity. NEVER copy Image 2's outfit when wardrobe says otherwise.`,
+        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is STYLE ONLY — JuicyChat / Grok Ani–class craft (line weight, cel shading, eye rendering, lighting). Keep Image 1's face. NEVER copy Image 2's face, hair color, body, or outfit. NEVER reproduce watermarks, logos, UI chrome, or text from Image 2.`,
         nude
-          ? `Create a NEW sexy FULL-LENGTH standing NUDE anime companion of ${museName} like Grok's Ani: head-to-toe (crown through feet), vertical companion-app scale — completely unclothed adults 18+ illustration.`
-          : `Create a sexy FULL-LENGTH standing anime companion of ${museName} like Grok's Ani: head-to-toe in frame (crown of head through feet visible), vertical companion-app scale, flirty, looking at the viewer — NOT a bust crop, NOT waist-up only.`,
-        `CRITICAL IDENTITY LOCK from Image 1: facial proportions, nose and mouth character, and every from-photo trait (eye color, hair color/length, skin undertone, body) must match the Muse photo unless the user explicitly overrode that trait. Never invent blue eyes on a brown-eyed Muse. Never replace her with the style-ref girl.`,
-        `STYLE LOCK from Image 2: modern high-quality anime/manga illustration — clean dark outlines, soft cel shading plus subtle gradients, large crystalline expressive eyes with thick lashes and catchlights, soft blush, glossy lips, polished hair strands with rim light, shallow-DOF indoor companion mood.`,
-        `NOT photoreal. NOT a CSS posterize or photo filter. NOT a recolor of the reference photo. NOT 3D plastic Character.AI doll. NOT chibi. Clearly hand-illustrated / digital-painted anime companion.${looksBit}`,
+          ? `Paint a NEW premium FULL-LENGTH standing NUDE anime companion of ${museName}: crown-to-feet in a clean vertical 9:16 frame, coherent anatomy, sharp face, polished finish — adults 18+ illustrated nude, not a photo edit.`
+          : `Paint a premium FULL-LENGTH standing anime companion of ${museName} like Grok's Ani: crown of head through feet visible in a clean vertical frame, flirty eye contact, elegant stance — NOT a bust crop, NOT waist-up, NOT a muddy filter of the photo.`,
+        `CRITICAL IDENTITY LOCK from Image 1: facial proportions, eyes, nose, mouth, jaw, skin undertone, and from-photo traits (hair/eye color unless user overrode). She must be recognizably the same adult woman. Never invent conflicting features.`,
+        `QUALITY BAR: high-end modern anime/manga illustration — crisp dark outlines, smooth cel shading with soft gradients, luminous multi-tone irises + catchlights, clean skin (no posterize banding), glossy lips, polished hair strands with subtle rim light, coherent full-body proportions, tasteful shallow-DOF companion mood.`,
+        `FORBIDDEN: photoreal selfie, CSS posterize, muddy recolor of Image 1, 3D plastic doll, chibi, collage, cropped feet/head, watermark, signature, UI overlay, text.${looksBit}`,
         wardrobe
           ? companionWardrobePromptBits(wardrobe, looks)
-          : "FRAMING: FULL-LENGTH standing head-to-toe companion.",
-        `Adults 18+ only. Single full-body standing figure, no watermark, no text, no UI chrome.`,
+          : "FRAMING: FULL-LENGTH standing head-to-toe companion, letterboxed if needed.",
+        `Adults 18+ only. Single full-body standing figure on a clean simple background.`,
       ]
         .filter(Boolean)
         .join(" ");
