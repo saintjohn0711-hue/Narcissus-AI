@@ -68,6 +68,14 @@ export type CompanionLookStyle =
 
 export type CompanionClothing =
   | "lingerie"
+  | "corset"
+  | "stockings-garter"
+  | "lace-teddy"
+  | "babydoll"
+  | "sheer-robe"
+  | "micro-bikini"
+  | "leather-harness"
+  | "silk-slip"
   | "casual"
   | "dress"
   | "goth"
@@ -178,13 +186,26 @@ export const COMPANION_LOOK_STYLES: Opt<CompanionLookStyle>[] = [
 ];
 
 export const COMPANION_CLOTHING: Opt<CompanionClothing>[] = [
-  { id: "lingerie", label: "Lingerie", hint: "Lace / intimate" },
+  { id: "lingerie", label: "Lingerie", hint: "Lace / intimate set" },
+  { id: "corset", label: "Corset", hint: "Bustier / waist cinch" },
+  { id: "stockings-garter", label: "Stockings", hint: "Garter + sheer hose" },
+  { id: "lace-teddy", label: "Lace teddy", hint: "One-piece lace" },
+  { id: "babydoll", label: "Babydoll", hint: "Sheer short nightie" },
+  { id: "sheer-robe", label: "Sheer robe", hint: "Open peignoir" },
+  { id: "micro-bikini", label: "Micro bikini", hint: "Sling / tiny set" },
+  { id: "leather-harness", label: "Harness", hint: "Leather straps" },
+  { id: "silk-slip", label: "Silk slip", hint: "Bias silk chemise" },
   { id: "casual", label: "Casual", hint: "Soft tee & shorts" },
   { id: "dress", label: "Dress", hint: "Flirty cocktail" },
   { id: "goth", label: "Goth", hint: "Black lace / straps" },
   { id: "swimsuit", label: "Swimsuit", hint: "Slim bikini" },
   { id: "nude", label: "Nude", hint: "Adults 18+ explicit" },
 ];
+
+/** True when clothing is fully nude (no garments). */
+export function isNudeClothing(c: CompanionClothing | string | undefined): boolean {
+  return c === "nude";
+}
 
 /** Feature groups shown under Customize → Features */
 export const COMPANION_FEATURE_GROUPS: Array<{
@@ -428,14 +449,33 @@ function clothingDirective(c: CompanionClothing): string {
       return "Clothing: black gothic lace / straps, full-body.";
     case "swimsuit":
       return "Clothing: slim fashionable bikini, full-body.";
+    case "corset":
+      return "Clothing: sexy structured corset / bustier with garters, cleavage emphasized, full-body standing adults 18+.";
+    case "stockings-garter":
+      return "Clothing: lingerie bra/panties with sheer stockings and garter belt, full-body standing adults 18+.";
+    case "lace-teddy":
+      return "Clothing: sheer lace teddy one-piece, high-cut hips, full-body standing adults 18+.";
+    case "babydoll":
+      return "Clothing: sheer babydoll nightie with tiny panties, short hem, full-body standing adults 18+.";
+    case "sheer-robe":
+      return "Clothing: open sheer peignoir / robe over minimal lingerie or bare skin, full-body standing adults 18+.";
+    case "micro-bikini":
+      return "Clothing: extreme micro bikini / sling bikini, minimal coverage, full-body standing adults 18+.";
+    case "leather-harness":
+      return "Clothing: black leather body harness straps (not a full catsuit), sensual companion look, full-body standing adults 18+.";
+    case "silk-slip":
+      return "Clothing: bias-cut silk slip chemise, thin straps, clinging fabric, full-body standing adults 18+.";
     case "nude":
       return [
-        "Clothing: NUDE — adults 18+ only, fully nude explicit anime companion.",
-        "Tasteful erotic illustrated nude, not photoreal pornography; no minors; keep face identity from Image 1.",
-        "FULL-BODY standing head-to-toe framing (not bust crop).",
+        "CLOTHING OVERRIDE — FULLY NUDE (adults 18+ only).",
+        "REMOVE every garment from Image 1 and from any style reference: no lingerie, bra, panties, dress, swimsuit, stockings, harness, or fabric covering breasts or groin.",
+        "Draw a NEW illustrated full-length nude anime companion of the SAME adult woman — bare breasts, bare hips, bare skin, standing head-to-toe.",
+        "Do NOT keep or reinvent lingerie. Do NOT soft-censor with steam, glow bars, towels, or cropped framing.",
+        "Identity lock: Muse face from Image 1. Image 2 (if present) is LINE/SHADING STYLE ONLY — ignore Image 2 clothing.",
+        "Illustrated anime nude (not photoreal porn). No minors.",
       ].join(" ");
     default:
-      return "Clothing: delicate lingerie / lace, sexy companion attire, full-body visible.";
+      return "Clothing: delicate lingerie / lace matching set, sexy companion attire, full-body visible adults 18+.";
   }
 }
 

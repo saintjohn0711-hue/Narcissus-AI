@@ -70,8 +70,8 @@ export function isMusePresenceStyle(v: string): v is MusePresenceStyle {
 }
 
 const STYLE_STORAGE = "narcissus.artOfX.musePresenceStyle.v1";
-/** v5: full-body Companion + exact Muse trait picks in cache key. */
-const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v5";
+/** v6: clothing-aware bust + nude must not reuse clothed cache. */
+const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v6";
 
 export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
   if (typeof window === "undefined") return "realistic";
@@ -184,6 +184,41 @@ export function saveCachedPortrait(
 }
 
 /**
+ * Drop cached Companion portraits for this Muse+photo when clothing changes
+ * so a clothed render is never shown under a new clothing (esp. nude) key
+ * from a stale hit, and sibling outfits don't linger as wrong identity frames.
+ */
+export function bustCompanionClothingCache(
+  partnerId: number,
+  photo?: string | null,
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem(PORTRAIT_STORAGE);
+    if (!raw) return;
+    const map = JSON.parse(raw) as PortraitCache;
+    const fp = photoFingerprint(photo);
+    const prefix = `${partnerId}:cartoon:${fp}:`;
+    let changed = false;
+    for (const k of Object.keys(map)) {
+      if (k.startsWith(prefix)) {
+        delete map[k];
+        changed = true;
+      }
+    }
+    // Also clear legacy v5 store if present
+    try {
+      localStorage.removeItem("narcissus.artOfX.musePresencePortraits.v5");
+    } catch {
+      // ignore
+    }
+    if (changed) localStorage.setItem(PORTRAIT_STORAGE, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Prompt for xAI image edit — keep likeness, apply look.
  * Companion (cartoon id) + Anime push hard toward JuicyChat / Ani-class
  * illustrated anime — never a photo filter.
@@ -215,13 +250,16 @@ export function styleEditPrompt(
         `Same woman as Image 1, rendered as premium sexy anime.${looksBit}`,
         `Adults 18+ only. Single portrait, no watermark, no text, no UI chrome.`,
       ].join(" ");
-    case "cartoon":
+    case "cartoon": {
+      const nude = wardrobe?.clothing === "nude";
       return [
-        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is the STYLE bible — JuicyChat / Grok Ani–class living anime companion. Match Image 2's illustration craft exactly; keep Image 1's face identity.`,
-        `Create a sexy FULL-LENGTH standing anime companion of ${museName} like Grok's Ani: head-to-toe in frame (crown of head through feet visible), vertical companion-app scale, flirty, looking at the viewer — NOT a bust crop, NOT waist-up only.`,
+        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is the STYLE bible — JuicyChat / Grok Ani–class living anime companion. Match Image 2's illustration craft (line, shading, eye rendering) exactly; keep Image 1's face identity. NEVER copy Image 2's outfit when wardrobe says otherwise.`,
+        nude
+          ? `Create a NEW sexy FULL-LENGTH standing NUDE anime companion of ${museName} like Grok's Ani: head-to-toe (crown through feet), vertical companion-app scale — completely unclothed adults 18+ illustration.`
+          : `Create a sexy FULL-LENGTH standing anime companion of ${museName} like Grok's Ani: head-to-toe in frame (crown of head through feet visible), vertical companion-app scale, flirty, looking at the viewer — NOT a bust crop, NOT waist-up only.`,
         `CRITICAL IDENTITY LOCK from Image 1: facial proportions, nose and mouth character, and every from-photo trait (eye color, hair color/length, skin undertone, body) must match the Muse photo unless the user explicitly overrode that trait. Never invent blue eyes on a brown-eyed Muse. Never replace her with the style-ref girl.`,
         `STYLE LOCK from Image 2: modern high-quality anime/manga illustration — clean dark outlines, soft cel shading plus subtle gradients, large crystalline expressive eyes with thick lashes and catchlights, soft blush, glossy lips, polished hair strands with rim light, shallow-DOF indoor companion mood.`,
-        `NOT photoreal. NOT a CSS posterize or photo filter. NOT 3D plastic Character.AI doll. NOT chibi. Clearly hand-illustrated / digital-painted anime companion.${looksBit}`,
+        `NOT photoreal. NOT a CSS posterize or photo filter. NOT a recolor of the reference photo. NOT 3D plastic Character.AI doll. NOT chibi. Clearly hand-illustrated / digital-painted anime companion.${looksBit}`,
         wardrobe
           ? companionWardrobePromptBits(wardrobe, looks)
           : "FRAMING: FULL-LENGTH standing head-to-toe companion.",
@@ -229,6 +267,7 @@ export function styleEditPrompt(
       ]
         .filter(Boolean)
         .join(" ");
+    }
     case "cyberpunk":
       return [
         `Edit this reference photo of adult ${museName} into cyberpunk neon glamour.`,
