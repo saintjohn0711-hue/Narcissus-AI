@@ -535,6 +535,7 @@ export function buildImg2ImgPrompt(
   const width = opts?.width ?? 768;
   const height = opts?.height ?? 768;
   const prefix = opts?.prefix ?? `narcissus_${mode}`;
+  const ckpt = opts?.checkpoint?.trim() || CKPT_SD15;
   // Soft blend only for freeform custom — keep it light so edits stay visible.
   const blend = Math.min(
     0.28,
@@ -544,7 +545,7 @@ export function buildImg2ImgPrompt(
   return {
     "1": {
       class_type: "CheckpointLoaderSimple",
-      inputs: { ckpt_name: CKPT_SD15 },
+      inputs: { ckpt_name: ckpt },
     },
     "2": {
       class_type: "LoadImage",
@@ -617,6 +618,8 @@ export type VideoBuildOpts = {
   fps?: number;
   width?: number;
   height?: number;
+  /** Realism ckpt for templates that img2img a still before SVD. */
+  checkpoint?: string;
 };
 
 /**
@@ -665,6 +668,7 @@ export function buildVideoPrompt(
     width,
     height,
     prefix: `narcissus_${tpl.id}_still`,
+    checkpoint: opts?.checkpoint,
   });
 
   // Rebuild as a single graph: still nodes 1-9, then SVD from blended still (node 9)
