@@ -220,7 +220,7 @@ function wireInstantId(
       instantid: ["30", 0],
       insightface: ["31", 0],
       control_net: ["32", 0],
-      // Full frame for identity — crop caused No face detected (NA-81).
+      // Full frame — InsightFace locates the face. Do NOT use node 17 crop.
       image: ["3", 0],
       model: ["1", 0],
       positive: ["4", 0],

@@ -287,7 +287,8 @@ export async function POST(req: NextRequest) {
         timeoutMs: mode === "video" ? 360_000 : 240_000,
       });
     } catch (err) {
-      // NA-81: InstantID "Reference Image: No face detected." → FaceID retry.
+      // NA-81: InstantID hard-fails with "Reference Image: No face detected."
+      // Retry undress/scene on FaceID (SD1.5) so Studio stays usable.
       const msg = err instanceof Error ? err.message : String(err);
       const noFace =
         /no face detected/i.test(msg) || /Reference Image/i.test(msg);
