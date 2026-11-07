@@ -868,7 +868,7 @@ export function comfyWardrobeEditPrompt(wardrobe: CompanionWardrobe): string {
     "photorealistic adult woman, same face identity as reference, coherent anatomy",
     clothingDirective(w.clothing, w.toySize, w.toyColor),
     fetishBit,
-    poseDirective(w.pose),
+    poseDirective(w.pose, isSoftClothing(w.clothing)),
     propDirective(w.prop),
     "clean background, adults 18+, no minors, no watermark",
   ]

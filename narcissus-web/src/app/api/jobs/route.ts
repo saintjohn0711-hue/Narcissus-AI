@@ -371,7 +371,7 @@ export async function POST(req: NextRequest) {
     const realismCkpt =
       mode === "faceswap"
         ? null
-        : mode === "undress" || mode === "custom" || mode === "toy"
+        : mode === "undress" || mode === "custom"
           ? await resolveCheckpoint(
               REALISM_CKPTS,
               sd15Ckpt,
@@ -589,7 +589,6 @@ export async function POST(req: NextRequest) {
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
     const skipHeadPaste =
-      mode === "toy" ||
       (mode === "scene" && sceneTpl?.id === "facial") ||
       ((mode === "undress" || mode === "custom" || mode === "scene") &&
         (identityEngine === "instantid" || identityEngine === "faceid"));
