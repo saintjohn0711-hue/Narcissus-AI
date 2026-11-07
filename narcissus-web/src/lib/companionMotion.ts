@@ -74,6 +74,9 @@ const NSFW_CLOTHING = new Set([
   "micro-bikini",
   "leather-harness",
   "silk-slip",
+  "strap-on",
+  "collar-leash",
+  "ball-gag",
   "nude",
   "swimsuit",
 ]);

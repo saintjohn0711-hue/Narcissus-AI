@@ -20,6 +20,9 @@ export type MusePresenceStyle =
   | "cartoon"
   | "cyberpunk";
 
+/** AI chat / Muse presence default Look — Ani-style Companion (not Realistic). */
+export const DEFAULT_MUSE_PRESENCE_STYLE: MusePresenceStyle = "cartoon";
+
 export const MUSE_PRESENCE_STYLES: Array<{
   id: MusePresenceStyle;
   label: string;
@@ -27,6 +30,13 @@ export const MUSE_PRESENCE_STYLES: Array<{
   /** Auto-request xAI restyle when picked (if photo + no cache). */
   autoGenerate?: boolean;
 }> = [
+  {
+    id: "cartoon",
+    label: "Companion",
+    blurb: "Design an anime companion",
+    /** From-scratch Generate is manual — no photo required. */
+    autoGenerate: false,
+  },
   {
     id: "realistic",
     label: "Realistic",
@@ -43,13 +53,6 @@ export const MUSE_PRESENCE_STYLES: Array<{
     label: "Anime match",
     blurb: "Her face → sexy anime",
     autoGenerate: true,
-  },
-  {
-    id: "cartoon",
-    label: "Companion",
-    blurb: "Design an anime companion",
-    /** From-scratch Generate is manual — no photo required. */
-    autoGenerate: false,
   },
   {
     id: "cyberpunk",
@@ -82,7 +85,7 @@ const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v7";
 export const COMPANION_SCRATCH_FP = "scratch";
 
 export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
-  if (typeof window === "undefined") return "realistic";
+  if (typeof window === "undefined") return DEFAULT_MUSE_PRESENCE_STYLE;
   try {
     const raw = localStorage.getItem(STYLE_STORAGE);
     const map = raw ? (JSON.parse(raw) as Record<string, string>) : {};
@@ -93,7 +96,8 @@ export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
   } catch {
     // ignore
   }
-  return "realistic";
+  // First visit / no saved Look → Companion (Ani-style). Explicit picks persist.
+  return DEFAULT_MUSE_PRESENCE_STYLE;
 }
 
 export function savePresenceStyle(

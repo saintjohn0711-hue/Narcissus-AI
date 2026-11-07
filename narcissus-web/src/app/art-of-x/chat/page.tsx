@@ -26,7 +26,10 @@ import {
   fetchPartners,
   persistChats,
 } from "@/lib/artOfXStore";
-import type { MusePresenceStyle } from "@/lib/musePresence";
+import {
+  DEFAULT_MUSE_PRESENCE_STYLE,
+  type MusePresenceStyle,
+} from "@/lib/musePresence";
 import type { ChatPov } from "@/lib/xai";
 
 async function readXaiSseStream(
@@ -82,8 +85,9 @@ function ChatPageInner() {
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelLabel, setModelLabel] = useState<string | null>(null);
-  const [presenceStyle, setPresenceStyle] =
-    useState<MusePresenceStyle>("realistic");
+  const [presenceStyle, setPresenceStyle] = useState<MusePresenceStyle>(
+    DEFAULT_MUSE_PRESENCE_STYLE,
+  );
   const [chatOpen, setChatOpen] = useState(true);
   const [reactionReply, setReactionReply] = useState<{
     id: string;

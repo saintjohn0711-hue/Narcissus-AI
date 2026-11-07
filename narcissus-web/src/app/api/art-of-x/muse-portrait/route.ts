@@ -109,6 +109,10 @@ function refusalPayload(
     detailLower.includes("refused") ||
     detailLower.includes("content-moderated");
   const askingNude = wardrobe?.clothing === "nude";
+  const askingFetish =
+    wardrobe?.clothing === "strap-on" ||
+    wardrobe?.clothing === "collar-leash" ||
+    wardrobe?.clothing === "ball-gag";
 
   let message =
     "xAI image restyle failed — API key is present; retry or tweak traits.";
@@ -124,6 +128,10 @@ function refusalPayload(
     error = "nude_refused";
     message =
       "xAI blocked this Nude request (content moderation). Lingerie and other explicit outfits still work — pick Lingerie, or start the Comfy/RunPod undress pod for true nude. Companion will not fake nude with a filter.";
+  } else if (askingFetish && contentBlocked) {
+    error = "content_refused";
+    message =
+      "xAI blocked this fetish look (content moderation). Try Lingerie, another fetish option, or start the Comfy/RunPod pod — Companion will not fake fetish outfits with a filter.";
   } else if (contentBlocked) {
     error = "content_refused";
     message =
