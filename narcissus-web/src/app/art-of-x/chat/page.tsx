@@ -361,7 +361,7 @@ function ChatPageInner() {
           <aside
             className={`flex gap-2 overflow-x-auto pb-1 ${
               companionFull
-                ? "absolute left-0 right-0 top-0 z-30 bg-gradient-to-b from-[#05070e]/92 to-transparent px-3 pb-4 pt-3 sm:px-5"
+                ? "muse-companion-strip absolute left-0 right-0 top-0 z-30 bg-gradient-to-b from-[#05070e]/92 via-[#05070e]/55 to-transparent px-3 pb-3 pt-2 sm:px-5"
                 : ""
             }`}
             aria-label={`${PERSON_LABEL.singular} picker`}

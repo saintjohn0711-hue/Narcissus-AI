@@ -77,7 +77,10 @@ export function MusePresence({
   const [photoIndex, setPhotoIndex] = useState(0);
   const [fitMode, setFitMode] = useState<StageFitMode>("fit");
   const [zoom, setZoom] = useState(1);
-  const [panelOpen, setPanelOpen] = useState(false);
+  /** Full-stage dock: only one section open; null = calm hero. */
+  const [dockSection, setDockSection] = useState<
+    null | "look" | "customize" | "actions"
+  >(null);
   const [actionId, setActionId] = useState<CompanionActionId | null>(null);
   const [reactionId, setReactionId] = useState<CompanionReactionId | null>(
     null,
@@ -118,8 +121,9 @@ export function MusePresence({
     setActionId(null);
     setReactionId(null);
     lastReplySeen.current = "";
-    // Keep Look/Customize collapsed on full stage so feet stay visible
-    setPanelOpen(false);
+    setDockSection(null);
+    setFitMode("fit");
+    setZoom(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- parent callback stable enough
   }, [partner.id, partner.mainPhotoIndex, photos.length]);
 
@@ -170,33 +174,29 @@ export function MusePresence({
     opts?: { missingKey?: boolean; clothing?: string },
   ): Promise<boolean> {
     if (targetStyle !== "anime" && targetStyle !== "cartoon") return false;
-    // Nude must NEVER show a CSS-mangled clothed photo as a "nude" result.
-    if (isNudeClothing(opts?.clothing)) {
+    // Companion (cartoon) — never present CSS posterize as a finished avatar.
+    if (targetStyle === "cartoon") {
       setGenerated(null);
       setMatchSource(null);
-      setGenError(
-        `${message} Nude needs a fresh xAI illustrated companion — not a filter on her clothed photo. Try again when generation succeeds.`,
-      );
+      const nudeBit = isNudeClothing(opts?.clothing)
+        ? " Nude needs a fresh xAI illustration — never a filter on her clothed photo."
+        : " Companion needs a finished xAI illustration — not a provisional cel.";
+      const keyBit = opts?.missingKey
+        ? " Set XAI_API_KEY on Vercel Production."
+        : " Try again when generation is available.";
+      setGenError(`${message}${nudeBit}${keyBit}`);
       return true;
     }
-    const fallback = await buildStyledCssFallback(
-      sourcePhoto,
-      targetStyle === "cartoon" ? "cartoon" : "anime",
-    );
+    const fallback = await buildStyledCssFallback(sourcePhoto, "anime");
     if (!fallback) return false;
     setGenerated(fallback);
     setMatchSource("local");
-    const provisional =
-      targetStyle === "cartoon"
-        ? "Provisional cel sketch only — not a finished Ani companion."
-        : "Provisional cel sketch only — not a finished anime match.";
-    // Only blame the env key when the API actually reported it missing.
     const keyHint = opts?.missingKey
-      ? targetStyle === "cartoon"
-        ? " Set XAI_API_KEY on Vercel Production for the real illustrated avatar."
-        : " Set XAI_API_KEY on Vercel Production for the real illustrated look."
+      ? " Set XAI_API_KEY on Vercel Production for the real illustrated look."
       : " Try again in a moment, or pick another Muse photo.";
-    setGenError(`${message} ${provisional}${keyHint}`);
+    setGenError(
+      `${message} Provisional cel only — not a finished anime match.${keyHint}`,
+    );
     return true;
   }
 
@@ -473,14 +473,52 @@ export function MusePresence({
     .filter(Boolean)
     .join(" ");
 
+  const statusLine = busy
+    ? style === "cartoon"
+      ? "Generating companion…"
+      : "Matching look…"
+    : style === "realistic"
+      ? "Photo"
+      : matchSource === "xai" && style === "cartoon"
+        ? `Companion · ${wardrobe.clothing}`
+        : matchSource === "local"
+          ? `${styleLabel} · unfinished`
+          : styleLabel;
+
+  function toggleDock(section: "look" | "customize" | "actions") {
+    setDockSection((cur) => (cur === section ? null : section));
+  }
+
+  const chipClass = (selected: boolean, danger = false) =>
+    `rounded-sm border px-2.5 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
+      selected
+        ? danger
+          ? "border-[var(--danger)]/55 bg-[var(--danger)]/12 text-[#f0c4b8]"
+          : "border-[var(--glow)]/50 bg-[var(--glow)]/10 text-[var(--ink)]"
+        : "border-[var(--line)] text-[var(--muted)] hover:border-[var(--accent)]/40 hover:text-[var(--soft)]"
+    }`;
+
+  const generateLabel = busy
+    ? style === "anime"
+      ? "Matching…"
+      : style === "cartoon"
+        ? "Generating…"
+        : "Restyling…"
+    : generated && matchSource === "xai"
+      ? "Regenerate"
+      : style === "cartoon"
+        ? "Generate Companion"
+        : style === "anime"
+          ? "Match anime"
+          : "Generate look";
+
   return (
     <aside
       className={`muse-presence muse-presence--${variant} flex h-full flex-col${
         chatCollapsed ? " muse-presence--chat-collapsed" : ""
-      }${panelOpen ? " muse-presence--panel-open" : ""}`}
+      }${dockSection ? " muse-presence--dock-open" : ""}`}
       aria-label={`${displayName(partner)} living portrait`}
       data-fit={isFullCompanion ? fitMode : undefined}
-      data-zoom={isFullCompanion ? String(zoom) : undefined}
     >
       <div
         className={`muse-presence-stage muse-presence-style-${style}${
@@ -503,126 +541,77 @@ export function MusePresence({
             isFullCompanion ? " muse-presence-viewport--pan" : ""
           }`}
         >
-          {displaySrc ? (
-            <div
-              className="muse-presence-parallax"
-              style={{
-                transform: `translate3d(${parallax.x}px, ${parallax.y}px, 0) scale(${
-                  isFullCompanion ? zoom : 1
-                })`,
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={displaySrc}
-                alt=""
-                className="muse-presence-photo"
-                draggable={false}
-              />
-              {companionLiving && (
-                <>
-                  <span className="muse-presence-eye-shimmer" aria-hidden />
-                  <span className="muse-presence-blink" aria-hidden />
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="muse-presence-empty">
-              <div className="muse-presence-silhouette" aria-hidden />
-              <span
-                className="relative z-[1] text-5xl font-semibold text-[var(--ink)]/85"
-                style={{ fontFamily: "var(--font-display), serif" }}
+          <div
+            className="muse-presence-zoom"
+            style={
+              isFullCompanion
+                ? { transform: `scale(${zoom})`, transformOrigin: "center bottom" }
+                : undefined
+            }
+          >
+            {displaySrc ? (
+              <div
+                className="muse-presence-parallax"
+                style={{
+                  transform: `translate3d(${parallax.x}px, ${parallax.y}px, 0)`,
+                }}
               >
-                {partner.name.slice(0, 1).toUpperCase()}
-              </span>
-              <p className="relative z-[1] mt-3 max-w-[14rem] text-center text-xs leading-relaxed text-[var(--soft)]">
-                Add photos on Muses — this panel becomes her living portrait.
-              </p>
-            </div>
-          )}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={displaySrc}
+                  alt=""
+                  className="muse-presence-photo"
+                  draggable={false}
+                />
+                {companionLiving && (
+                  <>
+                    <span className="muse-presence-eye-shimmer" aria-hidden />
+                    <span className="muse-presence-blink" aria-hidden />
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="muse-presence-empty">
+                <div className="muse-presence-silhouette" aria-hidden />
+                <span
+                  className="relative z-[1] text-5xl font-semibold text-[var(--ink)]/85"
+                  style={{ fontFamily: "var(--font-display), serif" }}
+                >
+                  {partner.name.slice(0, 1).toUpperCase()}
+                </span>
+                <p className="relative z-[1] mt-3 max-w-[14rem] text-center text-xs leading-relaxed text-[var(--soft)]">
+                  {isFullCompanion
+                    ? "Generate Companion from her Muse photo."
+                    : "Add photos on Muses — this panel becomes her living portrait."}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
         <div className="muse-presence-veil" aria-hidden />
-        <div className="muse-presence-nameplate">
-          <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--glow)]/90">
-            Living Muse
-          </p>
-          <p
-            className="mt-1 text-2xl leading-tight text-[var(--ink)] sm:text-3xl"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
-            {displayName(partner)}
-          </p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--soft)]">
-            {busy
-              ? style === "cartoon"
-                ? "Summoning companion…"
-                : "Matching her look…"
-              : style === "realistic"
-                ? "Breathing photo"
-                : matchSource === "local" &&
-                    (style === "cartoon" || style === "anime")
-                  ? `${styleLabel} · provisional`
-                  : style === "cartoon"
-                    ? `${styleLabel} · ${wardrobe.clothing}`
-                    : styleLabel}
-          </p>
-        </div>
-
-        {isFullCompanion && (
-          <div className="muse-presence-stage-controls" role="toolbar" aria-label="Stage view">
-            <button
-              type="button"
-              className={fitMode === "fit" ? "is-active" : undefined}
-              aria-pressed={fitMode === "fit"}
-              onClick={() => setFitMode("fit")}
+        {busy && (
+          <div className="muse-presence-loading" role="status">
+            <span className="muse-presence-loading-dot" aria-hidden />
+            Generating illustrated companion…
+          </div>
+        )}
+        {!isFullCompanion && (
+          <div className="muse-presence-nameplate">
+            <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--glow)]/90">
+              Living Muse
+            </p>
+            <p
+              className="mt-1 text-2xl leading-tight text-[var(--ink)] sm:text-3xl"
+              style={{ fontFamily: "var(--font-display), serif" }}
             >
-              Fit full
-            </button>
-            <button
-              type="button"
-              className={fitMode === "fill" ? "is-active" : undefined}
-              aria-pressed={fitMode === "fill"}
-              onClick={() => setFitMode("fill")}
-            >
-              Fill
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.min(1.85, Number((z + 0.15).toFixed(2))))}
-              aria-label="Zoom in"
-            >
-              Zoom +
-            </button>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.max(1, Number((z - 0.15).toFixed(2))))}
-              aria-label="Zoom out"
-              disabled={zoom <= 1}
-            >
-              Zoom −
-            </button>
+              {displayName(partner)}
+            </p>
+            <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--soft)]">
+              {statusLine}
+            </p>
           </div>
         )}
       </div>
-
-      {isFullCompanion && (
-        <div
-          className="muse-companion-actions"
-          role="toolbar"
-          aria-label="Companion actions"
-        >
-          {companionActions.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className={actionId === a.id ? "is-active" : undefined}
-              onClick={() => playAction(a.id)}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {photos.length > 1 && style === "realistic" && (
         <div
@@ -651,195 +640,248 @@ export function MusePresence({
         </div>
       )}
 
-      <div
-        className={`muse-presence-looks mt-4 space-y-2.5 border-t border-[var(--line)] pt-3${
-          isFullCompanion && !panelOpen ? " muse-presence-looks--collapsed" : ""
-        }`}
-      >
-        {isFullCompanion && (
-          <button
-            type="button"
-            className="muse-presence-panel-toggle"
-            aria-expanded={panelOpen}
-            onClick={() => setPanelOpen((v) => !v)}
-          >
-            {panelOpen ? "Hide Look / Customize" : "Look / Customize"}
-          </button>
-        )}
-        <div className="muse-presence-looks-body space-y-2.5">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent-strong)]">
-            Look
-          </p>
-          <p className="text-[10px] text-[var(--muted)]">
-            Pick a style for her
-          </p>
-        </div>
-        <div
-          className="grid grid-cols-2 gap-1.5"
-          role="group"
-          aria-label="Portrait style"
-        >
-          {MUSE_PRESENCE_STYLES.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => pickStyle(s.id)}
-              title={s.blurb}
-              className={`rounded-sm border px-2.5 py-2 text-left text-xs transition ${
-                style === s.id
-                  ? "border-[var(--glow)]/55 bg-[var(--glow)]/12 text-[var(--ink)] shadow-[0_0_20px_rgba(0,229,255,0.08)]"
-                  : "border-[var(--line)] text-[var(--muted)] hover:border-[var(--accent)]/45 hover:text-[var(--soft)]"
-              }`}
-            >
-              <span className="block font-medium">{s.label}</span>
-              <span className="mt-0.5 block text-[10px] leading-snug opacity-75">
-                {s.blurb}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {style === "cartoon" && (
-          <div className="muse-companion-customize space-y-2 border-t border-[var(--line)] pt-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--glow)]/90">
-                Customize
+      {isFullCompanion ? (
+        <div className="muse-companion-dock">
+          <div className="muse-companion-dock-head">
+            <div className="min-w-0">
+              <p className="muse-companion-dock-kicker">Companion</p>
+              <p
+                className="truncate text-base text-[var(--ink)]"
+                style={{ fontFamily: "var(--font-display), serif" }}
+              >
+                {displayName(partner)}
               </p>
-              <p className="text-[10px] text-[var(--muted)]">
-                Adults 18+ · Muse identity locked
+              <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                {statusLine}
               </p>
             </div>
-            <div
-              className="flex gap-1"
-              role="tablist"
-              aria-label="Companion customize"
-            >
-              {(
-                [
-                  ["features", "Features"],
-                  ["style", "Style"],
-                  ["clothing", "Clothing"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={wardrobeTab === id}
-                  onClick={() => setWardrobeTab(id)}
-                  className={`flex-1 rounded-sm border px-2 py-1.5 text-[11px] font-medium transition ${
-                    wardrobeTab === id
-                      ? "border-[var(--glow)]/50 bg-[var(--glow)]/10 text-[var(--ink)]"
-                      : "border-[var(--line)] text-[var(--muted)] hover:text-[var(--soft)]"
-                  }`}
-                >
-                  {label}
-                </button>
+            <div className="muse-companion-dock-fit" role="group" aria-label="Stage fit">
+              <button
+                type="button"
+                className={fitMode === "fit" ? "is-active" : undefined}
+                aria-pressed={fitMode === "fit"}
+                onClick={() => setFitMode("fit")}
+              >
+                Fit
+              </button>
+              <button
+                type="button"
+                className={fitMode === "fill" ? "is-active" : undefined}
+                aria-pressed={fitMode === "fill"}
+                onClick={() => setFitMode("fill")}
+              >
+                Fill
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setZoom((z) => Math.min(1.6, Number((z + 0.12).toFixed(2))))
+                }
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setZoom((z) => Math.max(1, Number((z - 0.12).toFixed(2))))
+                }
+                aria-label="Zoom out"
+                disabled={zoom <= 1}
+              >
+                −
+              </button>
+            </div>
+          </div>
+
+          <div className="muse-companion-dock-tabs" role="tablist" aria-label="Companion controls">
+            {(
+              [
+                ["look", "Look"],
+                ["customize", "Customize"],
+                ["actions", "Actions"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={dockSection === id}
+                onClick={() => toggleDock(id)}
+                className={dockSection === id ? "is-active" : undefined}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {dockSection === "look" && (
+            <div className="muse-companion-dock-body" role="tabpanel">
+              <div className="grid grid-cols-2 gap-1.5">
+                {MUSE_PRESENCE_STYLES.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    title={s.blurb}
+                    onClick={() => pickStyle(s.id)}
+                    className={chipClass(style === s.id)}
+                  >
+                    <span className="block font-medium">{s.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {dockSection === "customize" && (
+            <div className="muse-companion-dock-body space-y-2" role="tabpanel">
+              <div className="flex gap-1" role="tablist" aria-label="Customize">
+                {(
+                  [
+                    ["features", "Features"],
+                    ["style", "Style"],
+                    ["clothing", "Clothing"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={wardrobeTab === id}
+                    onClick={() => setWardrobeTab(id)}
+                    className={`flex-1 rounded-sm border px-2 py-1.5 text-[11px] font-medium ${
+                      wardrobeTab === id
+                        ? "border-[var(--glow)]/45 bg-[var(--glow)]/10 text-[var(--ink)]"
+                        : "border-[var(--line)] text-[var(--muted)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {wardrobeTab === "features" && (
+                <p className="text-[10px] text-[var(--muted)]">
+                  Defaults Match Muse from her photo.
+                </p>
+              )}
+              {featureChips.map((group) => (
+                <div key={group.key} className="space-y-1">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--soft)]">
+                    {group.title}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {group.options.map((opt) => {
+                      const selected =
+                        wardrobe[group.key as keyof CompanionWardrobe] === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          title={opt.hint}
+                          disabled={busy}
+                          onClick={() =>
+                            applyWardrobePatch({
+                              [group.key]: opt.id,
+                            } as Partial<CompanionWardrobe>)
+                          }
+                          className={chipClass(selected, opt.id === "nude")}
+                        >
+                          {"swatch" in opt && typeof opt.swatch === "string" ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="inline-block h-2.5 w-2.5 rounded-sm border border-white/20"
+                                style={{ background: opt.swatch }}
+                                aria-hidden
+                              />
+                              {opt.label}
+                            </span>
+                          ) : (
+                            opt.label
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
-            {wardrobeTab === "features" && (
-              <p className="text-[10px] leading-snug text-[var(--muted)]">
-                Defaults are <span className="text-[var(--soft)]">Match Muse</span>{" "}
-                from her photo — eye/hair/skin colors stay hers unless you
-                override.
-              </p>
-            )}
-            {featureChips.map((group) => (
-              <div key={group.key} className="space-y-1.5">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--soft)]">
-                  {group.title}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {group.options.map((opt) => {
-                    const selected =
-                      wardrobe[group.key as keyof CompanionWardrobe] ===
-                      opt.id;
-                    const isNude = opt.id === "nude";
-                    const isMatch = opt.id === "from-photo";
-                    const swatch =
-                      "swatch" in opt && typeof opt.swatch === "string"
-                        ? opt.swatch
-                        : null;
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        title={opt.hint}
-                        disabled={busy}
-                        onClick={() =>
-                          applyWardrobePatch({
-                            [group.key]: opt.id,
-                          } as Partial<CompanionWardrobe>)
-                        }
-                        className={`inline-flex items-start gap-1.5 rounded-sm border px-2 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
-                          selected
-                            ? isNude
-                              ? "border-[var(--danger)]/55 bg-[var(--danger)]/15 text-[#f0c4b8]"
-                              : isMatch
-                                ? "border-[var(--glow)]/55 bg-[var(--glow)]/12 text-[var(--ink)]"
-                                : "border-[var(--accent)]/55 bg-[var(--accent)]/12 text-[var(--ink)]"
-                            : "border-[var(--line)] text-[var(--muted)] hover:border-[var(--accent)]/40 hover:text-[var(--soft)]"
-                        }`}
-                      >
-                        {swatch && (
-                          <span
-                            className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-white/20"
-                            style={{ background: swatch }}
-                            aria-hidden
-                          />
-                        )}
-                        <span>
-                          <span className="block font-medium">{opt.label}</span>
-                          <span className="mt-0.5 block text-[9px] leading-snug opacity-75">
-                            {opt.hint}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            {wardrobe.clothing === "nude" && (
-              <p className="text-[10px] leading-snug text-[#f0c4b8]/90">
-                Nude is adults 18+ only — requires a fresh xAI full-length nude
-                illustration with her face locked. Never a CSS filter on a
-                clothed photo.
-              </p>
-            )}
-          </div>
-        )}
+          )}
 
-        {style !== "realistic" && livePhoto && (
-          <button
-            type="button"
-            onClick={() => void generateStyled(style, livePhoto, wardrobe)}
-            disabled={busy}
-            className="w-full rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] transition hover:border-[var(--accent)]/60 hover:bg-[var(--accent)]/16 disabled:opacity-50"
-          >
-            {busy
-              ? style === "anime"
-                ? "Matching anime…"
-                : style === "cartoon"
-                  ? "Summoning companion…"
-                  : "Restyling…"
-              : generated && matchSource === "xai"
-                ? "Regenerate AI look"
-                : style === "anime"
-                  ? "Match anime to her photo"
-                  : style === "cartoon"
-                    ? "Make Ani companion from her photo"
-                    : "Generate AI look"}
-          </button>
-        )}
-        {genError && (
-          <p className="text-[11px] leading-snug text-[var(--accent)]">
-            {genError}
-          </p>
-        )}
+          {dockSection === "actions" && (
+            <div className="muse-companion-dock-body" role="tabpanel">
+              <div className="flex flex-wrap gap-1.5">
+                {companionActions.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    className={chipClass(actionId === a.id)}
+                    onClick={() => playAction(a.id)}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {livePhoto && (
+            <button
+              type="button"
+              onClick={() => void generateStyled(style, livePhoto, wardrobe)}
+              disabled={busy}
+              className="muse-companion-dock-cta"
+            >
+              {generateLabel}
+            </button>
+          )}
+          {genError && (
+            <p className="muse-companion-dock-error">{genError}</p>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="muse-presence-looks mt-4 space-y-2.5 border-t border-[var(--line)] pt-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent-strong)]">
+              Look
+            </p>
+          </div>
+          <div
+            className="grid grid-cols-2 gap-1.5"
+            role="group"
+            aria-label="Portrait style"
+          >
+            {MUSE_PRESENCE_STYLES.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => pickStyle(s.id)}
+                title={s.blurb}
+                className={chipClass(style === s.id)}
+              >
+                <span className="block font-medium">{s.label}</span>
+                <span className="mt-0.5 block text-[10px] leading-snug opacity-75">
+                  {s.blurb}
+                </span>
+              </button>
+            ))}
+          </div>
+          {style !== "realistic" && livePhoto && (
+            <button
+              type="button"
+              onClick={() => void generateStyled(style, livePhoto, wardrobe)}
+              disabled={busy}
+              className="w-full rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-3 py-2 text-xs font-medium text-[var(--accent-strong)] transition hover:border-[var(--accent)]/60 disabled:opacity-50"
+            >
+              {generateLabel}
+            </button>
+          )}
+          {genError && (
+            <p className="text-[11px] leading-snug text-[var(--accent)]">
+              {genError}
+            </p>
+          )}
+        </div>
+      )}
     </aside>
   );
 }
