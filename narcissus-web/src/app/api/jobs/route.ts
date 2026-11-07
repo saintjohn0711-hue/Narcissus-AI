@@ -285,6 +285,9 @@ export async function POST(req: NextRequest) {
           faceLockFallback = true;
           const fallbackEngine: IdentityEngine =
             identityEngine === "instantid" ? "faceid" : "reactor";
+          // Keep cock undress denoise high on fallback — 0.52 strips clothes
+          // but won't invent a penis after InstantID body-lock failures.
+          const cockFallback = getBodyType(bodyType).needsCock;
           result = await runPromptToImages(
             buildUndressPrompt(uploaded.filename, {
               promptOverride,
@@ -297,7 +300,7 @@ export async function POST(req: NextRequest) {
                 undefined,
               faceLock: fallbackEngine !== "reactor",
               identityEngine: fallbackEngine,
-              denoise: 0.52,
+              denoise: cockFallback ? 0.65 : 0.52,
             }),
             { timeoutMs: 240_000 },
           );

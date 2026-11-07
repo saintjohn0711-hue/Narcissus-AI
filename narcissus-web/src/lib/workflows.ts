@@ -180,14 +180,22 @@ function wireReactorPolish(
  * NA-75 InstantID conditioning (SDXL). Mutates graph: adds InstantID loaders +
  * ApplyInstantIDAdvanced. Returns { model, positive, negative } node refs for
  * KSampler. Requires RealVisXL (or other SDXL) checkpoint already on node "1".
+ *
+ * When `reshapeBody` is true (add-penis / cock undress), do NOT keypoint-lock
+ * the full clothed frame — that freezes a smooth feminine crotch and ignores
+ * anatomy prompts. Use the face crop for kps + weaker ControlNet so genitals
+ * can appear while face identity still holds.
  */
 function wireInstantId(
   graph: Record<string, unknown>,
   identity: number,
+  opts?: { reshapeBody?: boolean },
 ): { model: [string, number]; positive: [string, number]; negative: [string, number] } {
   const id = Math.min(1, Math.max(0.35, identity));
-  const ipWeight = 0.75 + id * 0.25; // ~0.97 at 0.9
-  const cnStrength = 0.45 + id * 0.1;
+  const reshape = opts?.reshapeBody === true;
+  // Face IP stays strong; body ControlNet loosens when anatomy must change.
+  const ipWeight = reshape ? 0.7 + id * 0.2 : 0.75 + id * 0.25;
+  const cnStrength = reshape ? 0.22 + id * 0.08 : 0.45 + id * 0.1;
   graph["30"] = {
     class_type: "InstantIDModelLoader",
     inputs: { instantid_file: "ip-adapter.bin" },
@@ -213,10 +221,11 @@ function wireInstantId(
       ip_weight: ipWeight,
       cn_strength: cnStrength,
       start_at: 0.0,
-      end_at: 0.85,
-      noise: 0.4,
+      end_at: reshape ? 0.75 : 0.85,
+      noise: reshape ? 0.5 : 0.4,
       combine_embeds: "average",
-      image_kps: ["3", 0],
+      // Face crop for kps when reshaping body; full frame otherwise (pose lock).
+      image_kps: reshape ? ["17", 0] : ["3", 0],
     },
   };
   return {
@@ -387,11 +396,18 @@ export function buildUndressPrompt(
   // InstantID prefers non-1024 square (watermark avoidance in training data).
   const width = opts?.width ?? (useInstantId ? 1016 : 768);
   const height = opts?.height ?? (useInstantId ? 1016 : 768);
+  // Cock/penis undress needs higher denoise so crotch can change (InstantID
+  // otherwise keeps the clothed silhouette and "add penis" never lands).
+  const needsCock = body.needsCock;
   const denoise =
     opts?.denoise ??
     (useInstantId
-      ? Math.max(0.55, Math.min(0.66, denoiseForIdentity("undress", identity) + 0.08))
-      : denoiseForIdentity("undress", identity));
+      ? needsCock
+        ? Math.max(0.68, Math.min(0.78, denoiseForIdentity("undress", identity) + 0.2))
+        : Math.max(0.55, Math.min(0.66, denoiseForIdentity("undress", identity) + 0.08))
+      : needsCock
+        ? Math.max(0.52, Math.min(0.62, denoiseForIdentity("undress", identity) + 0.08))
+        : denoiseForIdentity("undress", identity));
   const ckpt =
     opts?.checkpoint?.trim() ||
     (useInstantId ? INSTANTID_CKPTS[0]! : CKPT_SD15);
@@ -399,15 +415,24 @@ export function buildUndressPrompt(
   const stamp = Date.now().toString(36);
   const savePrefix = `narcissus_undress_${body.id}_${stamp}`;
 
+  // Front-load anatomy when adding a cock — CLIP/InstantID otherwise bury it
+  // under face-identity tokens and clothing-removal alone "succeeds".
   const positive = [
+    needsCock ? anatomy.positive : "",
+    needsCock
+      ? "mandatory visible penis and testicles in the crotch, cock fully rendered, not smoothed flat, not censored, not hidden"
+      : "",
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.undress,
-    anatomy.positive,
+    needsCock ? "" : anatomy.positive,
     "completely remove all clothing and fabric, nude skin only where clothes were",
     "maintain identical subject placement, camera angle, framing, and perspective",
     "exact same face as the reference photo, identical eyes nose mouth bone structure",
     "exact same hairstyle hair color hair length and hairline as the reference photo",
     "preserve facial identity and hair, photorealistic skin",
-  ].join(", ");
+    needsCock ? anatomy.positive : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const negative = [
     NEGATIVE,
@@ -415,6 +440,9 @@ export function buildUndressPrompt(
     "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, covered, dressed",
     "blank, black image, empty frame",
     "different face, different person, different hairstyle, hair cut, bald, wrong hair color, face morph",
+    needsCock
+      ? "smooth Barbie crotch, featureless groin, no genitals, censored, mosaic, covered crotch, vagina only, closed legs hiding penis"
+      : "",
     useInstantId ? "watermark, text, logo" : "",
   ]
     .filter(Boolean)
@@ -461,19 +489,20 @@ export function buildUndressPrompt(
   let modelRef: [string, number] = ["1", 0];
   let posRef: [string, number] = ["4", 0];
   let negRef: [string, number] = ["5", 0];
-  let cfg = body.needsCock ? 6.5 : 5.5;
+  let cfg = needsCock ? 6.5 : 5.5;
   let steps = 32;
 
   if (faceLock && useInstantId) {
-    const iid = wireInstantId(graph, identity);
+    const iid = wireInstantId(graph, identity, { reshapeBody: needsCock });
     modelRef = iid.model;
     posRef = iid.positive;
     negRef = iid.negative;
-    cfg = 3.5; // InstantID burns at high CFG
-    steps = 30;
+    // InstantID burns faces above ~5; cock anatomy still needs more push than 3.5.
+    cfg = needsCock ? 4.8 : 3.5;
+    steps = needsCock ? 34 : 30;
   } else if (faceLock && useFaceId) {
     modelRef = wireFaceIdPlus(graph, identity);
-    cfg = 5.0;
+    cfg = needsCock ? 6.0 : 5.0;
   }
 
   graph["7"] = {
