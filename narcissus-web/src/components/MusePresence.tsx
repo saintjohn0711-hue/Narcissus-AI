@@ -81,6 +81,8 @@ export function MusePresence({
   const [dockSection, setDockSection] = useState<
     null | "look" | "customize" | "actions"
   >(null);
+  /** Companion: optional Muse-photo likeness (off by default — design from scratch). */
+  const [likenessLock, setLikenessLock] = useState(false);
   const [actionId, setActionId] = useState<CompanionActionId | null>(null);
   const [reactionId, setReactionId] = useState<CompanionReactionId | null>(
     null,
@@ -107,10 +109,12 @@ export function MusePresence({
       next,
       mainPhoto(partner),
       next === "cartoon" ? nextWardrobe : null,
+      next === "cartoon",
     );
     setGenerated(cached);
     setMatchSource(cached ? "xai" : null);
     setGenError(null);
+    setLikenessLock(false);
     setPhotoIndex(
       Math.min(
         Math.max(0, partner.mainPhotoIndex ?? 0),
@@ -179,11 +183,11 @@ export function MusePresence({
       setGenerated(null);
       setMatchSource(null);
       const nudeBit = isNudeClothing(opts?.clothing)
-        ? " Nude needs a fresh xAI illustration — never a filter on her clothed photo."
+        ? " Nude needs a finished xAI illustration — never a CSS fake. Try Lingerie, or start Comfy for true nude."
         : " Companion needs a finished xAI illustration — not a provisional cel.";
       const keyBit = opts?.missingKey
         ? " Set XAI_API_KEY on Vercel Production."
-        : " Try again when generation is available.";
+        : "";
       setGenError(`${message}${nudeBit}${keyBit}`);
       return true;
     }
@@ -246,12 +250,14 @@ export function MusePresence({
         err === "nude_refused" ||
         detail.includes("content") ||
         detail.includes("safety") ||
-        detail.includes("moderation")
+        detail.includes("moderation") ||
+        detail.includes("content-moderated")
       ) {
         return {
           missingKey: false,
           message:
-            "xAI refused or blocked this Nude request — Companion will not fake nude with a clothed photo filter.",
+            data.message ||
+            "xAI blocked Nude (moderation). Lingerie still works — or start the Comfy/RunPod undress pod for true nude. Never faking nude.",
         };
       }
       if (detail.includes("too small") || detail.includes("dimensions")) {
@@ -291,10 +297,27 @@ export function MusePresence({
 
   async function generateStyled(
     targetStyle: MusePresenceStyle,
-    sourcePhoto: string,
+    sourcePhoto: string | null,
     nextWardrobe: CompanionWardrobe = wardrobe,
+    opts?: { forceMode?: "generate" | "adjust" | "likeness" },
   ) {
-    if (!sourcePhoto || targetStyle === "realistic" || busy) return;
+    if (targetStyle === "realistic" || busy) return;
+    const isCompanion = targetStyle === "cartoon";
+    if (!isCompanion && !sourcePhoto) return;
+
+    let mode: "generate" | "adjust" | "likeness" = "likeness";
+    if (isCompanion) {
+      if (opts?.forceMode) {
+        mode = opts.forceMode;
+      } else if (likenessLock && sourcePhoto) {
+        mode = "likeness";
+      } else if (generated && matchSource === "xai") {
+        mode = "adjust";
+      } else {
+        mode = "generate";
+      }
+    }
+
     setBusy(true);
     setGenError(null);
     try {
@@ -303,10 +326,15 @@ export function MusePresence({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           style: targetStyle,
-          photo: sourcePhoto,
+          photo: sourcePhoto || undefined,
+          priorImage:
+            isCompanion && mode === "adjust" && generated
+              ? generated
+              : undefined,
+          mode: isCompanion ? mode : undefined,
           name: displayName(partner),
           looks: partner.looks,
-          wardrobe: targetStyle === "cartoon" ? nextWardrobe : undefined,
+          wardrobe: isCompanion ? nextWardrobe : undefined,
         }),
       });
       if (!res.ok) {
@@ -322,9 +350,22 @@ export function MusePresence({
           // keep empty
         }
         const { message, missingKey } = restyleErrorMessage(targetStyle, parsed);
+        if (isCompanion) {
+          // Never CSS-fake a companion (esp. nude)
+          setGenError(message);
+          if (parsed.error === "nude_refused" && nextWardrobe.clothing === "nude") {
+            // keep last clothed companion on stage if we have one
+          } else if (!generated) {
+            await applyLocalFallback(targetStyle, sourcePhoto || "", message, {
+              missingKey,
+              clothing: nextWardrobe.clothing,
+            });
+          }
+          return;
+        }
         const used = await applyLocalFallback(
           targetStyle,
-          sourcePhoto,
+          sourcePhoto || "",
           message,
           { missingKey, clothing: nextWardrobe.clothing },
         );
@@ -343,28 +384,29 @@ export function MusePresence({
           targetStyle,
           data.image,
           sourcePhoto,
-          targetStyle === "cartoon" ? nextWardrobe : null,
+          isCompanion ? nextWardrobe : null,
+          isCompanion && mode !== "likeness",
         );
         setGenError(null);
       } else {
         const used = await applyLocalFallback(
           targetStyle,
-          sourcePhoto,
+          sourcePhoto || "",
           "xAI returned no image.",
           { missingKey: false, clothing: nextWardrobe.clothing },
         );
-        if (!used) setGenError("xAI returned no image — retry Companion restyle.");
+        if (!used) setGenError("xAI returned no image — retry Companion.");
       }
     } catch {
       const used = await applyLocalFallback(
         targetStyle,
-        sourcePhoto,
-        targetStyle === "cartoon"
-          ? "AI companion restyle failed (network or timeout)."
+        sourcePhoto || "",
+        isCompanion
+          ? "AI companion generation failed (network or timeout)."
           : "AI anime restyle failed (network or timeout).",
         { missingKey: false, clothing: nextWardrobe.clothing },
       );
-      if (!used) setGenError("Restyle failed — CSS look stays on.");
+      if (!used) setGenError("Generation failed — try again.");
     } finally {
       setBusy(false);
     }
@@ -380,11 +422,13 @@ export function MusePresence({
       setMatchSource(null);
       return;
     }
+    const scratch = next === "cartoon";
     const cached = loadCachedPortrait(
       partner.id,
       next,
       livePhoto,
       next === "cartoon" ? wardrobe : null,
+      scratch,
     );
     setGenerated(cached);
     setMatchSource(cached ? "xai" : null);
@@ -407,21 +451,32 @@ export function MusePresence({
       typeof patch.clothing === "string" && patch.clothing !== wardrobe.clothing;
     setWardrobe(next);
     saveCompanionWardrobe(partner.id, next);
-    if (style !== "cartoon" || !livePhoto) return;
+    if (style !== "cartoon") return;
     if (clothingChanged) {
-      // Never reuse a clothed (or other-outfit) cache under a new clothing pick.
-      bustCompanionClothingCache(partner.id, livePhoto);
-      setGenerated(null);
-      setMatchSource(null);
+      bustCompanionClothingCache(partner.id, livePhoto, true);
+      // Keep current illustration on stage while regenerating (adjust path).
       setGenError(
         isNudeClothing(next.clothing)
-          ? "Summoning a new nude Companion illustration…"
-          : null,
+          ? "Updating Companion to Nude…"
+          : "Updating Companion outfit…",
       );
-      void generateStyled("cartoon", livePhoto, next);
+      void generateStyled("cartoon", livePhoto, next, {
+        forceMode:
+          generated && matchSource === "xai"
+            ? "adjust"
+            : likenessLock && livePhoto
+              ? "likeness"
+              : "generate",
+      });
       return;
     }
-    const cached = loadCachedPortrait(partner.id, "cartoon", livePhoto, next);
+    const cached = loadCachedPortrait(
+      partner.id,
+      "cartoon",
+      livePhoto,
+      next,
+      true,
+    );
     if (cached) {
       setGenerated(cached);
       setMatchSource("xai");
@@ -502,12 +557,18 @@ export function MusePresence({
     ? style === "anime"
       ? "Matching…"
       : style === "cartoon"
-        ? "Generating…"
+        ? generated && matchSource === "xai"
+          ? "Adjusting…"
+          : "Designing…"
         : "Restyling…"
-    : generated && matchSource === "xai"
-      ? "Regenerate"
-      : style === "cartoon"
-        ? "Generate Companion"
+    : style === "cartoon"
+      ? generated && matchSource === "xai"
+        ? likenessLock
+          ? "Regenerate with likeness"
+          : "Adjust Companion"
+        : "Generate Companion"
+      : generated && matchSource === "xai"
+        ? "Regenerate"
         : style === "anime"
           ? "Match anime"
           : "Generate look";
@@ -581,7 +642,7 @@ export function MusePresence({
                 </span>
                 <p className="relative z-[1] mt-3 max-w-[14rem] text-center text-xs leading-relaxed text-[var(--soft)]">
                   {isFullCompanion
-                    ? "Generate Companion from her Muse photo."
+                    ? "Design your Companion from traits — Generate creates a new anime girl. Optional: lock likeness to a Muse photo."
                     : "Add photos on Muses — this panel becomes her living portrait."}
                 </p>
               </div>
@@ -761,7 +822,8 @@ export function MusePresence({
               </div>
               {wardrobeTab === "features" && (
                 <p className="text-[10px] text-[var(--muted)]">
-                  Defaults Match Muse from her photo.
+                  Pick traits for your Companion. Natural = defaults (or Muse
+                  likeness when locked).
                 </p>
               )}
               {featureChips.map((group) => (
@@ -824,16 +886,39 @@ export function MusePresence({
             </div>
           )}
 
-          {livePhoto && (
-            <button
-              type="button"
-              onClick={() => void generateStyled(style, livePhoto, wardrobe)}
-              disabled={busy}
-              className="muse-companion-dock-cta"
-            >
-              {generateLabel}
-            </button>
-          )}
+          <label className="muse-companion-likeness flex items-start gap-2 px-0.5 text-[11px] text-[var(--muted)]">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={likenessLock}
+              disabled={!livePhoto || busy}
+              onChange={(e) => setLikenessLock(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium text-[var(--soft)]">
+                Likeness from photo
+              </span>
+              {livePhoto
+                ? " — optional lock to this Muse’s photo (secondary)."
+                : " — add a Muse photo first to enable."}
+            </span>
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              void generateStyled(style, livePhoto, wardrobe, {
+                forceMode: likenessLock && livePhoto
+                  ? "likeness"
+                  : generated && matchSource === "xai"
+                    ? "adjust"
+                    : "generate",
+              })
+            }
+            disabled={busy || (likenessLock && !livePhoto)}
+            className="muse-companion-dock-cta"
+          >
+            {generateLabel}
+          </button>
           {genError && (
             <p className="muse-companion-dock-error">{genError}</p>
           )}

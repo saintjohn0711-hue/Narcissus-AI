@@ -115,7 +115,7 @@ type Opt<T extends string> = {
 };
 
 export const COMPANION_EYE_COLOR: Opt<CompanionEyeColor>[] = [
-  { id: "from-photo", label: "Match Muse", hint: "From her photo" },
+  { id: "from-photo", label: "Natural", hint: "Default / likeness when locked" },
   { id: "brown", label: "Brown", hint: "Warm brown", swatch: "#6b3f2a" },
   { id: "hazel", label: "Hazel", hint: "Green-brown", swatch: "#8a6b3d" },
   { id: "green", label: "Green", hint: "Clear green", swatch: "#3d7a4a" },
@@ -125,7 +125,7 @@ export const COMPANION_EYE_COLOR: Opt<CompanionEyeColor>[] = [
 ];
 
 export const COMPANION_HAIR_COLOR: Opt<CompanionHairColor>[] = [
-  { id: "from-photo", label: "Match Muse", hint: "From her photo" },
+  { id: "from-photo", label: "Natural", hint: "Default / likeness when locked" },
   { id: "blonde", label: "Blonde", hint: "Light blonde", swatch: "#e6d0a0" },
   { id: "brunette", label: "Brunette", hint: "Warm brown", swatch: "#5c3a22" },
   { id: "black", label: "Black", hint: "Deep black", swatch: "#1a1a1c" },
@@ -135,7 +135,7 @@ export const COMPANION_HAIR_COLOR: Opt<CompanionHairColor>[] = [
 ];
 
 export const COMPANION_HAIR_STYLE: Opt<CompanionHairStyle>[] = [
-  { id: "from-photo", label: "Match Muse", hint: "Her length/style" },
+  { id: "from-photo", label: "Natural", hint: "Default length/style" },
   { id: "short", label: "Short", hint: "Chin or shorter" },
   { id: "medium", label: "Medium", hint: "Shoulder length" },
   { id: "long", label: "Long", hint: "Past shoulders" },
@@ -145,7 +145,7 @@ export const COMPANION_HAIR_STYLE: Opt<CompanionHairStyle>[] = [
 ];
 
 export const COMPANION_SKIN_TONE: Opt<CompanionSkinTone>[] = [
-  { id: "from-photo", label: "Match Muse", hint: "From her photo" },
+  { id: "from-photo", label: "Natural", hint: "Default / likeness when locked" },
   { id: "fair", label: "Fair", hint: "Very light", swatch: "#f3e0d0" },
   { id: "light", label: "Light", hint: "Light warm", swatch: "#e8c4a8" },
   { id: "medium", label: "Medium", hint: "Medium tone", swatch: "#c9956c" },
@@ -155,7 +155,7 @@ export const COMPANION_SKIN_TONE: Opt<CompanionSkinTone>[] = [
 ];
 
 export const COMPANION_BODY_TYPE: Opt<CompanionBodyType>[] = [
-  { id: "from-photo", label: "Match Muse", hint: "Her figure" },
+  { id: "from-photo", label: "Natural", hint: "Default figure" },
   { id: "slim", label: "Slim", hint: "Slender lines" },
   { id: "athletic", label: "Athletic", hint: "Toned" },
   { id: "soft-curves", label: "Soft curves", hint: "Gentle curves" },
@@ -164,7 +164,7 @@ export const COMPANION_BODY_TYPE: Opt<CompanionBodyType>[] = [
 ];
 
 export const COMPANION_BUST: Opt<CompanionBust>[] = [
-  { id: "from-photo", label: "Match Muse", hint: "Her bust" },
+  { id: "from-photo", label: "Natural", hint: "Default proportions" },
   { id: "small", label: "Small", hint: "Petite bust" },
   { id: "medium", label: "Medium", hint: "Average bust" },
   { id: "full", label: "Full", hint: "Full bust" },
@@ -341,21 +341,29 @@ export function saveCompanionWardrobe(
   }
 }
 
-function eyeColorDirective(c: CompanionEyeColor): string {
+function eyeColorDirective(c: CompanionEyeColor, hasRef: boolean): string {
   if (c === "from-photo") {
-    return "Eye color: EXACT iris color from Image 1 — do not invent a different color (no random blue/green if her photo shows otherwise).";
+    return hasRef
+      ? "Eye color: EXACT iris color from Image 1 — do not invent a different color."
+      : "Eye color: natural flattering anime irises that fit the character.";
   }
-  return `Eye color: ${c} irises (user override), still the same eye spacing/character as Image 1.`;
+  return hasRef
+    ? `Eye color: ${c} irises (user override), keep eye spacing/character from Image 1.`
+    : `Eye color: ${c} irises.`;
 }
 
-function hairColorDirective(c: CompanionHairColor): string {
+function hairColorDirective(c: CompanionHairColor, hasRef: boolean): string {
   if (c === "from-photo") {
-    return "Hair color: EXACT hair color from Image 1 — do not invent a different dye.";
+    return hasRef
+      ? "Hair color: EXACT hair color from Image 1 — do not invent a different dye."
+      : "Hair color: natural flattering anime hair color for the character.";
   }
-  return `Hair color: ${c} (user override), keep her hairline/parting character from Image 1.`;
+  return hasRef
+    ? `Hair color: ${c} (user override), keep hairline/parting character from Image 1.`
+    : `Hair color: ${c}.`;
 }
 
-function hairStyleDirective(s: CompanionHairStyle): string {
+function hairStyleDirective(s: CompanionHairStyle, hasRef: boolean): string {
   switch (s) {
     case "short":
       return "Hair style: short (chin-length or shorter), polished anime strands.";
@@ -370,18 +378,24 @@ function hairStyleDirective(s: CompanionHairStyle): string {
     case "wavy-long":
       return "Hair style: long soft waves with volume.";
     default:
-      return "Hair style/length: match Image 1 exactly (length, parting, hairline).";
+      return hasRef
+        ? "Hair style/length: match Image 1 exactly (length, parting, hairline)."
+        : "Hair style: long soft anime waves with volume (default).";
   }
 }
 
-function skinToneDirective(s: CompanionSkinTone): string {
+function skinToneDirective(s: CompanionSkinTone, hasRef: boolean): string {
   if (s === "from-photo") {
-    return "Skin tone: EXACT undertone from Image 1.";
+    return hasRef
+      ? "Skin tone: EXACT undertone from Image 1."
+      : "Skin tone: soft natural illustrated anime skin.";
   }
-  return `Skin tone: ${s} illustrated skin (user override), still recognizably her.`;
+  return hasRef
+    ? `Skin tone: ${s} illustrated skin (user override), still recognizably her.`
+    : `Skin tone: ${s} illustrated skin.`;
 }
 
-function bodyTypeDirective(b: CompanionBodyType): string {
+function bodyTypeDirective(b: CompanionBodyType, hasRef: boolean): string {
   switch (b) {
     case "slim":
       return "Body type: slim slender full-body silhouette.";
@@ -394,11 +408,13 @@ function bodyTypeDirective(b: CompanionBodyType): string {
     case "petite":
       return "Body type: petite small-frame full-body.";
     default:
-      return "Body type: preserve her proportions from Image 1 in a full-body standing pose.";
+      return hasRef
+        ? "Body type: preserve her proportions from Image 1 in a full-body standing pose."
+        : "Body type: elegant soft-curves anime companion silhouette, full-body.";
   }
 }
 
-function bustDirective(b: CompanionBust): string {
+function bustDirective(b: CompanionBust, hasRef: boolean): string {
   switch (b) {
     case "small":
       return "Bust: small / petite (user override).";
@@ -409,7 +425,9 @@ function bustDirective(b: CompanionBust): string {
     case "very-full":
       return "Bust: very full (user override).";
     default:
-      return "Bust: match her bust proportions from Image 1.";
+      return hasRef
+        ? "Bust: match her bust proportions from Image 1."
+        : "Bust: natural medium anime proportions.";
   }
 }
 
@@ -467,36 +485,44 @@ function clothingDirective(c: CompanionClothing): string {
       return "Clothing: bias-cut silk slip chemise, thin straps, clinging fabric, full-body standing adults 18+.";
     case "nude":
       return [
-        "CLOTHING OVERRIDE — FULLY NUDE (adults 18+ only).",
-        "REMOVE every garment from Image 1 and from any style reference: no lingerie, bra, panties, dress, swimsuit, stockings, harness, or fabric covering breasts or groin.",
-        "Draw a NEW illustrated full-length nude anime companion of the SAME adult woman — bare breasts, bare hips, bare skin, standing head-to-toe.",
-        "Do NOT keep or reinvent lingerie. Do NOT soft-censor with steam, glow bars, towels, or cropped framing.",
-        "Identity lock: Muse face from Image 1. Image 2 (if present) is LINE/SHADING STYLE ONLY — ignore Image 2 clothing.",
-        "Illustrated anime nude (not photoreal porn). No minors.",
+        "CLOTHING: fully nude adult anime companion (18+), tasteful illustrated figure study — bare skin, no lingerie, no towels, no steam bars.",
+        "Same character identity; standing full-length head-to-toe. Premium anime illustration (not photoreal porn). No minors.",
       ].join(" ");
     default:
       return "Clothing: delicate lingerie / lace matching set, sexy companion attire, full-body visible adults 18+.";
   }
 }
 
+export type WardrobePromptMode = "scratch" | "adjust" | "likeness";
+
 /** Extra prompt clauses for Companion wardrobe (appended to cartoon base prompt). */
 export function companionWardrobePromptBits(
   wardrobe: CompanionWardrobe,
   museLooks?: string,
+  mode: WardrobePromptMode = "likeness",
 ): string {
   const w = normalizeWardrobe(wardrobe);
+  const hasRef = mode === "likeness" || mode === "adjust";
   const looksBit = museLooks?.trim()
-    ? `Muse profile looks notes (honor when consistent with Image 1): ${museLooks.trim().slice(0, 280)}.`
+    ? mode === "scratch"
+      ? `Character vibe notes: ${museLooks.trim().slice(0, 280)}.`
+      : `Looks notes (honor when consistent with Image 1): ${museLooks.trim().slice(0, 280)}.`
     : "";
+  const customizeLead =
+    mode === "scratch"
+      ? "DESIGN (adults 18+): invent a cohesive Ani/JuicyChat-class companion from these traits — no real photo required."
+      : mode === "adjust"
+        ? "ADJUST (adults 18+): keep the SAME illustrated companion identity from Image 1; apply trait/outfit changes only."
+        : "CUSTOMIZE (adults 18+ — Image 1 face identity absolute; Natural traits match the Muse photo):";
   return [
     "FRAMING: FULL-LENGTH standing anime companion — head-to-toe in frame (feet and head visible), Ani-like vertical scale, not a bust/portrait crop.",
-    "CUSTOMIZE (adults 18+ only — Image 1 face identity absolute; from-photo traits MUST match the Muse photo, never invent conflicting colors):",
-    eyeColorDirective(w.eyeColor),
-    hairColorDirective(w.hairColor),
-    hairStyleDirective(w.hairStyle),
-    skinToneDirective(w.skinTone),
-    bodyTypeDirective(w.bodyType),
-    bustDirective(w.bust),
+    customizeLead,
+    eyeColorDirective(w.eyeColor, hasRef),
+    hairColorDirective(w.hairColor, hasRef),
+    hairStyleDirective(w.hairStyle, hasRef),
+    skinToneDirective(w.skinTone, hasRef),
+    bodyTypeDirective(w.bodyType, hasRef),
+    bustDirective(w.bust, hasRef),
     expressionDirective(w.expression),
     lookDirective(w.look),
     clothingDirective(w.clothing),

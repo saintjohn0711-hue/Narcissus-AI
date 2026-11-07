@@ -7,7 +7,11 @@ import {
   companionWardrobePromptBits,
   wardrobeKey,
   type CompanionWardrobe,
+  type WardrobePromptMode,
 } from "@/lib/companionWardrobe";
+
+/** How Companion images are produced. */
+export type CompanionGenMode = "generate" | "adjust" | "likeness";
 
 export type MusePresenceStyle =
   | "realistic"
@@ -43,8 +47,9 @@ export const MUSE_PRESENCE_STYLES: Array<{
   {
     id: "cartoon",
     label: "Companion",
-    blurb: "Ani-style anime companion",
-    autoGenerate: true,
+    blurb: "Design an anime companion",
+    /** From-scratch Generate is manual — no photo required. */
+    autoGenerate: false,
   },
   {
     id: "cyberpunk",
@@ -70,8 +75,11 @@ export function isMusePresenceStyle(v: string): v is MusePresenceStyle {
 }
 
 const STYLE_STORAGE = "narcissus.artOfX.musePresenceStyle.v1";
-/** v6: clothing-aware bust + nude must not reuse clothed cache. */
-const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v6";
+/** v7: from-scratch Companion cache (scratch fp) + clothing-aware bust. */
+const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v7";
+
+/** Cache fingerprint when Companion is designed without a Muse photo. */
+export const COMPANION_SCRATCH_FP = "scratch";
 
 export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
   if (typeof window === "undefined") return "realistic";
@@ -137,13 +145,18 @@ export function loadCachedPortrait(
   style: MusePresenceStyle,
   photo?: string | null,
   wardrobe?: CompanionWardrobe | null,
+  /** When true (default Companion), cache under scratch fp not Muse photo. */
+  scratch = false,
 ): string | null {
   if (typeof window === "undefined") return null;
   if (style === "realistic") return null;
   try {
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     const map = raw ? (JSON.parse(raw) as PortraitCache) : {};
-    const fp = photoFingerprint(photo);
+    const fp =
+      style === "cartoon" && scratch
+        ? COMPANION_SCRATCH_FP
+        : photoFingerprint(photo);
     const wFp =
       style === "cartoon" && wardrobe ? wardrobeKey(wardrobe) : "";
     const url = map[portraitKey(partnerId, style, fp, wFp)];
@@ -161,13 +174,17 @@ export function saveCachedPortrait(
   dataUrl: string,
   photo?: string | null,
   wardrobe?: CompanionWardrobe | null,
+  scratch = false,
 ): void {
   if (typeof window === "undefined") return;
   if (style === "realistic") return;
   try {
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     const map = raw ? (JSON.parse(raw) as PortraitCache) : {};
-    const fp = photoFingerprint(photo);
+    const fp =
+      style === "cartoon" && scratch
+        ? COMPANION_SCRATCH_FP
+        : photoFingerprint(photo);
     const wFp =
       style === "cartoon" && wardrobe ? wardrobeKey(wardrobe) : "";
     map[portraitKey(partnerId, style, fp, wFp)] = dataUrl;
@@ -184,31 +201,35 @@ export function saveCachedPortrait(
 }
 
 /**
- * Drop cached Companion portraits for this Muse+photo when clothing changes
- * so a clothed render is never shown under a new clothing (esp. nude) key
- * from a stale hit, and sibling outfits don't linger as wrong identity frames.
+ * Drop cached Companion portraits for this Muse when clothing changes
+ * so a clothed render is never shown under a new clothing (esp. nude) key.
  */
 export function bustCompanionClothingCache(
   partnerId: number,
   photo?: string | null,
+  scratch = true,
 ): void {
   if (typeof window === "undefined") return;
   try {
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     if (!raw) return;
     const map = JSON.parse(raw) as PortraitCache;
-    const fp = photoFingerprint(photo);
-    const prefix = `${partnerId}:cartoon:${fp}:`;
+    const fps = scratch
+      ? [COMPANION_SCRATCH_FP]
+      : [photoFingerprint(photo), COMPANION_SCRATCH_FP];
     let changed = false;
-    for (const k of Object.keys(map)) {
-      if (k.startsWith(prefix)) {
-        delete map[k];
-        changed = true;
+    for (const fp of fps) {
+      const prefix = `${partnerId}:cartoon:${fp}:`;
+      for (const k of Object.keys(map)) {
+        if (k.startsWith(prefix)) {
+          delete map[k];
+          changed = true;
+        }
       }
     }
-    // Also clear legacy v5 store if present
     try {
       localStorage.removeItem("narcissus.artOfX.musePresencePortraits.v5");
+      localStorage.removeItem("narcissus.artOfX.musePresencePortraits.v6");
     } catch {
       // ignore
     }
@@ -218,16 +239,19 @@ export function bustCompanionClothingCache(
   }
 }
 
+const COMPANION_QUALITY_BAR =
+  "QUALITY BAR: high-end modern anime/manga illustration — crisp dark outlines, smooth cel shading with soft gradients, luminous multi-tone irises + catchlights, clean skin, glossy lips, polished hair strands with subtle rim light, coherent full-body proportions.";
+
 /**
- * Prompt for xAI image edit — keep likeness, apply look.
- * Companion (cartoon id) + Anime push hard toward JuicyChat / Ani-class
- * illustrated anime — never a photo filter.
+ * Prompt for xAI image edit / generation.
+ * Companion default is from-scratch design; likeness + adjust are optional.
  */
 export function styleEditPrompt(
   style: MusePresenceStyle,
   museName: string,
   looks?: string,
   wardrobe?: CompanionWardrobe | null,
+  companionMode: CompanionGenMode = "likeness",
 ): string {
   const looksBit = looks?.trim()
     ? ` Match these notes exactly where visible: ${looks.trim().slice(0, 320)}.`
@@ -250,24 +274,8 @@ export function styleEditPrompt(
         `Same woman as Image 1, rendered as premium sexy anime.${looksBit}`,
         `Adults 18+ only. Single portrait, no watermark, no text, no UI chrome.`,
       ].join(" ");
-    case "cartoon": {
-      const nude = wardrobe?.clothing === "nude";
-      return [
-        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is STYLE ONLY — JuicyChat / Grok Ani–class craft (line weight, cel shading, eye rendering, lighting). Keep Image 1's face. NEVER copy Image 2's face, hair color, body, or outfit. NEVER reproduce watermarks, logos, UI chrome, or text from Image 2.`,
-        nude
-          ? `Paint a NEW premium FULL-LENGTH standing NUDE anime companion of ${museName}: crown-to-feet in a clean vertical 9:16 frame, coherent anatomy, sharp face, polished finish — adults 18+ illustrated nude, not a photo edit.`
-          : `Paint a premium FULL-LENGTH standing anime companion of ${museName} like Grok's Ani: crown of head through feet visible in a clean vertical frame, flirty eye contact, elegant stance — NOT a bust crop, NOT waist-up, NOT a muddy filter of the photo.`,
-        `CRITICAL IDENTITY LOCK from Image 1: facial proportions, eyes, nose, mouth, jaw, skin undertone, and from-photo traits (hair/eye color unless user overrode). She must be recognizably the same adult woman. Never invent conflicting features.`,
-        `QUALITY BAR: high-end modern anime/manga illustration — crisp dark outlines, smooth cel shading with soft gradients, luminous multi-tone irises + catchlights, clean skin (no posterize banding), glossy lips, polished hair strands with subtle rim light, coherent full-body proportions, tasteful shallow-DOF companion mood.`,
-        `FORBIDDEN: photoreal selfie, CSS posterize, muddy recolor of Image 1, 3D plastic doll, chibi, collage, cropped feet/head, watermark, signature, UI overlay, text.${looksBit}`,
-        wardrobe
-          ? companionWardrobePromptBits(wardrobe, looks)
-          : "FRAMING: FULL-LENGTH standing head-to-toe companion, letterboxed if needed.",
-        `Adults 18+ only. Single full-body standing figure on a clean simple background.`,
-      ]
-        .filter(Boolean)
-        .join(" ");
-    }
+    case "cartoon":
+      return companionPrompt(museName, looks, wardrobe, companionMode);
     case "cyberpunk":
       return [
         `Edit this reference photo of adult ${museName} into cyberpunk neon glamour.`,
@@ -278,6 +286,56 @@ export function styleEditPrompt(
     default:
       return `Photorealistic portrait of ${museName}, same person as the reference.${looksBit}`;
   }
+}
+
+function companionPrompt(
+  museName: string,
+  looks: string | undefined,
+  wardrobe: CompanionWardrobe | null | undefined,
+  mode: CompanionGenMode,
+): string {
+  const wardrobeMode: WardrobePromptMode =
+    mode === "generate" ? "scratch" : mode === "adjust" ? "adjust" : "likeness";
+  const wardrobeBits = wardrobe
+    ? companionWardrobePromptBits(wardrobe, looks, wardrobeMode)
+    : "FRAMING: FULL-LENGTH standing head-to-toe companion.";
+  const looksBit = looks?.trim()
+    ? ` Character notes: ${looks.trim().slice(0, 320)}.`
+    : "";
+
+  if (mode === "generate") {
+    return [
+      `Create a brand-new premium FULL-LENGTH standing anime companion named ${museName} in JuicyChat / Grok Ani class — invent her face and body from the design traits (no real photograph).`,
+      `Vertical 9:16, crown-to-feet visible, flirty eye contact, elegant stance. Sexy illustrated anime — not photoreal, not 3D doll, not chibi.`,
+      COMPANION_QUALITY_BAR,
+      `FORBIDDEN: photoreal selfie, watermark, signature, UI chrome, text, collage.${looksBit}`,
+      wardrobeBits,
+      `Adults 18+ only. Single full-body standing figure on a clean simple background.`,
+    ].join(" ");
+  }
+
+  if (mode === "adjust") {
+    return [
+      `Image 1 is the CURRENT illustrated companion of adult ${museName}. Image 2 (when present) is STYLE craft only — ignore Image 2 face/outfit.`,
+      `Redraw her as the SAME anime companion with the requested trait/outfit updates — keep face identity, hair vibe, and body continuity from Image 1 unless the user overrode those traits.`,
+      `FULL-LENGTH standing 9:16, crown-to-feet. Do not switch to a different character.`,
+      COMPANION_QUALITY_BAR,
+      `FORBIDDEN: photoreal conversion, watermark, text, collage.${looksBit}`,
+      wardrobeBits,
+      `Adults 18+ only. Single full-body standing figure on a clean simple background.`,
+    ].join(" ");
+  }
+
+  // likeness — optional Muse photo lock
+  return [
+    `Image 1 is the likeness photo of adult ${museName}. Image 2 (when present) is STYLE ONLY — JuicyChat / Ani craft. Keep Image 1's face. NEVER copy Image 2's face, hair, body, or outfit.`,
+    `Paint a premium FULL-LENGTH standing anime companion of the SAME woman: crown-to-feet in 9:16, flirty eye contact — NOT a bust crop, NOT a muddy photo filter.`,
+    `CRITICAL IDENTITY LOCK from Image 1: facial proportions, eyes, nose, mouth, jaw, skin undertone, and Natural traits unless user overrode them.`,
+    COMPANION_QUALITY_BAR,
+    `FORBIDDEN: photoreal selfie, CSS posterize, 3D doll, chibi, collage, watermark, text.${looksBit}`,
+    wardrobeBits,
+    `Adults 18+ only. Single full-body standing figure on a clean simple background.`,
+  ].join(" ");
 }
 
 /** Styles that attach the JuicyChat anime style-ref as a second edit image. */
