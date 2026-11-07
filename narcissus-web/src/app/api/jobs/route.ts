@@ -47,7 +47,8 @@ import {
 export const runtime = "nodejs";
 // Vercel plan caps: keep ≤60s for deployability. Long Comfy jobs need a
 // dedicated worker / higher plan — Studio UI still ships.
-export const maxDuration = 60;
+// Undress InstantID/FaceID + strip refine often exceeds 60s on cold GPU.
+export const maxDuration = 300;
 
 const MAX_BYTES = 12 * 1024 * 1024;
 const MODES: JobMode[] = ["faceswap", "undress", "custom", "scene", "video"];
@@ -194,9 +195,9 @@ export async function POST(req: NextRequest) {
       faceUploadedName = faceUploaded.filename;
     }
 
-    // NA-75: prefer InstantID (SDXL RealVis) for undress/scene identity.
-    // NA-78: cock/penis undress forces FaceID + epicrealism — RealVisXL
-    // InstantID soft-censors genitals even when prompts demand a cock.
+    // Undress: FaceID + epicrealism (SD1.5) — InstantID/RealVisXL soft-censors
+    // lingerie/genitals and leaves subjects clothed. Scene still prefers InstantID.
+    // NA-78: cock undress also FaceID + epicrealism.
     const sdxlCkpt = await resolveCheckpoint(
       IDENTITY_SDXL_CKPTS,
       "__missing_sdxl__",
@@ -208,7 +209,7 @@ export async function POST(req: NextRequest) {
     );
     const needsCockBody = getBodyType(bodyType).needsCock;
     const identityEngine: IdentityEngine =
-      mode === "undress" && needsCockBody
+      mode === "undress"
         ? "faceid"
         : hasSdxl
           ? "instantid"
@@ -219,12 +220,17 @@ export async function POST(req: NextRequest) {
     const realismCkpt =
       mode === "faceswap"
         ? null
-        : mode === "undress" || mode === "scene"
-          ? identityCkpt
-          : await resolveCheckpoint(
+        : mode === "undress"
+          ? await resolveCheckpoint(
               REALISM_CKPTS,
-              "v1-5-pruned-emaonly-fp16.safetensors",
-            );
+              sd15Ckpt,
+            )
+          : mode === "scene"
+            ? identityCkpt
+            : await resolveCheckpoint(
+                REALISM_CKPTS,
+                "v1-5-pruned-emaonly-fp16.safetensors",
+              );
     const undressCkpt = mode === "undress" ? realismCkpt : null;
 
     const graph =

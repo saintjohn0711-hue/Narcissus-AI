@@ -321,7 +321,7 @@ export function MusePresence({
       form.set("bodyType", "female");
       form.set(
         "prompt",
-        "Tasteful full-length adult nude anime companion illustration, coherent anatomy, same face identity, standing pose, clean background.",
+        "completely naked adult woman, fully nude, bare breasts, bare nipples, bare hips, bare crotch, no lingerie, no bra, no panties, no lace, skin only, coherent anatomy, same face identity, standing pose, clean background",
       );
       const res = await fetch("/api/jobs", { method: "POST", body: form });
       const data = (await res.json()) as {
