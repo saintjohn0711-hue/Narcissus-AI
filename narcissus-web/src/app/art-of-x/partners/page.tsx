@@ -2,11 +2,12 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
+import { CatalogMultiSelect } from "@/components/CatalogMultiSelect";
 import { PartnerCard } from "@/components/PartnerCard";
 import {
-  ALL_KINKS,
-  DONE_ACTS,
+  ACT_GROUPS,
   DYN_TAGS,
+  KINK_GROUPS,
   MUSE_SORT_OPTIONS,
   PARTNER_PHOTO_LIMITS,
   PERSON_GENDERS,
@@ -375,8 +376,8 @@ export default function PartnersPage() {
       setEditing((prev) => (prev ? { ...prev, looks: result.looks } : prev));
       setLooksNote(
         result.source === "vision"
-          ? "Looks filled from chosen photo(s) via vision."
-          : "Looks draft from chosen photo(s) — edit as needed. Add a vision API key for sharper descriptions.",
+          ? "Sexy looks blurb filled from chosen photo(s) via vision — edit freely."
+          : "Sensual looks draft from chosen photo(s) — edit as needed. Add a vision API key for sharper photo-true descriptions.",
       );
     } catch (err) {
       setLooksNote(
@@ -721,68 +722,50 @@ export default function PartnersPage() {
                     }`}
               </button>
             </div>
-            <input
+            <textarea
               value={editing.looks}
               onChange={(e) => {
                 setEditing({ ...editing, looks: e.target.value });
                 setLooksNote(null);
               }}
-              placeholder="Hair, build, style — or pull from chosen photos"
-              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+              rows={4}
+              placeholder="Sexy, specific looks — hair, body, presence — or pull from chosen photos"
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 leading-relaxed"
             />
             {looksNote && (
               <p className="text-xs text-[#c4b7a8]">{looksNote}</p>
             )}
           </div>
 
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-3">
             <legend className="text-sm uppercase tracking-[0.16em]">
-              Types of sex / acts done
+              Acts logged
             </legend>
-            <div className="flex flex-wrap gap-2">
-              {DONE_ACTS.map((act) => {
-                const on = editing.doneActs.includes(act);
-                return (
-                  <button
-                    key={act}
-                    type="button"
-                    onClick={() => toggleAct(act)}
-                    className={`rounded-sm border px-2.5 py-1 text-xs ${
-                      on
-                        ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
-                        : "border-[var(--line)] text-[#c4b7a8]"
-                    }`}
-                  >
-                    {act}
-                  </button>
-                );
-              })}
-            </div>
+            <p className="text-xs text-[var(--muted)]">
+              Search the catalog, add what you&apos;ve done — selected list stays
+              easy to scan.
+            </p>
+            <CatalogMultiSelect
+              groups={ACT_GROUPS}
+              selected={editing.doneActs}
+              onToggle={toggleAct}
+              searchPlaceholder="Search acts — oral, toys, public…"
+            />
           </fieldset>
 
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-3">
             <legend className="text-sm uppercase tracking-[0.16em]">
               Kinks
             </legend>
-            <div className="flex flex-wrap gap-2">
-              {ALL_KINKS.map((tag) => {
-                const on = editing.kinks.some((k) => k.tag === tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleKink(tag)}
-                    className={`rounded-sm border px-2.5 py-1 text-xs ${
-                      on
-                        ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
-                        : "border-[var(--line)] text-[#c4b7a8]"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
+            <p className="text-xs text-[var(--muted)]">
+              Grouped desires — oral, penetration, toys, power, and more.
+            </p>
+            <CatalogMultiSelect
+              groups={KINK_GROUPS}
+              selected={normalizeKinks(editing.kinks).map((k) => k.tag)}
+              onToggle={toggleKink}
+              searchPlaceholder="Search kinks — bondage, free-use…"
+            />
           </fieldset>
 
           <fieldset className="space-y-2">
