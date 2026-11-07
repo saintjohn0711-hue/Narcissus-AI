@@ -414,6 +414,86 @@ body {
   opacity: 0.45;
 }
 
+.muse-presence-style-cartoon .muse-presence-photo {
+  filter: contrast(1.28) saturate(1.55) brightness(1.08);
+}
+
+.muse-presence-style-cartoon .muse-presence-glow {
+  background: radial-gradient(
+    circle,
+    rgba(255, 180, 220, 0.32) 0%,
+    rgba(0, 229, 255, 0.12) 45%,
+    transparent 70%
+  );
+}
+
+.muse-presence-style-cartoon .muse-presence-veil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 200, 230, 0.18),
+    transparent 38%,
+    rgba(120, 200, 255, 0.14)
+  );
+  mix-blend-mode: soft-light;
+}
+
+/* xAI Companion result — illustrated anime, light CSS so art reads */
+.muse-presence-style-cartoon-matched .muse-presence-photo {
+  filter: contrast(1.04) saturate(1.1) brightness(1.02);
+  animation: muse-companion-breathe 5.2s ease-in-out infinite alternate;
+}
+
+.muse-presence-style-cartoon-matched .muse-presence-veil::after {
+  opacity: 0.28;
+}
+
+/* Ani-like living idle: head sway + eye shimmer + soft blink veil */
+.muse-presence--companion-living .muse-presence-parallax {
+  animation: muse-companion-sway 8.5s ease-in-out infinite alternate;
+  transform-origin: 50% 35%;
+}
+
+.muse-presence-eye-shimmer {
+  position: absolute;
+  left: 28%;
+  top: 28%;
+  width: 44%;
+  height: 14%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(180, 220, 255, 0.12) 40%,
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 2;
+  animation: muse-eye-shimmer 3.6s ease-in-out infinite;
+}
+
+.muse-presence-blink {
+  position: absolute;
+  left: 22%;
+  top: 26%;
+  width: 56%;
+  height: 16%;
+  border-radius: 40%;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 10, 18, 0.55) 0%,
+    rgba(8, 10, 18, 0.15) 45%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+  animation: muse-blink 5.8s ease-in-out infinite;
+}
+
 .muse-presence-style-cyberpunk .muse-presence-photo {
   filter: contrast(1.2) saturate(1.25) hue-rotate(-8deg) brightness(0.98);
 }
@@ -453,6 +533,58 @@ body {
   }
 }
 
+@keyframes muse-companion-breathe {
+  from {
+    transform: scale(1.05) translate3d(0, 0.6%, 0);
+  }
+  to {
+    transform: scale(1.09) translate3d(0, -1.4%, 0);
+  }
+}
+
+@keyframes muse-companion-sway {
+  from {
+    transform: rotate(-1.1deg) translate3d(-0.6%, 0.3%, 0);
+  }
+  to {
+    transform: rotate(1.25deg) translate3d(0.7%, -0.4%, 0);
+  }
+}
+
+@keyframes muse-eye-shimmer {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scaleX(1) translate3d(0, 0, 0);
+  }
+  40% {
+    opacity: 0.7;
+    transform: scaleX(1.06) translate3d(2%, -4%, 0);
+  }
+  70% {
+    opacity: 0.35;
+    transform: scaleX(0.98) translate3d(-1%, 2%, 0);
+  }
+}
+
+@keyframes muse-blink {
+  0%,
+  86%,
+  100% {
+    opacity: 0;
+    transform: scaleY(0.15);
+  }
+  88%,
+  91% {
+    opacity: 0.85;
+    transform: scaleY(1);
+  }
+  93% {
+    opacity: 0;
+    transform: scaleY(0.15);
+  }
+}
+
 @keyframes muse-glow-sway {
   from {
     opacity: 0.55;
@@ -474,7 +606,10 @@ body {
   .partner-card,
   .partner-lightbox,
   .muse-presence-photo,
-  .muse-presence-glow {
+  .muse-presence-glow,
+  .muse-presence--companion-living .muse-presence-parallax,
+  .muse-presence-eye-shimmer,
+  .muse-presence-blink {
     animation: none !important;
   }
 }

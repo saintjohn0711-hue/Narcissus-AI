@@ -13,7 +13,7 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
-  buildAnimeCssFallback,
+  buildStyledCssFallback,
   loadCachedPortrait,
   loadPresenceStyle,
   MUSE_PRESENCE_STYLES,
@@ -28,6 +28,8 @@ type MusePresenceProps = {
   variant?: "rail" | "compact";
 };
 
+type MatchSource = "xai" | "local" | null;
+
 export function MusePresence({
   partner,
   variant = "rail",
@@ -36,6 +38,7 @@ export function MusePresence({
   const photos = partner.photos || [];
   const [style, setStyle] = useState<MusePresenceStyle>("realistic");
   const [generated, setGenerated] = useState<string | null>(null);
+  const [matchSource, setMatchSource] = useState<MatchSource>(null);
   const [busy, setBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
@@ -50,7 +53,10 @@ export function MusePresence({
   useEffect(() => {
     const next = loadPresenceStyle(partner.id);
     setStyle(next);
-    setGenerated(loadCachedPortrait(partner.id, next, mainPhoto(partner)));
+    const cached = loadCachedPortrait(partner.id, next, mainPhoto(partner));
+    setGenerated(cached);
+    // v3 cache only persists xAI results — local cel is never saved.
+    setMatchSource(cached ? "xai" : null);
     setGenError(null);
     setPhotoIndex(
       Math.min(
@@ -65,6 +71,37 @@ export function MusePresence({
     if (style !== "realistic" && generated) return generated;
     return livePhoto;
   }, [style, generated, livePhoto]);
+
+  const aiMatched =
+    Boolean(generated) &&
+    matchSource === "xai" &&
+    (style === "anime" || style === "cartoon");
+
+  const companionLiving =
+    style === "cartoon" && Boolean(generated) && matchSource === "xai";
+
+  async function applyLocalFallback(
+    targetStyle: MusePresenceStyle,
+    sourcePhoto: string,
+    message: string,
+  ): Promise<boolean> {
+    if (targetStyle !== "anime" && targetStyle !== "cartoon") return false;
+    const fallback = await buildStyledCssFallback(
+      sourcePhoto,
+      targetStyle === "cartoon" ? "cartoon" : "anime",
+    );
+    if (!fallback) return false;
+    setGenerated(fallback);
+    setMatchSource("local");
+    // Do not persist provisional cel as if it were a finished Companion.
+    // Leave cache empty so a later keyed session can auto-generate for real.
+    setGenError(
+      targetStyle === "cartoon"
+        ? `${message} Provisional cel sketch only — not a finished Ani companion. Set XAI_API_KEY for the real illustrated avatar.`
+        : `${message} Provisional cel sketch only — not a finished anime match. Set XAI_API_KEY for the real illustrated look.`,
+    );
+    return true;
+  }
 
   async function generateStyled(
     targetStyle: MusePresenceStyle,
@@ -85,7 +122,7 @@ export function MusePresence({
         }),
       });
       if (!res.ok) {
-        let message = "Couldn’t restyle — using local anime match.";
+        let message = "Couldn’t restyle.";
         try {
           const data = (await res.json()) as {
             message?: string;
@@ -93,41 +130,44 @@ export function MusePresence({
           };
           if (data.error === "xai_not_configured") {
             message =
-              "No XAI_API_KEY — showing local anime match from her photo.";
+              targetStyle === "cartoon"
+                ? "No XAI_API_KEY — Companion needs xAI for Ani-style anime."
+                : targetStyle === "anime"
+                  ? "No XAI_API_KEY — Anime match needs xAI."
+                  : "No XAI_API_KEY — CSS look stays on.";
           } else if (data.message) {
             message = data.message;
           }
         } catch {
           // keep default
         }
-        if (targetStyle === "anime") {
-          const fallback = await buildAnimeCssFallback(sourcePhoto);
-          if (fallback) {
-            setGenerated(fallback);
-            saveCachedPortrait(partner.id, targetStyle, fallback, sourcePhoto);
-            setGenError(message);
-            return;
-          }
-        }
-        setGenError(message);
+        const used = await applyLocalFallback(
+          targetStyle,
+          sourcePhoto,
+          message,
+        );
+        if (!used) setGenError(message);
         return;
       }
-      const data = (await res.json()) as { image?: string };
+      const data = (await res.json()) as {
+        image?: string;
+        source?: string;
+      };
       if (data.image) {
         setGenerated(data.image);
+        setMatchSource("xai");
         saveCachedPortrait(partner.id, targetStyle, data.image, sourcePhoto);
+        setGenError(null);
       }
     } catch {
-      if (targetStyle === "anime") {
-        const fallback = await buildAnimeCssFallback(sourcePhoto);
-        if (fallback) {
-          setGenerated(fallback);
-          saveCachedPortrait(partner.id, targetStyle, fallback, sourcePhoto);
-          setGenError("AI restyle failed — local anime match from her photo.");
-          return;
-        }
-      }
-      setGenError("Restyle failed — CSS look stays on.");
+      const used = await applyLocalFallback(
+        targetStyle,
+        sourcePhoto,
+        targetStyle === "cartoon"
+          ? "AI companion restyle failed."
+          : "AI anime restyle failed.",
+      );
+      if (!used) setGenError("Restyle failed — CSS look stays on.");
     } finally {
       setBusy(false);
     }
@@ -139,10 +179,12 @@ export function MusePresence({
     setGenError(null);
     if (next === "realistic") {
       setGenerated(null);
+      setMatchSource(null);
       return;
     }
     const cached = loadCachedPortrait(partner.id, next, livePhoto);
     setGenerated(cached);
+    setMatchSource(cached ? "xai" : null);
     const meta = MUSE_PRESENCE_STYLES.find((s) => s.id === next);
     if (
       meta?.autoGenerate &&
@@ -155,28 +197,19 @@ export function MusePresence({
     }
   }
 
-  // Auto anime/styled generate when landing on a saved non-realistic style with photo but no cache
-  useEffect(() => {
-    if (!livePhoto || style === "realistic" || generated || busy) return;
-    const meta = MUSE_PRESENCE_STYLES.find((s) => s.id === style);
-    if (!meta?.autoGenerate) return;
-    const key = `${partner.id}:${style}:${livePhoto.length}`;
-    if (autoKey.current === key) return;
-    autoKey.current = key;
-    void generateStyled(style, livePhoto);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-shot when style+photo ready
-  }, [partner.id, style, livePhoto, generated, busy]);
-
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
-    const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-    setParallax({ x: nx * 8, y: ny * 5 });
+    const nx = (e.clientX - rect.left) / rect.width - 0.5;
+    const ny = (e.clientY - rect.top) / rect.height - 0.5;
+    setParallax({ x: nx * -10, y: ny * -8 });
   }
 
   function onPointerLeave() {
     setParallax({ x: 0, y: 0 });
   }
+
+  const styleLabel =
+    MUSE_PRESENCE_STYLES.find((s) => s.id === style)?.label ?? style;
 
   return (
     <aside
@@ -185,8 +218,14 @@ export function MusePresence({
     >
       <div
         className={`muse-presence-stage muse-presence-style-${style}${
-          style === "anime" && generated ? " muse-presence-style-anime-matched" : ""
-        }`}
+          style === "anime" && aiMatched
+            ? " muse-presence-style-anime-matched"
+            : ""
+        }${
+          style === "cartoon" && aiMatched
+            ? " muse-presence-style-cartoon-matched"
+            : ""
+        }${companionLiving ? " muse-presence--companion-living" : ""}`}
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
       >
@@ -205,6 +244,12 @@ export function MusePresence({
               className="muse-presence-photo"
               draggable={false}
             />
+            {companionLiving && (
+              <>
+                <span className="muse-presence-eye-shimmer" aria-hidden />
+                <span className="muse-presence-blink" aria-hidden />
+              </>
+            )}
           </div>
         ) : (
           <div className="muse-presence-empty">
@@ -233,10 +278,15 @@ export function MusePresence({
           </p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--soft)]">
             {busy
-              ? "Matching her look…"
+              ? style === "cartoon"
+                ? "Summoning companion…"
+                : "Matching her look…"
               : style === "realistic"
                 ? "Breathing photo"
-                : MUSE_PRESENCE_STYLES.find((s) => s.id === style)?.label}
+                : matchSource === "local" &&
+                    (style === "cartoon" || style === "anime")
+                  ? `${styleLabel} · provisional`
+                  : styleLabel}
           </p>
         </div>
       </div>
@@ -311,12 +361,16 @@ export function MusePresence({
             {busy
               ? style === "anime"
                 ? "Matching anime…"
-                : "Restyling…"
-              : generated
+                : style === "cartoon"
+                  ? "Summoning companion…"
+                  : "Restyling…"
+              : generated && matchSource === "xai"
                 ? "Regenerate AI look"
                 : style === "anime"
                   ? "Match anime to her photo"
-                  : "Generate AI look"}
+                  : style === "cartoon"
+                    ? "Make Ani companion from her photo"
+                    : "Generate AI look"}
           </button>
         )}
         {genError && (
