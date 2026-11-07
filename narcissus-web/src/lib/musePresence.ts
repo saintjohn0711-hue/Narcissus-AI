@@ -70,8 +70,8 @@ export function isMusePresenceStyle(v: string): v is MusePresenceStyle {
 }
 
 const STYLE_STORAGE = "narcissus.artOfX.musePresenceStyle.v1";
-/** v4: Companion wardrobe options in cache key. */
-const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v4";
+/** v5: full-body Companion + exact Muse trait picks in cache key. */
+const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v5";
 
 export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
   if (typeof window === "undefined") return "realistic";
@@ -217,13 +217,15 @@ export function styleEditPrompt(
       ].join(" ");
     case "cartoon":
       return [
-        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is the STYLE bible — JuicyChat / Grok Ani–class living anime companion portrait. Match Image 2's illustration craft exactly; keep Image 1's face identity.`,
-        `Create a sexy anime companion avatar of ${museName} — a living chat companion presence like Grok's Ani: full-body-capable intimate portrait, flirty, expressive face looking at the viewer, filling the frame like a companion app stage.`,
-        `CRITICAL IDENTITY LOCK from Image 1: same hair color/length/parting/hairline (unless customize overrides length/style only), skin undertone, facial proportions, eye color, nose and mouth character. She must still read as the same Muse — never replace her with the style-ref girl.`,
-        `STYLE LOCK from Image 2: modern high-quality anime/manga illustration — clean dark outlines, soft cel shading plus subtle gradients, large crystalline expressive eyes with thick lashes and catchlights, soft blush, glossy lips, polished hair strands with rim light, fair smooth illustrated skin, shallow-DOF indoor companion mood.`,
+        `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is the STYLE bible — JuicyChat / Grok Ani–class living anime companion. Match Image 2's illustration craft exactly; keep Image 1's face identity.`,
+        `Create a sexy FULL-LENGTH standing anime companion of ${museName} like Grok's Ani: head-to-toe in frame (crown of head through feet visible), vertical companion-app scale, flirty, looking at the viewer — NOT a bust crop, NOT waist-up only.`,
+        `CRITICAL IDENTITY LOCK from Image 1: facial proportions, nose and mouth character, and every from-photo trait (eye color, hair color/length, skin undertone, body) must match the Muse photo unless the user explicitly overrode that trait. Never invent blue eyes on a brown-eyed Muse. Never replace her with the style-ref girl.`,
+        `STYLE LOCK from Image 2: modern high-quality anime/manga illustration — clean dark outlines, soft cel shading plus subtle gradients, large crystalline expressive eyes with thick lashes and catchlights, soft blush, glossy lips, polished hair strands with rim light, shallow-DOF indoor companion mood.`,
         `NOT photoreal. NOT a CSS posterize or photo filter. NOT 3D plastic Character.AI doll. NOT chibi. Clearly hand-illustrated / digital-painted anime companion.${looksBit}`,
-        wardrobe ? companionWardrobePromptBits(wardrobe) : "",
-        `Adults 18+ only. Single bust/portrait, no watermark, no text, no UI chrome.`,
+        wardrobe
+          ? companionWardrobePromptBits(wardrobe, looks)
+          : "FRAMING: FULL-LENGTH standing head-to-toe companion.",
+        `Adults 18+ only. Single full-body standing figure, no watermark, no text, no UI chrome.`,
       ]
         .filter(Boolean)
         .join(" ");

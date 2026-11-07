@@ -13,11 +13,8 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
-  COMPANION_BODY,
   COMPANION_CLOTHING,
-  COMPANION_EXPRESSION,
-  COMPANION_EYES,
-  COMPANION_HAIR,
+  COMPANION_FEATURE_GROUPS,
   COMPANION_LOOK_STYLES,
   loadCompanionWardrobe,
   saveCompanionWardrobe,
@@ -269,16 +266,7 @@ export function MusePresence({
 
   const featureChips =
     wardrobeTab === "features"
-      ? [
-          { title: "Hair", options: COMPANION_HAIR, key: "hair" as const },
-          { title: "Eyes", options: COMPANION_EYES, key: "eyes" as const },
-          { title: "Body", options: COMPANION_BODY, key: "body" as const },
-          {
-            title: "Expression",
-            options: COMPANION_EXPRESSION,
-            key: "expression" as const,
-          },
-        ]
+      ? COMPANION_FEATURE_GROUPS
       : wardrobeTab === "style"
         ? [
             {
@@ -476,6 +464,13 @@ export function MusePresence({
                 </button>
               ))}
             </div>
+            {wardrobeTab === "features" && (
+              <p className="text-[10px] leading-snug text-[var(--muted)]">
+                Defaults are <span className="text-[var(--soft)]">Match Muse</span>{" "}
+                from her photo — eye/hair/skin colors stay hers unless you
+                override.
+              </p>
+            )}
             {featureChips.map((group) => (
               <div key={group.key} className="space-y-1.5">
                 <p className="text-[10px] uppercase tracking-[0.18em] text-[var(--soft)]">
@@ -483,8 +478,15 @@ export function MusePresence({
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {group.options.map((opt) => {
-                    const selected = wardrobe[group.key] === opt.id;
+                    const selected =
+                      wardrobe[group.key as keyof CompanionWardrobe] ===
+                      opt.id;
                     const isNude = opt.id === "nude";
+                    const isMatch = opt.id === "from-photo";
+                    const swatch =
+                      "swatch" in opt && typeof opt.swatch === "string"
+                        ? opt.swatch
+                        : null;
                     return (
                       <button
                         key={opt.id}
@@ -492,19 +494,32 @@ export function MusePresence({
                         title={opt.hint}
                         disabled={busy}
                         onClick={() =>
-                          applyWardrobePatch({ [group.key]: opt.id })
+                          applyWardrobePatch({
+                            [group.key]: opt.id,
+                          } as Partial<CompanionWardrobe>)
                         }
-                        className={`rounded-sm border px-2 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
+                        className={`inline-flex items-start gap-1.5 rounded-sm border px-2 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
                           selected
                             ? isNude
                               ? "border-[var(--danger)]/55 bg-[var(--danger)]/15 text-[#f0c4b8]"
-                              : "border-[var(--accent)]/55 bg-[var(--accent)]/12 text-[var(--ink)]"
+                              : isMatch
+                                ? "border-[var(--glow)]/55 bg-[var(--glow)]/12 text-[var(--ink)]"
+                                : "border-[var(--accent)]/55 bg-[var(--accent)]/12 text-[var(--ink)]"
                             : "border-[var(--line)] text-[var(--muted)] hover:border-[var(--accent)]/40 hover:text-[var(--soft)]"
                         }`}
                       >
-                        <span className="block font-medium">{opt.label}</span>
-                        <span className="mt-0.5 block text-[9px] leading-snug opacity-75">
-                          {opt.hint}
+                        {swatch && (
+                          <span
+                            className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border border-white/20"
+                            style={{ background: swatch }}
+                            aria-hidden
+                          />
+                        )}
+                        <span>
+                          <span className="block font-medium">{opt.label}</span>
+                          <span className="mt-0.5 block text-[9px] leading-snug opacity-75">
+                            {opt.hint}
+                          </span>
                         </span>
                       </button>
                     );
@@ -514,8 +529,8 @@ export function MusePresence({
             ))}
             {wardrobe.clothing === "nude" && (
               <p className="text-[10px] leading-snug text-[#f0c4b8]/90">
-                Nude is adults 18+ only — explicit illustrated companion, same
-                Muse face identity.
+                Nude is adults 18+ only — explicit full-length illustrated
+                companion, same Muse face identity.
               </p>
             )}
           </div>
