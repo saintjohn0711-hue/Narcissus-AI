@@ -103,7 +103,9 @@ export const DEFAULT_COMPANION_WARDROBE: CompanionWardrobe = {
   bust: "from-photo",
   expression: "soft-gaze",
   look: "juichat",
-  clothing: "lingerie",
+  /** Casual first — lingerie/nude via Adjust after a finished Companion exists
+   * (xAI text-to-image often moderates NSFW on cold generate). */
+  clothing: "casual",
 };
 
 type Opt<T extends string> = {
