@@ -193,9 +193,9 @@ function wireInstantId(
 ): { model: [string, number]; positive: [string, number]; negative: [string, number] } {
   const id = Math.min(1, Math.max(0.35, identity));
   const undress = opts?.undressBody === true;
-  // Face IP stays strong; body ControlNet loosens on undress so fabric can go.
-  const ipWeight = undress ? 0.72 + id * 0.18 : 0.75 + id * 0.25;
-  const cnStrength = undress ? 0.2 + id * 0.08 : 0.45 + id * 0.1;
+  // Face IP stays strong; body ControlNet nearly off on undress so fabric can go.
+  const ipWeight = undress ? 0.7 + id * 0.18 : 0.75 + id * 0.25;
+  const cnStrength = undress ? 0.12 + id * 0.06 : 0.45 + id * 0.1;
   graph["30"] = {
     class_type: "InstantIDModelLoader",
     inputs: { instantid_file: "ip-adapter.bin" },
@@ -221,8 +221,9 @@ function wireInstantId(
       ip_weight: ipWeight,
       cn_strength: cnStrength,
       start_at: 0.0,
-      end_at: undress ? 0.72 : 0.85,
-      noise: undress ? 0.45 : 0.4,
+      // End ControlNet early on undress so mid/late steps can erase clothes.
+      end_at: undress ? 0.55 : 0.85,
+      noise: undress ? 0.5 : 0.4,
       combine_embeds: "average",
       // Face crop for undress (no clothing silhouette lock); full frame else.
       image_kps: undress ? ["17", 0] : ["3", 0],
@@ -410,10 +411,10 @@ export function buildUndressPrompt(
   const denoise =
     opts?.denoise ??
     (useInstantId
-      ? Math.max(0.64, Math.min(0.74, denoiseForIdentity("undress", identity) + 0.16))
+      ? Math.max(0.7, Math.min(0.8, denoiseForIdentity("undress", identity) + 0.22))
       : needsCock
-        ? Math.max(0.58, Math.min(0.7, denoiseForIdentity("undress", identity) + 0.14))
-        : Math.max(0.52, Math.min(0.64, denoiseForIdentity("undress", identity) + 0.06)));
+        ? Math.max(0.6, Math.min(0.72, denoiseForIdentity("undress", identity) + 0.16))
+        : Math.max(0.55, Math.min(0.68, denoiseForIdentity("undress", identity) + 0.1)));
   const ckpt =
     opts?.checkpoint?.trim() ||
     (useInstantId
@@ -537,20 +538,69 @@ export function buildUndressPrompt(
     inputs: { samples: ["7", 0], vae: ["1", 2] },
   };
 
-  // NA-78: second anatomy refine — after undress, push cock onto the nude body
-  // without InstantID clothing lock (FaceID model still on node 1 / 20).
+  // NA-79: clothing strip refine on the *base* checkpoint (no InstantID /
+  // FaceID). Identity adapters fight fabric erasure; ReActor restores face after.
   let decodeRef: [string, number] = ["8", 0];
-  if (needsCock && (useFaceId || !useInstantId)) {
+  {
+    const stripPos = [
+      stripClothes,
+      anatomy.positive,
+      "bare breasts or bare chest, bare crotch, nude skin replacing every garment",
+      "same pose framing and face as the previous frame",
+    ].join(", ");
+    const stripNeg = [
+      NEGATIVE,
+      anatomy.negative,
+      "clothes, clothing, shirt, pants, dress, bra, panties, underwear, fabric, textile, garment, leotard, swimsuit, singlet, covered, dressed",
+    ].join(", ");
+    graph["34"] = {
+      class_type: "CLIPTextEncode",
+      inputs: { text: stripPos, clip: ["1", 1] },
+    };
+    graph["35"] = {
+      class_type: "CLIPTextEncode",
+      inputs: { text: stripNeg, clip: ["1", 1] },
+    };
+    graph["36"] = {
+      class_type: "VAEEncode",
+      inputs: { pixels: ["8", 0], vae: ["1", 2] },
+    };
+    graph["37"] = {
+      class_type: "KSampler",
+      inputs: {
+        seed: (seed + 7) >>> 0,
+        steps: 22,
+        cfg: useInstantId ? 5.0 : 6.5,
+        sampler_name: "euler",
+        scheduler: "normal",
+        denoise: useInstantId ? 0.55 : 0.48,
+        // Raw ckpt — InstantID/FaceID MODEL fights clothing removal.
+        model: ["1", 0],
+        positive: ["34", 0],
+        negative: ["35", 0],
+        latent_image: ["36", 0],
+      },
+    };
+    graph["38"] = {
+      class_type: "VAEDecode",
+      inputs: { samples: ["37", 0], vae: ["1", 2] },
+    };
+    decodeRef = ["38", 0];
+  }
+
+  // NA-78: anatomy refine — base model only, high denoise so a cock can appear
+  // where FaceID/img2img left a vagina. Face restored by ReActor afterward.
+  if (needsCock) {
     const cockPos = [
       stripClothes,
       anatomy.positive,
-      "close-up clear penis and testicles visible between the legs, cock in frame, photo-real genitals",
-      "exact same face and body pose as the previous frame",
+      "replace the crotch with a clearly visible penis and testicles, photo-real cock shaft and glans, scrotum hanging, no vagina",
+      "same face body pose and framing as the previous frame",
     ].join(", ");
     const cockNeg = [
       NEGATIVE,
       anatomy.negative,
-      "clothes, fabric, Barbie crotch, vagina, no penis, censored",
+      "clothes, fabric, Barbie crotch, vagina, vulva, pussy, no penis, missing penis, censored, mosaic",
     ].join(", ");
     graph["40"] = {
       class_type: "CLIPTextEncode",
@@ -562,18 +612,18 @@ export function buildUndressPrompt(
     };
     graph["42"] = {
       class_type: "VAEEncode",
-      inputs: { pixels: ["8", 0], vae: ["1", 2] },
+      inputs: { pixels: decodeRef, vae: ["1", 2] },
     };
     graph["43"] = {
       class_type: "KSampler",
       inputs: {
         seed: (seed + 17) >>> 0,
-        steps: 24,
-        cfg: 7.5,
+        steps: 28,
+        cfg: 8.0,
         sampler_name: "euler",
         scheduler: "normal",
-        denoise: 0.42,
-        model: modelRef,
+        denoise: 0.58,
+        model: ["1", 0],
         positive: ["40", 0],
         negative: ["41", 0],
         latent_image: ["42", 0],
