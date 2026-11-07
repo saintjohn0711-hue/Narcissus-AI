@@ -43,20 +43,21 @@ export function denoiseForIdentity(
   mode: Exclude<JobMode, "video">,
   identity = 0.85,
 ): number {
-  // Undress: body can change; head integrity is restored post-pass.
-  // Keep denoise moderate so pose/background don't drift.
+  // Undress: body can change; ReActor (+ light head-lock) restores identity.
+  // GFPGAN after-swap was the likeness killer — keep denoise high enough to
+  // strip clothes; ReActor with an upper-face source recovers identity.
   const base =
     mode === "faceswap"
       ? 0.28
       : mode === "undress"
-        ? 0.5
+        ? 0.48
         : mode === "scene"
           ? 0.4
           : 0.3;
   const clamped = Math.min(1, Math.max(0.35, identity));
   const factor = 1.35 - clamped; // 0.35..1.0
   if (mode === "undress") {
-    return Math.max(0.38, Math.min(0.56, base * (0.95 + factor * 0.12)));
+    return Math.max(0.4, Math.min(0.52, base * (0.95 + factor * 0.1)));
   }
   if (mode === "scene") {
     // Floor high enough that SD1.5 actually reshapes the frame (acts/outfits).
@@ -110,9 +111,10 @@ export function buildFaceSwapPrompt(
   const width = opts?.width ?? 768;
   const height = opts?.height ?? 768;
   const prefix = opts?.prefix ?? "narcissus_faceswap";
-  const restoreVisibility = opts?.restoreVisibility ?? 1;
+  // Prefer raw swap identity; heavy GFPGAN was washing faces into generics (NA-73).
+  const restoreVisibility = opts?.restoreVisibility ?? 0.45;
   const facedetection = opts?.facedetection ?? "retinaface_resnet50";
-  const faceRestore = opts?.faceRestore ?? "GFPGANv1.4.pth";
+  const faceRestore = opts?.faceRestore ?? "none";
 
   return {
     "1": {
@@ -276,7 +278,36 @@ export function buildUndressPrompt(
   };
 
   if (faceLock) {
-    // Stronger identity path: Options + FaceBoost → FaceSwapOpt → RestoreFace
+    // Identity-first ReActor path (NA-73):
+    // - Upper-body crop as face source (dead-center crop on full-body shots
+    //   often has no face; tiny full-frame faces embed weakly)
+    // - No GFPGAN FaceBoost / RestoreFace — they "beautify" away likeness
+    //   (insightface cosine ~0.62 with GFPGAN stack vs ~0.88 with none)
+    // - face_restore_model "none" keeps the raw inswapper identity
+    const faceX = Math.round(width * 0.18);
+    const faceY = Math.round(height * 0.0);
+    const faceW = Math.round(width * 0.64);
+    const faceH = Math.round(height * 0.48);
+    graph["16"] = {
+      class_type: "ImageCrop",
+      inputs: {
+        image: ["3", 0],
+        width: faceW,
+        height: faceH,
+        x: faceX,
+        y: faceY,
+      },
+    };
+    graph["17"] = {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["16", 0],
+        upscale_method: "lanczos",
+        width: 512,
+        height: 512,
+        crop: "disabled",
+      },
+    };
     graph["9"] = {
       class_type: "ReActorOptions",
       inputs: {
@@ -290,47 +321,25 @@ export function buildUndressPrompt(
         restore_swapped_only: true,
       },
     };
-    graph["11"] = {
-      class_type: "ReActorFaceBoost",
-      inputs: {
-        enabled: true,
-        boost_model: "GFPGANv1.4.pth",
-        interpolation: "Bicubic",
-        visibility: 1,
-        codeformer_weight: 0.4,
-        restore_with_main_after: true,
-      },
-    };
     graph["12"] = {
       class_type: "ReActorFaceSwapOpt",
       inputs: {
         enabled: true,
         input_image: ["8", 0],
-        source_image: ["3", 0],
+        source_image: ["17", 0],
         swap_model: "inswapper_128.onnx",
         facedetection: "retinaface_resnet50",
-        face_restore_model: "GFPGANv1.4.pth",
-        face_restore_visibility: 1,
-        codeformer_weight: 0.4,
+        face_restore_model: "none",
+        face_restore_visibility: 0.35,
+        codeformer_weight: 0.0,
         options: ["9", 0],
-        face_boost: ["11", 0],
-      },
-    };
-    graph["13"] = {
-      class_type: "ReActorRestoreFace",
-      inputs: {
-        image: ["12", 0],
-        facedetection: "retinaface_resnet50",
-        model: "GFPGANv1.4.pth",
-        visibility: 0.9,
-        codeformer_weight: 0.35,
       },
     };
     graph["15"] = {
       class_type: "SaveImage",
       inputs: {
         filename_prefix: `narcissus_undress_${body.id}_${stamp}`,
-        images: ["13", 0],
+        images: ["12", 0],
       },
     };
   } else {
@@ -445,6 +454,31 @@ export function buildScenePrompt(
   };
 
   if (faceLock) {
+    // Same identity-first ReActor as undress (upper-face crop, no GFPGAN).
+    const faceX = Math.round(width * 0.18);
+    const faceY = Math.round(height * 0.0);
+    const faceW = Math.round(width * 0.64);
+    const faceH = Math.round(height * 0.48);
+    graph["16"] = {
+      class_type: "ImageCrop",
+      inputs: {
+        image: ["3", 0],
+        width: faceW,
+        height: faceH,
+        x: faceX,
+        y: faceY,
+      },
+    };
+    graph["17"] = {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["16", 0],
+        upscale_method: "lanczos",
+        width: 512,
+        height: 512,
+        crop: "disabled",
+      },
+    };
     graph["9"] = {
       class_type: "ReActorOptions",
       inputs: {
@@ -458,30 +492,18 @@ export function buildScenePrompt(
         restore_swapped_only: true,
       },
     };
-    graph["11"] = {
-      class_type: "ReActorFaceBoost",
-      inputs: {
-        enabled: true,
-        boost_model: "GFPGANv1.4.pth",
-        interpolation: "Bicubic",
-        visibility: 1,
-        codeformer_weight: 0.4,
-        restore_with_main_after: true,
-      },
-    };
     graph["12"] = {
       class_type: "ReActorFaceSwapOpt",
       inputs: {
         enabled: true,
         input_image: ["8", 0],
-        source_image: ["3", 0],
+        source_image: ["17", 0],
         swap_model: "inswapper_128.onnx",
         facedetection: "retinaface_resnet50",
-        face_restore_model: "GFPGANv1.4.pth",
-        face_restore_visibility: 1,
-        codeformer_weight: 0.4,
+        face_restore_model: "none",
+        face_restore_visibility: 0.35,
+        codeformer_weight: 0.0,
         options: ["9", 0],
-        face_boost: ["11", 0],
       },
     };
     graph["15"] = {
