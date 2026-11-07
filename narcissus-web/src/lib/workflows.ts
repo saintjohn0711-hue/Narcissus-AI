@@ -100,17 +100,20 @@ export function undressCheckpoint(preferred?: string): string {
   return CKPT_UNDRESS_CANDIDATES[0]!;
 }
 
-/** Upper-body face crop → 512/640 square for InsightFace / InstantID / ReActor. */
+/**
+ * Upper-body face crop → square for ReActor. Wider/taller so off-center faces
+ * still land in the crop. InstantID identity uses the full frame (node 3).
+ */
 function wireUpperFaceCrop(
   graph: Record<string, unknown>,
   width: number,
   height: number,
   outSize = 640,
 ) {
-  const faceX = Math.round(width * 0.18);
+  const faceX = Math.round(width * 0.08);
   const faceY = Math.round(height * 0.0);
-  const faceW = Math.round(width * 0.64);
-  const faceH = Math.round(height * 0.48);
+  const faceW = Math.round(width * 0.84);
+  const faceH = Math.round(height * 0.7);
   graph["16"] = {
     class_type: "ImageCrop",
     inputs: {
@@ -183,8 +186,11 @@ function wireReactorPolish(
  *
  * Undress must NOT keypoint-lock the full clothed frame (`image_kps` = body):
  * that freezes fabric silhouettes so clothes stay on (NA-79) and blocks cock
- * anatomy (NA-78). Face-crop kps + softer ControlNet keeps InstantID face
- * while the body can go nude.
+ * anatomy (NA-78). Soft ControlNet + early end_at keeps InstantID face while
+ * the body can go nude.
+ *
+ * NA-81: InstantID `image` MUST be the full frame. Feeding the upper-face crop
+ * caused `Reference Image: No face detected.` on off-center photos.
  */
 function wireInstantId(
   graph: Record<string, unknown>,
@@ -214,7 +220,8 @@ function wireInstantId(
       instantid: ["30", 0],
       insightface: ["31", 0],
       control_net: ["32", 0],
-      image: ["17", 0],
+      // Full frame for identity — crop caused No face detected (NA-81).
+      image: ["3", 0],
       model: ["1", 0],
       positive: ["4", 0],
       negative: ["5", 0],
@@ -225,8 +232,8 @@ function wireInstantId(
       end_at: undress ? 0.55 : 0.85,
       noise: undress ? 0.5 : 0.4,
       combine_embeds: "average",
-      // Face crop for undress (no clothing silhouette lock); full frame else.
-      image_kps: undress ? ["17", 0] : ["3", 0],
+      // Soft pose hint on undress (weak CN); full frame always for kps safety.
+      image_kps: ["3", 0],
     },
   };
   return {

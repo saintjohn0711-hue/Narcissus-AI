@@ -280,13 +280,62 @@ export async function POST(req: NextRequest) {
                   checkpoint: realismCkpt || undefined,
                 });
 
-    let result = await runPromptToImages(graph, {
-      timeoutMs: mode === "video" ? 360_000 : 240_000,
-    });
+    let faceLockFallback = false;
+    let result;
+    try {
+      result = await runPromptToImages(graph, {
+        timeoutMs: mode === "video" ? 360_000 : 240_000,
+      });
+    } catch (err) {
+      // NA-81: InstantID "Reference Image: No face detected." → FaceID retry.
+      const msg = err instanceof Error ? err.message : String(err);
+      const noFace =
+        /no face detected/i.test(msg) || /Reference Image/i.test(msg);
+      if (
+        !noFace ||
+        identityEngine !== "instantid" ||
+        (mode !== "undress" && mode !== "scene") ||
+        (mode === "scene" && sceneTpl?.id === "facial")
+      ) {
+        throw err;
+      }
+      faceLockFallback = true;
+      if (mode === "undress") {
+        const cockFallback = getBodyType(bodyType).needsCock;
+        result = await runPromptToImages(
+          buildUndressPrompt(uploaded.filename, {
+            promptOverride,
+            identity: Math.max(identity, 0.88),
+            bodyType,
+            cockState,
+            cockSize,
+            checkpoint: sd15Ckpt || undefined,
+            faceLock: true,
+            identityEngine: "faceid",
+            denoise: cockFallback ? 0.68 : 0.62,
+          }),
+          { timeoutMs: 240_000 },
+        );
+      } else {
+        result = await runPromptToImages(
+          buildScenePrompt(uploaded.filename, {
+            promptOverride: [sceneTpl!.stillPrompt, promptOverride]
+              .filter(Boolean)
+              .join(", "),
+            identity: Math.max(identity, 0.85),
+            denoise: sceneDenoise(sceneTpl!.stillDenoise, identity),
+            faceLock: true,
+            prefix: `narcissus_scene_${sceneTpl!.id}`,
+            checkpoint: sd15Ckpt || undefined,
+            identityEngine: "faceid",
+          }),
+          { timeoutMs: 240_000 },
+        );
+      }
+    }
 
     // ReActor can emit a pure-black frame when the undress pass wiped the face
     // (or NSFW filter tripped). Detect and retry InstantID→FaceID→no-lock.
-    let faceLockFallback = false;
     if (mode === "undress" && result.images[0]) {
       try {
         const bytes = await fetchImageBytes(result.images[0]);
