@@ -100,17 +100,21 @@ export function undressCheckpoint(preferred?: string): string {
   return CKPT_UNDRESS_CANDIDATES[0]!;
 }
 
-/** Upper-body face crop → 512/640 square for InsightFace / InstantID / ReActor. */
+/**
+ * Upper-body face crop → square for ReActor. Wider/taller than the old
+ * 18%/64%/48% box so off-center faces still land in the crop (InstantID no
+ * longer uses this crop as its reference — see wireInstantId).
+ */
 function wireUpperFaceCrop(
   graph: Record<string, unknown>,
   width: number,
   height: number,
   outSize = 640,
 ) {
-  const faceX = Math.round(width * 0.18);
+  const faceX = Math.round(width * 0.08);
   const faceY = Math.round(height * 0.0);
-  const faceW = Math.round(width * 0.64);
-  const faceH = Math.round(height * 0.48);
+  const faceW = Math.round(width * 0.84);
+  const faceH = Math.round(height * 0.7);
   graph["16"] = {
     class_type: "ImageCrop",
     inputs: {
@@ -180,6 +184,12 @@ function wireReactorPolish(
  * NA-75 InstantID conditioning (SDXL). Mutates graph: adds InstantID loaders +
  * ApplyInstantIDAdvanced. Returns { model, positive, negative } node refs for
  * KSampler. Requires RealVisXL (or other SDXL) checkpoint already on node "1".
+ *
+ * NA-81: InstantID `image` MUST be the full scaled frame (node 3), not the
+ * upper-face crop. Cropping to top-center caused
+ * `Reference Image: No face detected.` on off-center / full-body photos
+ * (Studio showed the generic "ComfyUI reported a job error"). InsightFace
+ * finds the face in the full frame; ReActor still uses the face crop.
  */
 function wireInstantId(
   graph: Record<string, unknown>,
@@ -206,7 +216,8 @@ function wireInstantId(
       instantid: ["30", 0],
       insightface: ["31", 0],
       control_net: ["32", 0],
-      image: ["17", 0],
+      // Full frame — InsightFace locates the face. Do NOT use node 17 crop.
+      image: ["3", 0],
       model: ["1", 0],
       positive: ["4", 0],
       negative: ["5", 0],

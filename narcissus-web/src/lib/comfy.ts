@@ -158,6 +158,29 @@ function collectMedia(entry: HistoryEntry): ComfyImageRef[] {
   return animated.length ? animated : out;
 }
 
+/** Pull InstantID/Comfy exception text out of history status.messages. */
+export function comfyExecutionErrorMessage(entry: HistoryEntry): string {
+  const msgs = entry.status?.messages || [];
+  for (const raw of msgs) {
+    if (!Array.isArray(raw) || raw[0] !== "execution_error") continue;
+    const detail = raw[1] as
+      | {
+          exception_message?: string;
+          exception_type?: string;
+          node_type?: string;
+          node_id?: string | number;
+        }
+      | undefined;
+    if (!detail || typeof detail !== "object") continue;
+    const msg = String(detail.exception_message || "").trim();
+    const node = detail.node_type
+      ? ` (${detail.node_type}${detail.node_id != null ? ` #${detail.node_id}` : ""})`
+      : "";
+    if (msg) return `${msg}${node}`;
+  }
+  return "ComfyUI reported a job error";
+}
+
 export async function waitForPrompt(
   promptId: string,
   {
@@ -174,7 +197,7 @@ export async function waitForPrompt(
     const hist = (await res.json()) as Record<string, HistoryEntry>;
     const entry = hist[promptId];
     if (entry?.status?.status_str === "error") {
-      throw new Error("ComfyUI reported a job error");
+      throw new Error(comfyExecutionErrorMessage(entry));
     }
     if (entry?.outputs) {
       const media = collectMedia(entry);
