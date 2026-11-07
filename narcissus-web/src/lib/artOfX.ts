@@ -245,42 +245,69 @@ export const ART_OF_X_NAV = [
   },
 ] as const;
 
-export const DONE_ACTS = [
-  "Kissed",
-  "Made out",
-  "Handjob",
-  "Received handjob",
-  "Blowjob given",
-  "Blowjob received",
-  "Facial",
-  "Cum in mouth",
-  "Creampie",
-  "Creampie cleanup",
-  "Vaginal sex",
-  "Anal sex (gave)",
-  "Anal sex (received)",
-  "Pegging / strap-on",
-  "Rimming",
-  "69",
-  "Threesome",
-  "Group sex",
-  "Swinging",
-  "Public / semi-public",
-  "Watched by others",
-  "Voyeur",
-  "Dirty talk",
-  "Domination",
-  "Submission",
-  "Bondage",
-  "Spanking",
-  "Chastity / cage",
-  "Piss play",
-  "Roleplay",
-  "Crossdressing",
-  "Hotel / travel",
-  "Car sex",
-  "Overnight",
-] as const;
+/** Grouped catalog for acts logged (editor multi-select). */
+export const ACT_GROUPS: Array<{ cat: string; tags: string[] }> = [
+  {
+    cat: "Kiss / touch",
+    tags: ["Kissed", "Made out", "Handjob", "Received handjob", "Massage / body worship"],
+  },
+  {
+    cat: "Oral",
+    tags: [
+      "Blowjob given",
+      "Blowjob received",
+      "Facial",
+      "Cum in mouth",
+      "Rimming",
+      "69",
+      "Face-fucking",
+    ],
+  },
+  {
+    cat: "Penetration",
+    tags: [
+      "Vaginal sex",
+      "Anal sex (gave)",
+      "Anal sex (received)",
+      "Pegging / strap-on",
+      "Creampie",
+      "Creampie cleanup",
+      "Toys",
+    ],
+  },
+  {
+    cat: "Power / sensation",
+    tags: [
+      "Dirty talk",
+      "Domination",
+      "Submission",
+      "Bondage",
+      "Spanking",
+      "Chastity / cage",
+      "Edging",
+    ],
+  },
+  {
+    cat: "Social / place",
+    tags: [
+      "Threesome",
+      "Group sex",
+      "Swinging",
+      "Public / semi-public",
+      "Watched by others",
+      "Voyeur",
+      "Hotel / travel",
+      "Car sex",
+      "Overnight",
+    ],
+  },
+  {
+    cat: "Play / identity",
+    tags: ["Roleplay", "Crossdressing", "Piss play"],
+  },
+];
+
+export const DONE_ACTS = ACT_GROUPS.flatMap((g) => g.tags);
 
 export const DYN_TAGS = [
   "Long-term",
@@ -321,7 +348,11 @@ export const KINK_GROUPS: Array<{ cat: string; tags: string[] }> = [
   },
   {
     cat: "Penetration",
-    tags: ["Vaginal", "Anal", "Pegging", "Breeding", "Toys"],
+    tags: ["Vaginal", "Anal", "Pegging", "Breeding", "Double penetration"],
+  },
+  {
+    cat: "Toys",
+    tags: ["Toys", "Strap-on", "Vibrator", "Plug", "Cage"],
   },
   {
     cat: "Power",
@@ -329,7 +360,7 @@ export const KINK_GROUPS: Array<{ cat: string; tags: string[] }> = [
   },
   {
     cat: "Restraint / sensation",
-    tags: ["Bondage", "Spanking", "Cage", "Edging", "Praise", "Degradation"],
+    tags: ["Bondage", "Spanking", "Edging", "Praise", "Degradation"],
   },
   {
     cat: "Social / risk",

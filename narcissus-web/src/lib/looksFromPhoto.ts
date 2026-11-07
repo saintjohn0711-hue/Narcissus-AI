@@ -1,7 +1,7 @@
 /**
- * Pull a short "looks" line from partner photo(s).
+ * Pull a partner "looks" blurb from photo(s).
  * Prefer server vision (/api/art-of-x/describe-looks) when configured;
- * otherwise infer a draft from local color/framing analysis.
+ * otherwise infer a sensual draft from local color/framing analysis.
  */
 
 export type LooksHint = {
@@ -66,66 +66,118 @@ function sat(c: Rgb) {
   return (max - min) / max;
 }
 
-function hairLabel(c: Rgb): string {
+type HairCue = { label: string; texture: string };
+
+function hairCue(c: Rgb): HairCue {
   const L = lum(c);
   const S = sat(c);
-  if (L < 45) return "dark / black hair";
-  if (L < 90 && S < 0.25) return "dark brown hair";
-  if (L < 130 && c.r > c.b + 20) return "brown hair";
-  if (L >= 130 && L < 190 && S < 0.35) return "light brown / dirty blonde hair";
-  if (L >= 170 && S < 0.3) return "blonde / light hair";
-  if (c.r > c.g + 25 && c.r > c.b + 15 && L > 70) return "auburn / red hair";
-  if (S > 0.45 && (c.b > c.r + 20 || c.g > c.r + 20)) return "dyed / vivid hair";
-  return "medium-tone hair";
+  if (L < 45)
+    return { label: "ink-black hair", texture: "dark and glossy against the light" };
+  if (L < 90 && S < 0.25)
+    return { label: "deep brown hair", texture: "rich and shadowed" };
+  if (L < 130 && c.r > c.b + 20)
+    return { label: "warm brown hair", texture: "soft and touchable" };
+  if (L >= 130 && L < 190 && S < 0.35)
+    return { label: "dirty-blonde hair", texture: "sun-kissed and lived-in" };
+  if (L >= 170 && S < 0.3)
+    return { label: "blonde hair", texture: "light-catching and soft" };
+  if (c.r > c.g + 25 && c.r > c.b + 15 && L > 70)
+    return { label: "auburn hair", texture: "copper-warm and striking" };
+  if (S > 0.45 && (c.b > c.r + 20 || c.g > c.r + 20))
+    return { label: "vivid dyed hair", texture: "bold color that owns the frame" };
+  return { label: "medium-tone hair", texture: "natural and easy" };
 }
 
-function skinLabel(c: Rgb): string {
+type SkinCue = { label: string; glow: string };
+
+function skinCue(c: Rgb): SkinCue {
   const L = lum(c);
-  if (L < 70) return "deep skin";
-  if (L < 110) return "medium-deep skin";
-  if (L < 155) return "medium skin";
-  if (L < 195) return "light-medium skin";
-  return "fair skin";
+  if (L < 70)
+    return { label: "deep skin", glow: "warm and luminous" };
+  if (L < 110)
+    return { label: "medium-deep skin", glow: "golden and inviting" };
+  if (L < 155)
+    return { label: "medium skin", glow: "sun-warmed and smooth" };
+  if (L < 195)
+    return { label: "light-medium skin", glow: "soft and flushed with light" };
+  return { label: "fair skin", glow: "pale and delicate in the light" };
 }
 
-function frameLabel(w: number, h: number): string {
+type FrameCue = { shot: string; energy: string };
+
+function frameCue(w: number, h: number): FrameCue {
   const ratio = w / Math.max(1, h);
-  if (ratio < 0.72) return "portrait framing";
-  if (ratio > 1.25) return "wide / landscape framing";
-  return "square-ish framing";
+  if (ratio < 0.72)
+    return {
+      shot: "tight portrait",
+      energy: "close enough to feel their breath — face and presence front and center",
+    };
+  if (ratio > 1.25)
+    return {
+      shot: "wide frame",
+      energy: "body language and silhouette getting room to seduce",
+    };
+  return {
+    shot: "balanced frame",
+    energy: "face and figure sharing the heat evenly",
+  };
 }
 
-function genderPhrase(gender?: string): string {
+function presencePhrase(gender?: string): string {
   switch (gender) {
     case "woman":
-      return "feminine presentation";
+      return "Feminine presence that reads adult and intentional";
     case "man":
-      return "masculine presentation";
+      return "Masculine presence that reads adult and intentional";
     case "trans":
-      return "trans feminine presentation";
+      return "Trans feminine presence that reads adult and intentional";
     case "crossdresser":
-      return "cross-dresser presentation";
+      return "Cross-dressed presentation that reads adult and intentional";
     case "couple":
-      return "couple";
+      return "Couple energy — two bodies sharing the frame";
     default:
-      return "";
+      return "Adult presence that reads intentional";
   }
 }
 
-/** Local draft looks line from one or more photos (no cloud vision). */
+function bodyVibe(gender?: string, framing?: FrameCue): string {
+  const close = framing?.shot === "tight portrait";
+  switch (gender) {
+    case "woman":
+      return close
+        ? "Soft lips and a gaze that holds — the kind of face you lean into"
+        : "Curves and posture reading soft and confident, made to be looked at";
+    case "man":
+      return close
+        ? "A steady jaw and eyes that mean business — quietly magnetic"
+        : "Build and stance reading solid and sure, the kind of body you notice first";
+    case "trans":
+      return close
+        ? "Soft features and a gaze that lands — pretty with heat behind it"
+        : "Feminine lines and confidence that feel deliberate and sexy";
+    case "crossdresser":
+      return close
+        ? "Made-up and intentional — the look is the flirt"
+        : "Styled presentation with a playful, dressed-to-tease energy";
+    case "couple":
+      return "Chemistry in how they sit together — inviting and a little dangerous";
+    default:
+      return close
+        ? "Features that pull focus — eyes, mouth, the quiet dare of the expression"
+        : "A body and vibe that feel worth a second look";
+  }
+}
+
+/** Local draft looks blurb from one or more photos (no cloud vision). */
 export async function inferLooksLocally(
   dataUrls: string[],
   hints: LooksHint = {},
 ): Promise<string> {
   if (!dataUrls.length) throw new Error("Choose at least one photo");
 
-  const parts: string[] = [];
-  const genderBit = genderPhrase(hints.gender);
-  if (genderBit) parts.push(genderBit);
-
-  const hairVotes = new Map<string, number>();
-  const skinVotes = new Map<string, number>();
-  let frame = "";
+  const hairVotes = new Map<string, { cue: HairCue; n: number }>();
+  const skinVotes = new Map<string, { cue: SkinCue; n: number }>();
+  let framing: FrameCue | null = null;
 
   for (const src of dataUrls.slice(0, 4)) {
     const img = await loadImage(src);
@@ -142,27 +194,34 @@ export async function inferLooksLocally(
     // Top-center ≈ hair; mid-center ≈ face/skin
     const hair = avgRegion(data, canvas.width, canvas.height, 0.28, 0.02, 0.72, 0.28);
     const face = avgRegion(data, canvas.width, canvas.height, 0.32, 0.22, 0.68, 0.52);
-    const hairL = hairLabel(hair);
-    const skinL = skinLabel(face);
-    hairVotes.set(hairL, (hairVotes.get(hairL) || 0) + 1);
-    skinVotes.set(skinL, (skinVotes.get(skinL) || 0) + 1);
-    if (!frame) frame = frameLabel(img.naturalWidth, img.naturalHeight);
+    const hCue = hairCue(hair);
+    const sCue = skinCue(face);
+    const hPrev = hairVotes.get(hCue.label);
+    hairVotes.set(hCue.label, { cue: hCue, n: (hPrev?.n || 0) + 1 });
+    const sPrev = skinVotes.get(sCue.label);
+    skinVotes.set(sCue.label, { cue: sCue, n: (sPrev?.n || 0) + 1 });
+    if (!framing) framing = frameCue(img.naturalWidth, img.naturalHeight);
   }
 
-  const top = (votes: Map<string, number>) =>
-    [...votes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const top = <T extends { n: number }>(votes: Map<string, T>) =>
+    [...votes.values()].sort((a, b) => b.n - a.n)[0];
 
-  const hair = top(hairVotes);
-  const skin = top(skinVotes);
-  if (hair) parts.push(hair);
-  if (skin) parts.push(skin);
-  if (frame) parts.push(frame);
-  if (dataUrls.length > 1) {
-    parts.push(`from ${dataUrls.length} photos`);
-  }
+  const hair = top(hairVotes)?.cue;
+  const skin = top(skinVotes)?.cue;
+  const frame = framing ?? frameCue(1, 1);
 
-  const line = parts.join(", ");
-  return line.charAt(0).toUpperCase() + line.slice(1);
+  const multi =
+    dataUrls.length > 1
+      ? ` Pulled across ${dataUrls.length} photos — same heat, different angles.`
+      : "";
+
+  const sentences = [
+    `${presencePhrase(hints.gender)}: ${hair?.label ?? "soft hair"}, ${hair?.texture ?? "catching the light"}, over ${skin?.label ?? "warm skin"} that looks ${skin?.glow ?? "alive"}.`,
+    `${bodyVibe(hints.gender, frame)}.`,
+    `${frame.shot[0].toUpperCase()}${frame.shot.slice(1)} — ${frame.energy}.${multi}`,
+  ];
+
+  return sentences.join(" ").replace(/\s+/g, " ").trim();
 }
 
 export type DescribeLooksResult = {
