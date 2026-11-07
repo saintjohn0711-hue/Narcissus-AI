@@ -14,9 +14,12 @@ import {
 } from "@/lib/artOfX";
 import {
   clothingUsesToyOptions,
+  comfyWardrobeEditPrompt,
   COMPANION_CLOTHING,
   COMPANION_FEATURE_GROUPS,
   COMPANION_LOOK_STYLES,
+  COMPANION_POSES,
+  COMPANION_PROPS,
   COMPANION_TOY_COLOR,
   COMPANION_TOY_SIZE,
   isFetishClothing,
@@ -276,7 +279,7 @@ export function MusePresence({
           missingKey: false,
           message:
             data.message ||
-            "xAI blocked this adult look (moderation). Lingerie usually still works — or start the Comfy/RunPod undress pod. Never faking with a filter.",
+            "xAI blocked this adult look (moderation). Trying Comfy when the GPU pod is up — Lingerie still works. Never faking with a filter.",
         };
       }
       if (detail.includes("too small") || detail.includes("dimensions")) {
@@ -314,23 +317,37 @@ export function MusePresence({
     return { missingKey: false, message: "Couldn’t restyle." };
   }
 
-  async function tryComfyNude(
+  /**
+   * Nude / fetish xAI moderation → Comfy FaceID+epicrealism edit.
+   * Never CSS-fake. Returns true when the attempt was handled (success or clear error).
+   */
+  async function tryComfyWardrobeEdit(
     sourcePhoto: string | null,
     nextWardrobe: CompanionWardrobe,
   ): Promise<boolean> {
     const base =
       (generated && matchSource === "xai" ? generated : null) || sourcePhoto;
     if (!base?.startsWith("data:image/")) return false;
+    const nude = isNudeClothing(nextWardrobe.clothing);
+    const fetish = isFetishClothing(nextWardrobe.clothing);
     try {
       const blob = await (await fetch(base)).blob();
       const form = new FormData();
       form.set("photo", blob, "companion.png");
-      form.set("mode", "undress");
+      // Nude: undress FaceID path. Fetish: custom img2img on epicrealism with wardrobe prompt.
+      form.set("mode", nude ? "undress" : "custom");
       form.set("adultsConfirmed", "true");
       form.set("bodyType", "female");
+      form.set("identity", "0.88");
       form.set(
         "prompt",
-        "completely naked adult woman, fully nude, bare breasts, bare nipples, bare hips, bare crotch, no lingerie, no bra, no panties, no lace, skin only, coherent anatomy, same face identity, standing pose, clean background",
+        nude
+          ? [
+              "completely naked adult woman, fully nude, bare breasts, bare nipples, bare hips, bare crotch,",
+              "no lingerie, no bra, no panties, no lace, skin only, coherent anatomy, same face identity,",
+              comfyWardrobeEditPrompt({ ...nextWardrobe, clothing: "nude" }),
+            ].join(" ")
+          : comfyWardrobeEditPrompt(nextWardrobe),
       );
       const res = await fetch("/api/jobs", { method: "POST", body: form });
       const data = (await res.json()) as {
@@ -342,17 +359,22 @@ export function MusePresence({
       if (!res.ok) {
         setGenError(
           data.error ||
-            "Comfy undress failed — keep Lingerie, or check the GPU pod is RUNNING.",
+            (nude
+              ? "Comfy undress failed — keep Lingerie, or check the GPU pod is RUNNING."
+              : "Comfy fetish edit failed — try Lingerie, or start the RunPod Comfy pod."),
         );
-        return true; // handled (show Comfy error, don't fake nude)
+        return true;
       }
       const url =
         data.resultUrl || data.resultUrls?.[0] || data.viewUrls?.[0] || null;
       if (!url) {
-        setGenError("Comfy returned no nude image — try again shortly.");
+        setGenError(
+          nude
+            ? "Comfy returned no nude image — try again shortly."
+            : "Comfy returned no fetish image — try again shortly.",
+        );
         return true;
       }
-      // Local /api/media or Comfy /view — fetch into a cacheable data URL
       let image = url;
       if (url.startsWith("/") || url.includes("proxy.runpod.net")) {
         const abs = url.startsWith("/")
@@ -381,7 +403,9 @@ export function MusePresence({
       return true;
     } catch {
       setGenError(
-        "Comfy undress unreachable — start the RunPod Comfy pod, or stay on Lingerie.",
+        fetish || nude
+          ? "Comfy unreachable — start the RunPod Comfy pod, or stay on Lingerie."
+          : "Comfy edit unreachable — start the RunPod Comfy pod.",
       );
       return true;
     }
@@ -443,16 +467,25 @@ export function MusePresence({
         }
         const { message, missingKey } = restyleErrorMessage(targetStyle, parsed);
         if (isCompanion) {
-          if (
-            (parsed.error === "nude_refused" ||
-              isNudeClothing(nextWardrobe.clothing)) &&
-            isNudeClothing(nextWardrobe.clothing)
-          ) {
-            setGenError("xAI blocked Nude — trying Comfy undress…");
-            const usedComfy = await tryComfyNude(sourcePhoto, nextWardrobe);
+          const wantNude = isNudeClothing(nextWardrobe.clothing);
+          const wantFetish = isFetishClothing(nextWardrobe.clothing);
+          const moderated =
+            parsed.error === "nude_refused" ||
+            parsed.error === "content_refused" ||
+            (parsed.detail || "").toLowerCase().includes("content-moderated");
+          if (moderated && (wantNude || wantFetish)) {
+            setGenError(
+              wantNude
+                ? "xAI blocked Nude — trying Comfy undress…"
+                : "xAI blocked fetish look — trying Comfy edit…",
+            );
+            const usedComfy = await tryComfyWardrobeEdit(
+              sourcePhoto,
+              nextWardrobe,
+            );
             if (usedComfy) return;
           }
-          // Never CSS-fake a companion (esp. nude)
+          // Never CSS-fake a companion (esp. nude / fetish)
           setGenError(message);
           if (!generated) {
             await applyLocalFallback(targetStyle, sourcePhoto || "", message, {
@@ -552,7 +585,9 @@ export function MusePresence({
       (typeof patch.toySize === "string" &&
         patch.toySize !== wardrobe.toySize) ||
       (typeof patch.toyColor === "string" &&
-        patch.toyColor !== wardrobe.toyColor);
+        patch.toyColor !== wardrobe.toyColor) ||
+      (typeof patch.pose === "string" && patch.pose !== wardrobe.pose) ||
+      (typeof patch.prop === "string" && patch.prop !== wardrobe.prop);
     setWardrobe(next);
     saveCompanionWardrobe(partner.id, next);
     if (style !== "cartoon") return;
@@ -564,7 +599,11 @@ export function MusePresence({
           ? "Updating Companion to Nude…"
           : next.clothing === "strap-on"
             ? `Updating strap-on (${next.toySize}, ${next.toyColor})…`
-            : "Updating Companion outfit…",
+            : typeof patch.pose === "string"
+              ? "Updating Companion pose…"
+              : typeof patch.prop === "string"
+                ? "Updating Companion prop…"
+                : "Updating Companion outfit…",
       );
       void generateStyled("cartoon", livePhoto, next, {
         forceMode:
@@ -615,6 +654,16 @@ export function MusePresence({
               title: "Anime look",
               options: COMPANION_LOOK_STYLES,
               key: "look" as const,
+            },
+            {
+              title: "Pose",
+              options: COMPANION_POSES,
+              key: "pose" as const,
+            },
+            {
+              title: "Prop",
+              options: COMPANION_PROPS,
+              key: "prop" as const,
             },
           ]
         : [

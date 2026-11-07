@@ -208,8 +208,9 @@ export async function POST(req: NextRequest) {
       "v1-5-pruned-emaonly-fp16.safetensors",
     );
     const needsCockBody = getBodyType(bodyType).needsCock;
+    // Undress + Companion fetish custom → FaceID/epicrealism (no InstantID soft-censor).
     const identityEngine: IdentityEngine =
-      mode === "undress"
+      mode === "undress" || mode === "custom"
         ? "faceid"
         : hasSdxl
           ? "instantid"
@@ -220,7 +221,7 @@ export async function POST(req: NextRequest) {
     const realismCkpt =
       mode === "faceswap"
         ? null
-        : mode === "undress"
+        : mode === "undress" || mode === "custom"
           ? await resolveCheckpoint(
               REALISM_CKPTS,
               sd15Ckpt,
@@ -250,6 +251,20 @@ export async function POST(req: NextRequest) {
               faceLock: true,
               identityEngine,
             })
+          : mode === "custom"
+            ? // Companion fetish / wardrobe edits: FaceID + epicrealism (same stack as true nude).
+              buildScenePrompt(uploaded.filename, {
+                promptOverride:
+                  promptOverride ||
+                  "sexy adult companion wardrobe edit, same face identity",
+                identity: Math.max(identity, 0.85),
+                // High denoise so fetish gear actually lands (0.64 left lingerie intact).
+                denoise: Math.max(0.68, Math.min(0.8, 0.75)),
+                faceLock: true,
+                prefix: "narcissus_custom",
+                checkpoint: realismCkpt || undefined,
+                identityEngine: "faceid",
+              })
           : mode === "video"
             ? buildVideoPrompt(uploaded.filename, {
                 template: videoTemplateId,
@@ -279,10 +294,7 @@ export async function POST(req: NextRequest) {
               : buildImg2ImgPrompt(mode, uploaded.filename, {
                   promptOverride,
                   identity,
-                  denoise: denoiseForIdentity(
-                    mode === "custom" ? "custom" : "faceswap",
-                    identity,
-                  ),
+                  denoise: denoiseForIdentity("faceswap", identity),
                   checkpoint: realismCkpt || undefined,
                 });
 
@@ -428,7 +440,7 @@ export async function POST(req: NextRequest) {
     let identityLocked = false;
     const skipHeadPaste =
       (mode === "scene" && sceneTpl?.id === "facial") ||
-      ((mode === "undress" || mode === "scene") &&
+      ((mode === "undress" || mode === "custom" || mode === "scene") &&
         (identityEngine === "instantid" || identityEngine === "faceid"));
     if (
       !skipHeadPaste &&

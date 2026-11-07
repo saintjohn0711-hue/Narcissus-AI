@@ -100,6 +100,24 @@ export type CompanionToyColor =
   | "clear"
   | "blue";
 
+/** Full-body pose for generate / adjust. */
+export type CompanionPose =
+  | "standing"
+  | "sitting"
+  | "leaning"
+  | "all-fours"
+  | "over-shoulder"
+  | "legs-crossed";
+
+/** Optional sexy prop held or worn — none by default. */
+export type CompanionProp =
+  | "none"
+  | "wine-glass"
+  | "handcuffs"
+  | "riding-crop"
+  | "pearl-necklace"
+  | "phone-selfie";
+
 export type CompanionWardrobe = {
   eyeColor: CompanionEyeColor;
   hairColor: CompanionHairColor;
@@ -112,6 +130,8 @@ export type CompanionWardrobe = {
   clothing: CompanionClothing;
   toySize: CompanionToySize;
   toyColor: CompanionToyColor;
+  pose: CompanionPose;
+  prop: CompanionProp;
 };
 
 export const DEFAULT_COMPANION_WARDROBE: CompanionWardrobe = {
@@ -128,6 +148,8 @@ export const DEFAULT_COMPANION_WARDROBE: CompanionWardrobe = {
   clothing: "casual",
   toySize: "medium",
   toyColor: "black",
+  pose: "standing",
+  prop: "none",
 };
 
 type Opt<T extends string> = {
@@ -260,6 +282,24 @@ export const COMPANION_TOY_COLOR: Opt<CompanionToyColor>[] = [
   { id: "blue", label: "Blue", hint: "Electric blue", swatch: "#3a6ea5" },
 ];
 
+export const COMPANION_POSES: Opt<CompanionPose>[] = [
+  { id: "standing", label: "Standing", hint: "Full-body stand" },
+  { id: "sitting", label: "Sitting", hint: "Seated pose" },
+  { id: "leaning", label: "Leaning", hint: "Lean on a surface" },
+  { id: "all-fours", label: "All fours", hint: "On hands and knees" },
+  { id: "over-shoulder", label: "Over shoulder", hint: "Look back at viewer" },
+  { id: "legs-crossed", label: "Legs crossed", hint: "Seated legs crossed" },
+];
+
+export const COMPANION_PROPS: Opt<CompanionProp>[] = [
+  { id: "none", label: "None", hint: "No prop" },
+  { id: "wine-glass", label: "Wine glass", hint: "Holding a wine glass" },
+  { id: "handcuffs", label: "Handcuffs", hint: "Cuffs as sexy prop" },
+  { id: "riding-crop", label: "Riding crop", hint: "Holding a crop" },
+  { id: "pearl-necklace", label: "Pearls", hint: "Pearl necklace" },
+  { id: "phone-selfie", label: "Phone", hint: "Selfie phone pose" },
+];
+
 /** True when clothing is fully nude (no garments). */
 export function isNudeClothing(c: CompanionClothing | string | undefined): boolean {
   return c === "nude";
@@ -364,6 +404,8 @@ export function normalizeWardrobe(
     toyColor: isId(src.toyColor, COMPANION_TOY_COLOR)
       ? src.toyColor!
       : d.toyColor,
+    pose: isId(src.pose, COMPANION_POSES) ? src.pose! : d.pose,
+    prop: isId(src.prop, COMPANION_PROPS) ? src.prop! : d.prop,
   };
 }
 
@@ -382,6 +424,8 @@ export function wardrobeKey(w: CompanionWardrobe): string {
     n.look,
     n.clothing,
     toyBit,
+    n.pose,
+    n.prop,
   ].join(".");
 }
 
@@ -492,14 +536,14 @@ function bodyTypeDirective(b: CompanionBodyType, hasRef: boolean): string {
     case "petite":
       return "Body type: petite small-frame full-body.";
     case "plus-curvy":
-      return "Body type: plus-size curvy hourglass — fuller bust, soft waist, wide hips, clearly fuller than slim, full-body standing.";
+      return "Body type: plus-size curvy hourglass — fuller bust, soft waist, wide hips, clearly fuller than slim, full-body.";
     case "chubby":
-      return "Body type: chubby soft round figure — soft belly, chubby cheeks optional, plush arms/thighs, cute fuller anime companion, full-body standing.";
+      return "Body type: chubby soft round figure — soft belly, chubby cheeks optional, plush arms/thighs, cute fuller anime companion, full-body.";
     case "soft-thick":
-      return "Body type: soft thick — thick thighs, soft hips, plush butt and tummy, strong curves without looking skinny, full-body standing.";
+      return "Body type: soft thick — thick thighs, soft hips, plush butt and tummy, strong curves without looking skinny, full-body.";
     default:
       return hasRef
-        ? "Body type: preserve her proportions from Image 1 in a full-body standing pose."
+        ? "Body type: preserve her proportions from Image 1 in a full-body pose."
         : "Body type: elegant soft-curves anime companion silhouette, full-body.";
   }
 }
@@ -544,6 +588,40 @@ function lookDirective(l: CompanionLookStyle): string {
       return "Palette/style variant: neon-night — deep navy shadows with cyan rim light.";
     default:
       return "Palette/style variant: JuicyChat-class cel shading, soft blush, thin rim light.";
+  }
+}
+
+function poseDirective(p: CompanionPose): string {
+  switch (p) {
+    case "sitting":
+      return "POSE: sitting on a simple seat, full body visible, sexy composed posture.";
+    case "leaning":
+      return "POSE: leaning against a wall or railing, weight on one hip, full body visible.";
+    case "all-fours":
+      return "POSE: on all fours (hands and knees), arched back, looking toward the viewer, full body visible adults 18+.";
+    case "over-shoulder":
+      return "POSE: standing or half-turned, looking back over one shoulder at the viewer, full body visible.";
+    case "legs-crossed":
+      return "POSE: seated with legs crossed, elegant sexy posture, full body visible.";
+    default:
+      return "POSE: standing full-body, natural weight shift, head-to-toe in frame.";
+  }
+}
+
+function propDirective(p: CompanionProp): string {
+  switch (p) {
+    case "wine-glass":
+      return "PROP: holding a wine glass in one hand (clearly visible).";
+    case "handcuffs":
+      return "PROP: metal handcuffs as a sexy accessory (held or loosely worn on wrists) — adults 18+.";
+    case "riding-crop":
+      return "PROP: holding a slim black riding crop — sexy prop, not violence.";
+    case "pearl-necklace":
+      return "PROP: wearing a classic pearl necklace.";
+    case "phone-selfie":
+      return "PROP: holding a smartphone in a casual selfie / mirror-selfie pose.";
+    default:
+      return "";
   }
 }
 
@@ -655,7 +733,7 @@ export function companionWardrobePromptBits(
         ? "ADJUST (adults 18+): keep the SAME illustrated companion identity from Image 1; apply trait/outfit changes only."
         : "CUSTOMIZE (adults 18+ — Image 1 face identity absolute; Natural traits match the Muse photo):";
   return [
-    "FRAMING: FULL-LENGTH standing anime companion — head-to-toe in frame (feet and head visible), Ani-like vertical scale, not a bust/portrait crop.",
+    "FRAMING: FULL-LENGTH anime companion — head-to-toe in frame (feet and head visible), Ani-like vertical scale, not a bust/portrait crop.",
     customizeLead,
     eyeColorDirective(w.eyeColor, hasRef),
     hairColorDirective(w.hairColor, hasRef),
@@ -666,8 +744,31 @@ export function companionWardrobePromptBits(
     expressionDirective(w.expression),
     lookDirective(w.look),
     clothingDirective(w.clothing, w.toySize, w.toyColor),
+    poseDirective(w.pose),
+    propDirective(w.prop),
     looksBit,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/**
+ * Prompt for Comfy /api/jobs when xAI moderates fetish (or Nude undress).
+ * FaceID + epicrealism custom/undress — never a CSS fake.
+ */
+export function comfyWardrobeEditPrompt(wardrobe: CompanionWardrobe): string {
+  const w = normalizeWardrobe(wardrobe);
+  const fetishBit = isFetishClothing(w.clothing)
+    ? "explicit fetish gear fully visible, not censored, not replaced with lingerie, not hidden"
+    : "";
+  return [
+    "photorealistic adult woman, same face identity as reference, coherent anatomy",
+    clothingDirective(w.clothing, w.toySize, w.toyColor),
+    fetishBit,
+    poseDirective(w.pose),
+    propDirective(w.prop),
+    "clean background, adults 18+, no minors, no watermark",
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
