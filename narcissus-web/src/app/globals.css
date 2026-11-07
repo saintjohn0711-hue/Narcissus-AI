@@ -389,7 +389,7 @@ body {
 }
 
 .muse-presence-style-anime .muse-presence-photo {
-  filter: contrast(1.18) saturate(1.35) brightness(1.06);
+  filter: contrast(1.22) saturate(1.4) brightness(1.05);
 }
 
 .muse-presence-style-anime .muse-presence-veil::after {
@@ -398,11 +398,20 @@ body {
   inset: 0;
   background: linear-gradient(
     125deg,
-    rgba(255, 170, 210, 0.12),
+    rgba(255, 170, 210, 0.14),
     transparent 40%,
-    rgba(120, 180, 255, 0.1)
+    rgba(120, 180, 255, 0.12)
   );
   mix-blend-mode: soft-light;
+}
+
+/* Matched anime result from xAI / canvas — lighter overlay so likeness reads */
+.muse-presence-style-anime-matched .muse-presence-photo {
+  filter: contrast(1.06) saturate(1.12) brightness(1.02);
+}
+
+.muse-presence-style-anime-matched .muse-presence-veil::after {
+  opacity: 0.45;
 }
 
 .muse-presence-style-cyberpunk .muse-presence-photo {
