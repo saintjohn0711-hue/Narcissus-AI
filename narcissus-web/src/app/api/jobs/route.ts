@@ -37,7 +37,10 @@ import {
   buildUndressPrompt,
   buildVideoPrompt,
   denoiseForIdentity,
+  FACEID_SD15_CKPTS,
+  INSTANTID_CKPTS,
   sceneDenoise,
+  type IdentityEngine,
   type JobMode,
 } from "@/lib/workflows";
 
@@ -56,6 +59,10 @@ const REALISM_CKPTS = [
   "dreamshaper_8.safetensors",
   "v1-5-pruned-emaonly-fp16.safetensors",
 ];
+
+/** NA-75: InstantID needs SDXL; FaceID Plus V2 stays on SD1.5 realism. */
+const IDENTITY_SDXL_CKPTS = [...INSTANTID_CKPTS];
+const IDENTITY_SD15_CKPTS = [...FACEID_SD15_CKPTS];
 
 function asUploadFile(value: FormDataEntryValue | null): File | null {
   if (!(value instanceof File) || value.size === 0) return null;
@@ -187,13 +194,28 @@ export async function POST(req: NextRequest) {
       faceUploadedName = faceUploaded.filename;
     }
 
+    // NA-75: prefer InstantID (SDXL RealVis) for undress/scene identity.
+    const sdxlCkpt = await resolveCheckpoint(
+      IDENTITY_SDXL_CKPTS,
+      "__missing_sdxl__",
+    );
+    const hasSdxl = sdxlCkpt !== "__missing_sdxl__";
+    const sd15Ckpt = await resolveCheckpoint(
+      IDENTITY_SD15_CKPTS,
+      "v1-5-pruned-emaonly-fp16.safetensors",
+    );
+    const identityEngine: IdentityEngine = hasSdxl ? "instantid" : "faceid";
+    const identityCkpt = hasSdxl ? sdxlCkpt : sd15Ckpt;
+
     const realismCkpt =
       mode === "faceswap"
         ? null
-        : await resolveCheckpoint(
-            REALISM_CKPTS,
-            "v1-5-pruned-emaonly-fp16.safetensors",
-          );
+        : mode === "undress" || mode === "scene"
+          ? identityCkpt
+          : await resolveCheckpoint(
+              REALISM_CKPTS,
+              "v1-5-pruned-emaonly-fp16.safetensors",
+            );
     const undressCkpt = mode === "undress" ? realismCkpt : null;
 
     const graph =
@@ -211,6 +233,7 @@ export async function POST(req: NextRequest) {
               cockSize,
               checkpoint: undressCkpt || undefined,
               faceLock: true,
+              identityEngine,
             })
           : mode === "video"
             ? buildVideoPrompt(uploaded.filename, {
@@ -235,6 +258,8 @@ export async function POST(req: NextRequest) {
                   faceLock: sceneTpl.id !== "facial",
                   prefix: `narcissus_scene_${sceneTpl.id}`,
                   checkpoint: realismCkpt || undefined,
+                  identityEngine:
+                    sceneTpl.id === "facial" ? "reactor" : identityEngine,
                 })
               : buildImg2ImgPrompt(mode, uploaded.filename, {
                   promptOverride,
@@ -247,17 +272,19 @@ export async function POST(req: NextRequest) {
                 });
 
     let result = await runPromptToImages(graph, {
-      timeoutMs: mode === "video" ? 360_000 : 180_000,
+      timeoutMs: mode === "video" ? 360_000 : 240_000,
     });
 
-    // ReActor can emit a pure-black frame when the undress pass wiped the face.
-    // Detect that and immediately retry without the face-lock node.
+    // ReActor can emit a pure-black frame when the undress pass wiped the face
+    // (or NSFW filter tripped). Detect and retry InstantID→FaceID→no-lock.
     let faceLockFallback = false;
     if (mode === "undress" && result.images[0]) {
       try {
         const bytes = await fetchImageBytes(result.images[0]);
         if (await isNearlyBlankImageAsync(bytes)) {
           faceLockFallback = true;
+          const fallbackEngine: IdentityEngine =
+            identityEngine === "instantid" ? "faceid" : "reactor";
           result = await runPromptToImages(
             buildUndressPrompt(uploaded.filename, {
               promptOverride,
@@ -265,11 +292,14 @@ export async function POST(req: NextRequest) {
               bodyType,
               cockState,
               cockSize,
-              checkpoint: undressCkpt || undefined,
-              faceLock: false,
-              denoise: 0.48,
+              checkpoint:
+                (fallbackEngine === "faceid" ? sd15Ckpt : undressCkpt) ||
+                undefined,
+              faceLock: fallbackEngine !== "reactor",
+              identityEngine: fallbackEngine,
+              denoise: 0.52,
             }),
-            { timeoutMs: 180_000 },
+            { timeoutMs: 240_000 },
           );
         }
       } catch {
@@ -323,12 +353,15 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // NA-74: oval face+hair lock + luma match. Same ~0.96 cosine as a thin band
-    // but soft edges (no hard seam) and almost no strap/chest paste from upload.
+    // NA-75: InstantID/FaceID + ReActor already condition identity during
+    // generation. Skip oval head-paste for those paths — paste inflates cosine
+    // (~0.96) but looks like a sticker; commercial path is generated likeness.
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
     const skipHeadPaste =
-      mode === "scene" && sceneTpl?.id === "facial";
+      (mode === "scene" && sceneTpl?.id === "facial") ||
+      ((mode === "undress" || mode === "scene") &&
+        (identityEngine === "instantid" || identityEngine === "faceid"));
     if (
       !skipHeadPaste &&
       (mode === "undress" || mode === "custom" || mode === "scene") &&
@@ -338,16 +371,13 @@ export async function POST(req: NextRequest) {
       try {
         const editedBytes = await fetchImageBytes(result.images[0]);
         if (!(await isNearlyBlankImageAsync(editedBytes))) {
-          // Sweep winner: faceRx~0.32 faceRy~0.26 — cos~0.964, clothes keep≈band+
           const id = Math.min(1, Math.max(0.35, identity));
           const locked = await lockHeadAndHair(editedBytes, originalBytes, {
             shape: "oval",
             faceCenterY: mode === "undress" ? 0.14 : 0.15,
-            faceRx: 0.3 + id * 0.03, // ~0.327 at 0.9
+            faceRx: 0.3 + id * 0.03,
             faceRy:
-              mode === "undress"
-                ? 0.24 + id * 0.025 // ~0.263 — chin, not chest
-                : 0.25 + id * 0.03,
+              mode === "undress" ? 0.24 + id * 0.025 : 0.25 + id * 0.03,
             feather: 0.35,
             globalPull: 0,
           });
