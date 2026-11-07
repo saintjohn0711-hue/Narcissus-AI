@@ -247,6 +247,177 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* —— Muse chat presence —— */
+.muse-presence-stage {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  aspect-ratio: 3 / 4;
+  width: 100%;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 30%, rgba(0, 229, 255, 0.08), transparent 65%),
+    linear-gradient(165deg, #12182a 0%, #080b14 55%, #05070e 100%);
+  border: 1px solid var(--line);
+}
+
+.muse-presence-parallax {
+  position: absolute;
+  inset: 0;
+  transition: transform 0.45s ease-out;
+  will-change: transform;
+}
+
+.muse-presence-photo {
+  position: absolute;
+  inset: -4%;
+  width: 108%;
+  height: 108%;
+  object-fit: cover;
+  object-position: center 18%;
+  will-change: transform;
+  animation: muse-breathe 7.5s ease-in-out infinite alternate;
+}
+
+.muse-presence-glow {
+  position: absolute;
+  inset: 12% 8% auto;
+  height: 42%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(0, 229, 255, 0.18) 0%,
+    rgba(196, 160, 140, 0.08) 40%,
+    transparent 70%
+  );
+  filter: blur(18px);
+  animation: muse-glow-sway 9s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.muse-presence-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    linear-gradient(
+      180deg,
+      transparent 42%,
+      rgba(5, 8, 15, 0.35) 68%,
+      rgba(5, 8, 15, 0.88) 100%
+    ),
+    radial-gradient(ellipse 70% 50% at 50% 20%, transparent 40%, rgba(5, 8, 15, 0.25) 100%);
+}
+
+.muse-presence-nameplate {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 1rem 1rem 0.9rem;
+  pointer-events: none;
+}
+
+.muse-presence-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+/* Style composites — CSS only (works without xAI / Comfy) */
+.muse-presence-style-realistic .muse-presence-photo {
+  filter: contrast(1.04) saturate(1.05);
+}
+
+.muse-presence-style-soft-glam .muse-presence-photo {
+  filter: contrast(1.02) saturate(1.12) brightness(1.04) sepia(0.12);
+}
+
+.muse-presence-style-soft-glam .muse-presence-veil {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(196, 160, 140, 0.12) 0%,
+      transparent 35%,
+      rgba(5, 8, 15, 0.4) 70%,
+      rgba(5, 8, 15, 0.9) 100%
+    ),
+    radial-gradient(ellipse 60% 40% at 70% 20%, rgba(229, 195, 178, 0.22), transparent 70%);
+}
+
+.muse-presence-style-anime .muse-presence-photo {
+  filter: contrast(1.18) saturate(1.35) brightness(1.06);
+}
+
+.muse-presence-style-anime .muse-presence-veil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 170, 210, 0.12),
+    transparent 40%,
+    rgba(120, 180, 255, 0.1)
+  );
+  mix-blend-mode: soft-light;
+}
+
+.muse-presence-style-cyberpunk .muse-presence-photo {
+  filter: contrast(1.2) saturate(1.25) hue-rotate(-8deg) brightness(0.98);
+}
+
+.muse-presence-style-cyberpunk .muse-presence-glow {
+  background: radial-gradient(
+    circle,
+    rgba(0, 229, 255, 0.35) 0%,
+    rgba(59, 89, 152, 0.15) 45%,
+    transparent 70%
+  );
+}
+
+.muse-presence-style-cyberpunk .muse-presence-veil {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(0, 229, 255, 0.08) 0%,
+      transparent 30%,
+      rgba(5, 8, 15, 0.45) 68%,
+      rgba(5, 8, 15, 0.92) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgba(0, 163, 255, 0.12),
+      transparent 35%,
+      rgba(196, 160, 140, 0.1) 100%
+    );
+}
+
+@keyframes muse-breathe {
+  from {
+    transform: scale(1.06) translate3d(0, 0.4%, 0);
+  }
+  to {
+    transform: scale(1.1) translate3d(0, -1.1%, 0);
+  }
+}
+
+@keyframes muse-glow-sway {
+  from {
+    opacity: 0.55;
+    transform: translate3d(-2%, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0.95;
+    transform: translate3d(3%, 2%, 0) scale(1.08);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-hero-art img,
   .home-hero-glow,
@@ -255,7 +426,9 @@ body {
   .echo-card,
   .echo-cloud-dot,
   .partner-card,
-  .partner-lightbox {
+  .partner-lightbox,
+  .muse-presence-photo,
+  .muse-presence-glow {
     animation: none !important;
   }
 }

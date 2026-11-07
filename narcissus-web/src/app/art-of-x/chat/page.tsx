@@ -2,15 +2,21 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AppNav } from "@/components/AppNav";
+import { MusePresence } from "@/components/MusePresence";
 import {
   displayName,
   genderLabel,
   mainPhoto,
-  normalizeKinks,
+  PERSON_LABEL,
   type ChatMessage,
   type PartnerRecord,
 } from "@/lib/artOfX";
-import { fetchChats, fetchPartners, persistChats } from "@/lib/artOfXStore";
+import {
+  clearChatForPartner,
+  fetchChats,
+  fetchPartners,
+  persistChats,
+} from "@/lib/artOfXStore";
 import type { ChatPov } from "@/lib/xai";
 
 async function readXaiSseStream(
@@ -60,9 +66,11 @@ export default function ChatPage() {
   const [ready, setReady] = useState(false);
   const [pov, setPov] = useState<ChatPov>("1st");
   const [sending, setSending] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modelLabel, setModelLabel] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const skipPersist = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +91,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!ready) return;
+    if (skipPersist.current) {
+      skipPersist.current = false;
+      return;
+    }
     void persistChats(chats).catch(() => {});
   }, [chats, ready]);
 
@@ -96,6 +108,30 @@ export default function ChatPage() {
   );
   const threadKey = activeId != null ? String(activeId) : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
+
+  async function resetChat() {
+    if (!partner || resetting) return;
+    const name = displayName(partner);
+    const ok =
+      typeof window !== "undefined" &&
+      window.confirm(
+        `Reset chat with ${name}? This clears the whole conversation — can’t undo.`,
+      );
+    if (!ok) return;
+
+    setResetting(true);
+    setError(null);
+    try {
+      skipPersist.current = true;
+      const next = await clearChatForPartner(chats, partner.id);
+      setChats(next);
+    } catch (err) {
+      skipPersist.current = false;
+      setError(err instanceof Error ? err.message : "Couldn’t reset chat");
+    } finally {
+      setResetting(false);
+    }
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -225,29 +261,32 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+    <div className="mx-auto flex min-h-screen max-w-6xl flex-col px-5 py-8 sm:px-10 sm:py-10">
       <AppNav />
-      <header className="mb-8">
+      <header className="mb-7">
+        <p className="mb-2 text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
+          {PERSON_LABEL.plural} · Grok
+        </p>
         <h1
           className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
           style={{ fontFamily: "var(--font-display), serif" }}
         >
-          AI chat
+          Muse chat
         </h1>
         <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          Chat with Muse cards via xAI Grok
-          {modelLabel ? ` · ${modelLabel}` : ""}. Grounded in looks, kinks,
-          dynamics, and history — witty, vivid, adults 18+ only.
+          Talk with a living portrait
+          {modelLabel ? ` · ${modelLabel}` : ""}. Looks, kinks, and history —
+          adults 18+ only.
         </p>
       </header>
 
       {partners.length === 0 ? (
         <p className="text-sm text-[#c4b7a8]">
-          Add Muses first, then come back to chat with them.
+          Add {PERSON_LABEL.plural} first, then come back to chat with them.
         </p>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-          <aside className="space-y-2">
+        <div className="grid gap-5 lg:grid-cols-[200px_minmax(220px,280px)_minmax(0,1fr)]">
+          <aside className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:space-y-2 lg:overflow-visible lg:pb-0">
             {partners.map((p) => (
               <button
                 key={p.id}
@@ -256,9 +295,9 @@ export default function ChatPage() {
                   setActiveId(p.id);
                   setError(null);
                 }}
-                className={`flex w-full items-center gap-3 border px-3 py-2 text-left text-sm ${
+                className={`flex min-w-[9.5rem] shrink-0 items-center gap-3 border px-3 py-2 text-left text-sm lg:min-w-0 lg:w-full ${
                   activeId === p.id
-                    ? "border-[var(--accent)] bg-[var(--accent)]/10"
+                    ? "border-[var(--glow)]/45 bg-[var(--glow)]/8"
                     : "border-[var(--line)]"
                 }`}
               >
@@ -270,7 +309,7 @@ export default function ChatPage() {
                     className="h-10 w-10 object-cover"
                   />
                 ) : (
-                  <span className="flex h-10 w-10 items-center justify-center bg-[#1c1814] text-xs text-[#c4b7a8]">
+                  <span className="flex h-10 w-10 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8]">
                     {p.name.slice(0, 1)}
                   </span>
                 )}
@@ -286,10 +325,16 @@ export default function ChatPage() {
             ))}
           </aside>
 
+          {partner && (
+            <div className="order-first lg:order-none">
+              <MusePresence partner={partner} />
+            </div>
+          )}
+
           <section className="flex min-h-[28rem] flex-col border border-[var(--line)] bg-[var(--bg-elevated)]/40">
             {partner && (
               <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] p-4">
-                <div>
+                <div className="min-w-0">
                   <h2
                     className="text-xl text-[var(--ink)]"
                     style={{ fontFamily: "var(--font-display), serif" }}
@@ -297,26 +342,32 @@ export default function ChatPage() {
                     {displayName(partner)}
                   </h2>
                   <p className="mt-1 text-xs text-[#c4b7a8]">
-                    {normalizeKinks(partner.kinks)
-                      .slice(0, 5)
-                      .map((k) => k.tag)
-                      .join(" · ") || "No kinks tagged"}
-                    {partner.dynTags.length
-                      ? ` · ${partner.dynTags.slice(0, 3).join(", ")}`
-                      : ""}
+                    {partner.dynTags.slice(0, 3).join(" · ") ||
+                      "No dynamics tagged"}
                   </p>
                 </div>
-                <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                  POV
-                  <select
-                    value={pov}
-                    onChange={(e) => setPov(e.target.value as ChatPov)}
-                    className="rounded-sm border border-[var(--line)] bg-[#1c1814] px-2 py-1 text-sm text-[var(--ink)]"
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
+                    POV
+                    <select
+                      value={pov}
+                      onChange={(e) => setPov(e.target.value as ChatPov)}
+                      className="rounded-sm border border-[var(--line)] bg-[#12182a] px-2 py-1 text-sm text-[var(--ink)]"
+                    >
+                      <option value="1st">1st person</option>
+                      <option value="3rd">3rd person</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void resetChat()}
+                    disabled={resetting || messages.length === 0}
+                    className="rounded-sm border border-[var(--danger)]/35 px-3 py-1.5 text-xs font-medium text-[#f0c4b8] transition hover:border-[var(--danger)]/70 hover:bg-[var(--danger)]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Clear this Muse’s conversation"
                   >
-                    <option value="1st">1st person</option>
-                    <option value="3rd">3rd person</option>
-                  </select>
-                </label>
+                    {resetting ? "Resetting…" : "Reset chat"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -338,11 +389,13 @@ export default function ChatPage() {
                   className={`max-w-[85%] rounded-sm px-3 py-2 text-sm leading-relaxed ${
                     m.who === "You"
                       ? "ml-auto bg-[var(--accent)]/20 text-[#f7f1e8]"
-                      : "bg-[#1c1814] text-[#f7f1e8]"
+                      : "bg-[#12182a] text-[#f7f1e8]"
                   }`}
                 >
                   <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                    {m.who}
+                    {m.who === "Partner" && partner
+                      ? displayName(partner)
+                      : m.who}
                   </p>
                   <p className="whitespace-pre-wrap">
                     {m.text ||
@@ -362,12 +415,12 @@ export default function ChatPage() {
                 onChange={(e) => setText(e.target.value)}
                 placeholder="Message…"
                 disabled={sending || !partner}
-                className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm disabled:opacity-60"
+                className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2 text-sm disabled:opacity-60"
               />
               <button
                 type="submit"
                 disabled={sending || !partner || !text.trim()}
-                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#1a120c] disabled:opacity-50"
+                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
               >
                 {sending ? "…" : "Send"}
               </button>

@@ -182,6 +182,39 @@ export async function persistChats(
   if (!res.ok) throw new Error("Failed to save chats");
 }
 
+/**
+ * Clear chat history for one Muse (client localStorage and/or Neon).
+ * Prefer DELETE on the API when cloud; always update the returned map.
+ */
+export async function clearChatForPartner(
+  chats: Record<string, ChatMessage[]>,
+  partnerId: number,
+): Promise<Record<string, ChatMessage[]>> {
+  const next = { ...chats };
+  delete next[String(partnerId)];
+
+  if ((await getStoreMode()) === "local") {
+    saveChatsLocal(next);
+    return next;
+  }
+
+  const res = await fetch(
+    `/api/art-of-x/chats?partnerId=${encodeURIComponent(String(partnerId))}`,
+    { method: "DELETE", credentials: "same-origin" },
+  );
+  if (res.status === 401) {
+    resetStoreMode();
+    saveChatsLocal(next);
+    return next;
+  }
+  if (!res.ok) {
+    // Fallback: full PUT of remaining threads so the wipe still sticks.
+    await persistChats(next);
+    return next;
+  }
+  return next;
+}
+
 function nextFreeNumericId(
   used: Set<number>,
   preferred: number,

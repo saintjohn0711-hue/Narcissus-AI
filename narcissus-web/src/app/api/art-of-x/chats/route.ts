@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
 import type { ChatMessage } from "@/lib/artOfX";
@@ -79,4 +79,42 @@ export async function PUT(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/** Wipe conversation for one Muse (or all if partnerId omitted). */
+export async function DELETE(req: NextRequest) {
+  if (!isDatabaseConfigured()) {
+    return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
+  }
+  const auth = await requireUserId();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
+  }
+
+  const partnerRaw = req.nextUrl.searchParams.get("partnerId");
+  const db = getDb();
+  const userId = auth.userId;
+
+  if (partnerRaw == null || partnerRaw === "") {
+    await db
+      .delete(schema.chatMessages)
+      .where(eq(schema.chatMessages.userId, userId));
+    return NextResponse.json({ ok: true, cleared: "all" });
+  }
+
+  const partnerId = Number(partnerRaw);
+  if (!Number.isFinite(partnerId)) {
+    return NextResponse.json({ error: "invalid_partner_id" }, { status: 400 });
+  }
+
+  await db
+    .delete(schema.chatMessages)
+    .where(
+      and(
+        eq(schema.chatMessages.userId, userId),
+        eq(schema.chatMessages.partnerId, partnerId),
+      ),
+    );
+
+  return NextResponse.json({ ok: true, cleared: partnerId });
 }
