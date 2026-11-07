@@ -24,6 +24,7 @@ const STYLES: MusePresenceStyle[] = [
   "realistic",
   "soft-glam",
   "anime",
+  "cartoon",
   "cyberpunk",
 ];
 
@@ -49,7 +50,10 @@ export async function POST(req: NextRequest) {
   const style = body.style as MusePresenceStyle;
   if (!STYLES.includes(style) || style === "realistic") {
     return NextResponse.json(
-      { error: "style_required", message: "Pick soft-glam, anime, or cyberpunk." },
+      {
+        error: "style_required",
+        message: "Pick soft-glam, anime, cartoon, or cyberpunk.",
+      },
       { status: 400 },
     );
   }
@@ -80,8 +84,9 @@ export async function POST(req: NextRequest) {
   const model =
     process.env.XAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const apiKey = getXaiApiKey();
-  // Anime identity match benefits from medium quality when available.
-  const quality = style === "anime" ? "medium" : "low";
+  // Anime / Cartoon AI identity stylization benefits from medium quality.
+  const quality =
+    style === "anime" || style === "cartoon" ? "medium" : "low";
 
   try {
     const upstream = await fetch(XAI_IMAGE_EDITS_URL, {

@@ -13,7 +13,7 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
-  buildAnimeCssFallback,
+  buildStyledCssFallback,
   loadCachedPortrait,
   loadPresenceStyle,
   MUSE_PRESENCE_STYLES,
@@ -85,7 +85,7 @@ export function MusePresence({
         }),
       });
       if (!res.ok) {
-        let message = "Couldn’t restyle — using local anime match.";
+        let message = "Couldn’t restyle — using local stylization.";
         try {
           const data = (await res.json()) as {
             message?: string;
@@ -93,15 +93,22 @@ export function MusePresence({
           };
           if (data.error === "xai_not_configured") {
             message =
-              "No XAI_API_KEY — showing local anime match from her photo.";
+              targetStyle === "cartoon"
+                ? "No XAI_API_KEY — showing local Cartoon AI from her photo."
+                : targetStyle === "anime"
+                  ? "No XAI_API_KEY — showing local anime match from her photo."
+                  : "No XAI_API_KEY — CSS look stays on.";
           } else if (data.message) {
             message = data.message;
           }
         } catch {
           // keep default
         }
-        if (targetStyle === "anime") {
-          const fallback = await buildAnimeCssFallback(sourcePhoto);
+        if (targetStyle === "anime" || targetStyle === "cartoon") {
+          const fallback = await buildStyledCssFallback(
+            sourcePhoto,
+            targetStyle === "cartoon" ? "cartoon" : "anime",
+          );
           if (fallback) {
             setGenerated(fallback);
             saveCachedPortrait(partner.id, targetStyle, fallback, sourcePhoto);
@@ -118,12 +125,19 @@ export function MusePresence({
         saveCachedPortrait(partner.id, targetStyle, data.image, sourcePhoto);
       }
     } catch {
-      if (targetStyle === "anime") {
-        const fallback = await buildAnimeCssFallback(sourcePhoto);
+      if (targetStyle === "anime" || targetStyle === "cartoon") {
+        const fallback = await buildStyledCssFallback(
+          sourcePhoto,
+          targetStyle === "cartoon" ? "cartoon" : "anime",
+        );
         if (fallback) {
           setGenerated(fallback);
           saveCachedPortrait(partner.id, targetStyle, fallback, sourcePhoto);
-          setGenError("AI restyle failed — local anime match from her photo.");
+          setGenError(
+            targetStyle === "cartoon"
+              ? "AI restyle failed — local Cartoon AI from her photo."
+              : "AI restyle failed — local anime match from her photo.",
+          );
           return;
         }
       }
@@ -185,7 +199,13 @@ export function MusePresence({
     >
       <div
         className={`muse-presence-stage muse-presence-style-${style}${
-          style === "anime" && generated ? " muse-presence-style-anime-matched" : ""
+          style === "anime" && generated
+            ? " muse-presence-style-anime-matched"
+            : ""
+        }${
+          style === "cartoon" && generated
+            ? " muse-presence-style-cartoon-matched"
+            : ""
         }`}
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
@@ -311,12 +331,16 @@ export function MusePresence({
             {busy
               ? style === "anime"
                 ? "Matching anime…"
-                : "Restyling…"
+                : style === "cartoon"
+                  ? "Making Cartoon AI…"
+                  : "Restyling…"
               : generated
                 ? "Regenerate AI look"
                 : style === "anime"
                   ? "Match anime to her photo"
-                  : "Generate AI look"}
+                  : style === "cartoon"
+                    ? "Make Cartoon AI from her photo"
+                    : "Generate AI look"}
           </button>
         )}
         {genError && (

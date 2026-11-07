@@ -414,6 +414,40 @@ body {
   opacity: 0.45;
 }
 
+.muse-presence-style-cartoon .muse-presence-photo {
+  filter: contrast(1.28) saturate(1.55) brightness(1.08);
+}
+
+.muse-presence-style-cartoon .muse-presence-glow {
+  background: radial-gradient(
+    circle,
+    rgba(255, 180, 220, 0.32) 0%,
+    rgba(0, 229, 255, 0.12) 45%,
+    transparent 70%
+  );
+}
+
+.muse-presence-style-cartoon .muse-presence-veil::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 200, 230, 0.18),
+    transparent 38%,
+    rgba(120, 200, 255, 0.14)
+  );
+  mix-blend-mode: soft-light;
+}
+
+.muse-presence-style-cartoon-matched .muse-presence-photo {
+  filter: contrast(1.08) saturate(1.18) brightness(1.03);
+}
+
+.muse-presence-style-cartoon-matched .muse-presence-veil::after {
+  opacity: 0.4;
+}
+
 .muse-presence-style-cyberpunk .muse-presence-photo {
   filter: contrast(1.2) saturate(1.25) hue-rotate(-8deg) brightness(0.98);
 }
