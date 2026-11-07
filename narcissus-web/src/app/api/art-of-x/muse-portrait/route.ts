@@ -118,15 +118,15 @@ export async function POST(req: NextRequest) {
   const model =
     process.env.XAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const apiKey = getXaiApiKey();
-  // Companion defaults to high for clean Ani-class output; override with XAI_IMAGE_QUALITY.
-  // Tradeoff: high costs more credits / latency. Fall back env: medium|low.
+  // grok-imagine-image-2.0 only accepts: low | medium | auto (not "high").
+  // Companion/Anime default medium for clean Ani-class output; override with XAI_IMAGE_QUALITY.
   const qualityEnv = process.env.XAI_IMAGE_QUALITY?.trim().toLowerCase();
   const quality =
-    qualityEnv === "low" || qualityEnv === "medium" || qualityEnv === "high"
+    qualityEnv === "low" || qualityEnv === "medium" || qualityEnv === "auto"
       ? qualityEnv
-      : style === "cartoon"
-        ? "high"
-        : style === "anime"
+      : qualityEnv === "high"
+        ? "medium" // map unsupported "high" → medium
+        : style === "cartoon" || style === "anime"
           ? "medium"
           : "low";
 
