@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { writeFile } from "fs/promises";
+import path from "path";
 import {
+  anatomyPromptFor,
   getBodyType,
   getCockSize,
   getCockState,
@@ -20,6 +23,7 @@ import {
 } from "@/lib/comfy";
 import { lockHeadAndHair } from "@/lib/identityLock";
 import { localResultUrl, saveLocalResult } from "@/lib/localResults";
+import { muxAudioOntoVideo, resultsDir } from "@/lib/muxAudio";
 import {
   getPhotoTemplate,
   getSayVoice,
@@ -30,6 +34,7 @@ import {
   type PhotoTemplateId,
   type VideoTemplateId,
 } from "@/lib/templates";
+import { synthesizeSpeech } from "@/lib/tts";
 import {
   buildFaceSwapPrompt,
   buildImg2ImgPrompt,
@@ -129,11 +134,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid mode." }, { status: 400 });
   }
 
-  if (mode === "faceswap" && !faceFile) {
+  const photoTemplateId: PhotoTemplateId = isPhotoTemplateId(templateRaw)
+    ? templateRaw
+    : "blowjob";
+  const videoTemplateId: VideoTemplateId = isVideoTemplateId(templateRaw)
+    ? templateRaw
+    : "natural";
+  const sceneTpl = mode === "scene" ? getPhotoTemplate(photoTemplateId) : null;
+  const tpl = mode === "video" ? getVideoTemplate(videoTemplateId) : null;
+  const needsFaceUpload =
+    mode === "faceswap" || (mode === "video" && Boolean(tpl?.needsFace));
+
+  if (needsFaceUpload && !faceFile) {
     return NextResponse.json(
       {
         error:
-          "Face photo required — the face you want swapped onto the source.",
+          mode === "video"
+            ? "Face-swap video needs a donor face photo plus a body/scene photo."
+            : "Face photo required — the face you want swapped onto the source.",
       },
       { status: 400 },
     );
@@ -153,14 +171,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const photoTemplateId: PhotoTemplateId = isPhotoTemplateId(templateRaw)
-    ? templateRaw
-    : "blowjob";
-  const videoTemplateId: VideoTemplateId = isVideoTemplateId(templateRaw)
-    ? templateRaw
-    : "natural";
-  const sceneTpl = mode === "scene" ? getPhotoTemplate(photoTemplateId) : null;
-  const tpl = mode === "video" ? getVideoTemplate(videoTemplateId) : null;
   if (mode === "video" && tpl?.needsSpeech && !speech) {
     return NextResponse.json(
       { error: "Say template needs the line you want spoken." },
@@ -187,12 +197,19 @@ export async function POST(req: NextRequest) {
     );
 
     let faceUploadedName: string | null = null;
-    if (mode === "faceswap" && faceFile) {
+    if (needsFaceUpload && faceFile) {
       const faceSafe =
         faceFile.name.replace(/[^\w.\-]+/g, "_") || "face.png";
       const faceUploaded = await uploadImage(faceFile, `face_${faceSafe}`);
       faceUploadedName = faceUploaded.filename;
     }
+
+    const useBodyOnScene = Boolean(sceneTpl?.useBodyOptions);
+    const useBodyOnVideo = Boolean(tpl?.useBodyOptions);
+    const sceneAnatomy =
+      useBodyOnScene
+        ? anatomyPromptFor(bodyType, cockState, cockSize)
+        : null;
 
     // NA-75: prefer InstantID (SDXL RealVis) for undress/scene identity.
     // NA-78: cock/penis undress forces FaceID + epicrealism — RealVisXL
@@ -252,11 +269,17 @@ export async function POST(req: NextRequest) {
                 seconds: 5,
                 fps: 8,
                 checkpoint: realismCkpt || undefined,
+                faceImage: faceUploadedName || undefined,
+                bodyType: useBodyOnVideo ? bodyType : undefined,
+                cockState: useBodyOnVideo ? cockState : undefined,
+                cockSize: useBodyOnVideo ? cockSize : undefined,
+                promptOverride,
               })
             : mode === "scene" && sceneTpl
               ? buildScenePrompt(uploaded.filename, {
                   promptOverride: [
                     sceneTpl.stillPrompt,
+                    sceneAnatomy?.positive,
                     promptOverride,
                   ]
                     .filter(Boolean)
@@ -455,10 +478,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Say-this: mux Edge-TTS audio under the silent SVD clip when toolchain exists.
+    let speechMuxed = false;
+    let speechMuxError: string | null = null;
+    if (
+      mode === "video" &&
+      tpl?.needsSpeech &&
+      speech &&
+      result.images[0] &&
+      result.mediaKind === "video"
+    ) {
+      try {
+        const videoBytes = await fetchImageBytes(result.images[0]);
+        const dir = resultsDir();
+        const base = `${result.promptId}_say`;
+        const silentPath = path.join(dir, `${base}_silent.mp4`);
+        const audioPath = path.join(dir, `${base}.mp3`);
+        const voicedPath = path.join(dir, `${base}_voiced.mp4`);
+        await writeFile(silentPath, Buffer.from(videoBytes));
+        await synthesizeSpeech(speech, audioPath, voice);
+        await muxAudioOntoVideo(silentPath, audioPath, voicedPath);
+        const voicedBytes = new Uint8Array(
+          await (await import("fs/promises")).readFile(voicedPath),
+        );
+        const localName = await saveLocalResult(
+          `${result.promptId}_say.mp4`,
+          voicedBytes,
+        );
+        resultUrl = localResultUrl(localName);
+        speechMuxed = true;
+      } catch (err) {
+        speechMuxError =
+          err instanceof Error ? err.message.slice(0, 180) : "tts mux failed";
+        // Keep silent video URL — UI still gets a clip.
+      }
+    }
+
     const bodyMeta = getBodyType(bodyType);
     const bodyLabel = bodyMeta.label;
+    const showBodyMeta =
+      mode === "undress" ||
+      (mode === "scene" && useBodyOnScene) ||
+      (mode === "video" && useBodyOnVideo);
     const cockNote =
-      bodyMeta.needsCock
+      bodyMeta.needsCock && showBodyMeta
         ? ` · ${getCockState(cockState).label} ${getCockSize(cockSize).label}`
         : "";
 
@@ -474,17 +537,23 @@ export async function POST(req: NextRequest) {
           : mode === "scene"
             ? photoTemplateId
             : null,
-      bodyType: mode === "undress" ? bodyType : null,
-      cockState: mode === "undress" && bodyMeta.needsCock ? cockState : null,
-      cockSize: mode === "undress" && bodyMeta.needsCock ? cockSize : null,
+      bodyType: showBodyMeta ? bodyType : null,
+      cockState: showBodyMeta && bodyMeta.needsCock ? cockState : null,
+      cockSize: showBodyMeta && bodyMeta.needsCock ? cockSize : null,
       speech: speech || null,
       voice: mode === "video" && tpl?.needsSpeech ? voice : null,
+      speechMuxed,
+      speechMuxError,
       identity,
       identityLocked,
       filename: file.name,
       faceFilename: faceFile?.name ?? null,
       bytes: file.size,
-      prompt: promptOverride || sceneTpl?.stillPrompt || null,
+      prompt:
+        promptOverride ||
+        tpl?.stillPrompt ||
+        sceneTpl?.stillPrompt ||
+        null,
       checkpoint: realismCkpt,
       faceLockFallback,
       message:
@@ -497,11 +566,15 @@ export async function POST(req: NextRequest) {
             : mode === "scene"
               ? identityLocked
                 ? `${sceneTpl?.label || "Scene"} ready — original face & hair locked.`
-                : `${sceneTpl?.label || "Scene"} photo finished.`
+                : `${sceneTpl?.label || "Scene"}${showBodyMeta ? ` · ${bodyLabel}${cockNote}` : ""} photo finished.`
               : mode === "video"
-                ? tpl?.id === "say"
-                  ? `5s talking clip ready (${sayVoice.label}). Line queued: “${speech}”. Full lip-sync TTS hooks in next.`
-                  : `5s ${tpl?.label || "video"} template ready.`
+                ? tpl?.needsSpeech
+                  ? speechMuxed
+                    ? `5s talking clip ready (${sayVoice.label}) with spoken line muxed.`
+                    : `5s talking clip ready (${sayVoice.label}). Line: “${speech}”. Audio mux skipped${speechMuxError ? ` (${speechMuxError})` : ""} — silent motion still returned.`
+                  : tpl?.needsFace
+                    ? "5s face-swap video ready — donor face on source, then SVD motion."
+                    : `5s ${tpl?.label || "video"} template ready${showBodyMeta ? ` · ${bodyLabel}${cockNote}` : ""}.`
                 : identityLocked
                   ? "Photo edit done — original face & hair preserved on top of the edit."
                   : "Photo job finished with high identity lock.",
@@ -537,12 +610,27 @@ export async function GET() {
       "double_blowjob",
       "cumshot",
       "facial",
+      "missionary",
+      "doggy",
+      "riding",
       "lingerie",
       "bikini",
       "lbd",
       "wet_silk",
     ],
-    videoTemplates: ["natural", "blowjob", "say"],
+    videoTemplates: [
+      "natural",
+      "blowjob",
+      "double_blowjob",
+      "cumshot",
+      "facial",
+      "missionary",
+      "doggy",
+      "riding",
+      "lingerie",
+      "say",
+      "face_swap",
+    ],
     sayVoices: [
       "en-US-JennyNeural",
       "en-US-AriaNeural",
@@ -551,7 +639,11 @@ export async function GET() {
       "en-US-GuyNeural",
       "en-US-DavisNeural",
     ],
+    faceswapVideo: {
+      requires: ["photo", "face"],
+      engine: "ReActorFaceSwap → SVD_img2vid",
+    },
     comfyConfigured: isComfyConfigured(),
-    engine: "comfyui-reactor+undress-bodytypes+svd+scenes",
+    engine: "comfyui-reactor+instantid+undress-bodytypes+svd+faceswap-video+say-tts",
   });
 }
