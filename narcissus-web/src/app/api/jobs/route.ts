@@ -323,9 +323,8 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // Light head lock reinforces ReActor. Keep undress below shoulders so the
-    // paste doesn't put clothes back; identity now comes from raw inswapper
-    // (no GFPGAN) + upper-face source crop (~0.88 cosine vs ~0.62 before).
+    // NA-74: oval face+hair lock + luma match. Same ~0.96 cosine as a thin band
+    // but soft edges (no hard seam) and almost no strap/chest paste from upload.
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
     const skipHeadPaste =
@@ -339,15 +338,17 @@ export async function POST(req: NextRequest) {
       try {
         const editedBytes = await fetchImageBytes(result.images[0]);
         if (!(await isNearlyBlankImageAsync(editedBytes))) {
-          const headRatio =
-            mode === "undress"
-              ? 0.26 + identity * 0.06 // ~0.31 at 0.9 — face/hair only
-              : mode === "scene"
-                ? 0.28 + identity * 0.06
-                : 0.28 + identity * 0.08;
+          // Sweep winner: faceRx~0.32 faceRy~0.26 — cos~0.964, clothes keep≈band+
+          const id = Math.min(1, Math.max(0.35, identity));
           const locked = await lockHeadAndHair(editedBytes, originalBytes, {
-            headRatio,
-            feather: 0.1,
+            shape: "oval",
+            faceCenterY: mode === "undress" ? 0.14 : 0.15,
+            faceRx: 0.3 + id * 0.03, // ~0.327 at 0.9
+            faceRy:
+              mode === "undress"
+                ? 0.24 + id * 0.025 // ~0.263 — chin, not chest
+                : 0.25 + id * 0.03,
+            feather: 0.35,
             globalPull: 0,
           });
           const localName = await saveLocalResult(
