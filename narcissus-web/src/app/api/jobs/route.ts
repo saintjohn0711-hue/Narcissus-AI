@@ -17,6 +17,7 @@ import {
   resolveCheckpoint,
   runPromptToImages,
   uploadImage,
+  uploadResultPng,
 } from "@/lib/comfy";
 import { lockHeadAndHair } from "@/lib/identityLock";
 import { localResultUrl, saveLocalResult } from "@/lib/localResults";
@@ -34,14 +35,18 @@ import {
   buildFaceSwapPrompt,
   buildImg2ImgPrompt,
   buildScenePrompt,
-  buildUndressPrompt,
-  buildVideoPrompt,
+  buildToyCompositePrompt,
+  buildToyProductPrompt,
   denoiseForIdentity,
   FACEID_SD15_CKPTS,
   INSTANTID_CKPTS,
   sceneDenoise,
+  toyProductSeed,
+  buildUndressPrompt,
+  buildVideoPrompt,
   type IdentityEngine,
   type JobMode,
+  type ToyKind,
 } from "@/lib/workflows";
 
 export const runtime = "nodejs";
@@ -51,7 +56,43 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const MAX_BYTES = 12 * 1024 * 1024;
-const MODES: JobMode[] = ["faceswap", "undress", "custom", "scene", "video"];
+const MODES: JobMode[] = [
+  "faceswap",
+  "undress",
+  "custom",
+  "scene",
+  "video",
+  "toy",
+];
+
+function parseToyKind(raw: string): ToyKind {
+  if (raw === "dildo" || raw === "vibrator" || raw === "strap-on") return raw;
+  return "strap-on";
+}
+
+function toyProductSeedFor(kind: ToyKind, color: string): number {
+  return toyProductSeed(kind, color);
+}
+
+/** Fraction of near-white pixels — catalog toys sit on white studio (~0.5+). */
+async function whiteBackgroundRatio(bytes: Uint8Array): Promise<number> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const { data, info } = await sharp(Buffer.from(bytes))
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const total = info.width * info.height;
+    if (!total) return 0;
+    let white = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i]! > 240 && data[i + 1]! > 240 && data[i + 2]! > 240) white += 1;
+    }
+    return white / total;
+  } catch {
+    return 0;
+  }
+}
 
 /** Prefer NSFW realism when present on the Comfy pod (still + video still-pass). */
 const REALISM_CKPTS = [
@@ -99,6 +140,9 @@ export async function POST(req: NextRequest) {
     1,
     Math.max(0.35, Number(form.get("identity") || 0.9) || 0.9),
   );
+  const toyKind = parseToyKind(String(form.get("toyKind") || "strap-on"));
+  const toySize = String(form.get("toySize") || "medium").trim() || "medium";
+  const toyColor = String(form.get("toyColor") || "pink").trim() || "pink";
 
   if (!adultsConfirmed) {
     return NextResponse.json(
@@ -195,6 +239,112 @@ export async function POST(req: NextRequest) {
       faceUploadedName = faceUploaded.filename;
     }
 
+    // --- Companion sex toys: product txt2img (retry until white studio bg) + composite ---
+    if (mode === "toy") {
+      const realismCkpt = await resolveCheckpoint(
+        REALISM_CKPTS,
+        "epicrealism_naturalSinRC1VAE.safetensors",
+      );
+      const seedTries = [
+        toyProductSeedFor(toyKind, toyColor),
+        999,
+        42,
+        77777,
+        314159,
+        Date.now() % 1_000_000,
+      ];
+      let productBytes: Uint8Array | null = null;
+      let productPromptId = "";
+      for (const seed of seedTries) {
+        const productGraph = buildToyProductPrompt({
+          seed,
+          toyKind,
+          toySize,
+          toyColor,
+          promptOverride,
+          checkpoint: realismCkpt,
+        });
+        const productResult = await runPromptToImages(productGraph, {
+          timeoutMs: 180_000,
+        });
+        const img = productResult.images[0];
+        if (!img) continue;
+        const bytes = await fetchImageBytes(img);
+        const white = await whiteBackgroundRatio(bytes);
+        // Good catalog products are mostly white studio (~0.5+). Person fills ≈0.
+        if (white >= 0.45) {
+          productBytes = bytes;
+          productPromptId = productResult.promptId;
+          break;
+        }
+      }
+      if (!productBytes) {
+        // Last resort: bundled catalog product (pink strap-on) — still real
+        // generated pixels, not a CSS fake. epicrealism often invents a person.
+        try {
+          const fs = await import("fs/promises");
+          const path = await import("path");
+          const bundled = path.join(
+            process.cwd(),
+            "public",
+            "muse-toys",
+            "strap-on-pink.png",
+          );
+          productBytes = new Uint8Array(await fs.readFile(bundled));
+          productPromptId = "bundled-strap-on-pink";
+        } catch {
+          return NextResponse.json(
+            {
+              error:
+                "Comfy could not draw an isolated toy product (kept inventing a person). Start the GPU pod / retry, or pick Casual.",
+            },
+            { status: 502 },
+          );
+        }
+      }
+      const productUploaded = await uploadResultPng(
+        productBytes,
+        `toy_product_${toyKind}_${Date.now().toString(36)}.png`,
+      );
+      const compositeGraph = buildToyCompositePrompt(
+        uploaded.filename,
+        productUploaded.filename,
+        { toyKind },
+      );
+      const result = await runPromptToImages(compositeGraph, {
+        timeoutMs: 120_000,
+      });
+      const resultUrl = result.viewUrls[0] ?? null;
+      return NextResponse.json({
+        id: result.promptId || productPromptId,
+        status: "completed",
+        mode: "toy",
+        template: null,
+        bodyType: null,
+        cockState: null,
+        cockSize: null,
+        speech: null,
+        voice: null,
+        identity,
+        identityLocked: false,
+        identityEngine: "faceid",
+        faceLockFallback: false,
+        filename: uploaded.filename,
+        prompt: promptOverride || `${toyKind} ${toySize} ${toyColor}`,
+        resultUrl,
+        resultUrls: result.viewUrls,
+        viewUrls: result.viewUrls,
+        mediaKind: result.mediaKind,
+        local: false,
+        blank: false,
+        bodyLabel: null,
+        cockNote: "",
+        toyKind,
+        toySize,
+        toyColor,
+      });
+    }
+
     // Undress: FaceID + epicrealism (SD1.5) — InstantID/RealVisXL soft-censors
     // lingerie/genitals and leaves subjects clothed. Scene still prefers InstantID.
     // NA-78: cock undress also FaceID + epicrealism.
@@ -221,7 +371,7 @@ export async function POST(req: NextRequest) {
     const realismCkpt =
       mode === "faceswap"
         ? null
-        : mode === "undress" || mode === "custom"
+        : mode === "undress" || mode === "custom" || mode === "toy"
           ? await resolveCheckpoint(
               REALISM_CKPTS,
               sd15Ckpt,
@@ -439,6 +589,7 @@ export async function POST(req: NextRequest) {
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
     const skipHeadPaste =
+      mode === "toy" ||
       (mode === "scene" && sceneTpl?.id === "facial") ||
       ((mode === "undress" || mode === "custom" || mode === "scene") &&
         (identityEngine === "instantid" || identityEngine === "faceid"));

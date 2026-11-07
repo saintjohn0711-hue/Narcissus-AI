@@ -112,8 +112,16 @@ function refusalPayload(
   const askingNude = wardrobe?.clothing === "nude";
   const askingFetish =
     wardrobe?.clothing === "strap-on" ||
+    wardrobe?.clothing === "dildo" ||
+    wardrobe?.clothing === "vibrator" ||
     wardrobe?.clothing === "collar-leash" ||
-    wardrobe?.clothing === "ball-gag";
+    wardrobe?.clothing === "ball-gag" ||
+    wardrobe?.clothing === "leather-harness" ||
+    wardrobe?.clothing === "pvc" ||
+    wardrobe?.clothing === "leather" ||
+    wardrobe?.clothing === "dominatrix" ||
+    wardrobe?.clothing === "body-stocking" ||
+    wardrobe?.clothing === "corset-stockings";
 
   let message =
     "xAI image restyle failed — API key is present; retry or tweak traits.";
@@ -128,15 +136,20 @@ function refusalPayload(
   } else if (askingNude && contentBlocked) {
     error = "nude_refused";
     message =
-      "xAI blocked this Nude request (content moderation). Lingerie and other explicit outfits still work — pick Lingerie, or start the Comfy/RunPod undress pod for true nude. Companion will not fake nude with a filter.";
+      "xAI blocked this Nude request (content moderation). Companion will try Comfy undress when the GPU pod is RUNNING — or pick Casual. Never faking nude with a filter.";
   } else if (askingFetish && contentBlocked) {
     error = "content_refused";
     message =
-      "xAI blocked this fetish look (content moderation). Companion will try Comfy FaceID edit when the GPU pod is RUNNING — or pick Lingerie. Never faking with a filter.";
+      "xAI blocked this fetish look (content moderation). Companion will try Comfy when the GPU pod is RUNNING — or pick Casual. Never faking with a filter.";
   } else if (contentBlocked) {
     error = "content_refused";
+    const clothing = wardrobe?.clothing || "this look";
     message =
-      "xAI content moderation blocked this Companion request — try softer clothing (Lingerie works) or different traits.";
+      clothing === "lingerie"
+        ? "xAI blocked Lingerie (content moderation). Companion will try Comfy when the GPU pod is RUNNING — or pick Casual / Dress. Never faking with a filter."
+        : clothing === "casual"
+          ? "xAI blocked Casual (content moderation). Companion will try Comfy when the GPU pod is RUNNING — or retry shortly. Never faking with a filter."
+          : `xAI blocked ${clothing} (content moderation). Companion will try Comfy when the GPU pod is RUNNING — or try Casual. Never faking with a filter.`;
   }
 
   return NextResponse.json(

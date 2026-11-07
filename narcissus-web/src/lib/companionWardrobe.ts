@@ -73,13 +73,20 @@ export type CompanionClothing =
   | "lingerie"
   | "corset"
   | "stockings-garter"
+  | "corset-stockings"
   | "lace-teddy"
   | "babydoll"
   | "sheer-robe"
   | "micro-bikini"
+  | "body-stocking"
+  | "pvc"
+  | "leather"
+  | "dominatrix"
   | "leather-harness"
   | "silk-slip"
   | "strap-on"
+  | "dildo"
+  | "vibrator"
   | "collar-leash"
   | "ball-gag"
   | "casual"
@@ -238,16 +245,43 @@ export const COMPANION_CLOTHING: Opt<CompanionClothing>[] = [
   { id: "lingerie", label: "Lingerie", hint: "Lace / intimate set" },
   { id: "corset", label: "Corset", hint: "Bustier / waist cinch" },
   { id: "stockings-garter", label: "Stockings", hint: "Garter + sheer hose" },
+  {
+    id: "corset-stockings",
+    label: "Corset & stockings",
+    hint: "Structured corset + sheer stockings set",
+  },
   { id: "lace-teddy", label: "Lace teddy", hint: "One-piece lace" },
   { id: "babydoll", label: "Babydoll", hint: "Sheer short nightie" },
   { id: "sheer-robe", label: "Sheer robe", hint: "Open peignoir" },
   { id: "micro-bikini", label: "Micro bikini", hint: "Sling / tiny set" },
+  {
+    id: "body-stocking",
+    label: "Body stocking",
+    hint: "Sheer one-piece bodystocking",
+  },
+  { id: "pvc", label: "PVC", hint: "Shiny PVC catsuit / dress" },
+  { id: "leather", label: "Leather", hint: "Black leather outfit" },
+  {
+    id: "dominatrix",
+    label: "Dominatrix",
+    hint: "Latex/leather dominant look",
+  },
   { id: "leather-harness", label: "Harness", hint: "Leather straps" },
   { id: "silk-slip", label: "Silk slip", hint: "Bias silk chemise" },
   {
     id: "strap-on",
     label: "Strap-on",
-    hint: "Harness + toy — pick size & color",
+    hint: "Harness + toy — pick size & color (Comfy)",
+  },
+  {
+    id: "dildo",
+    label: "Dildo",
+    hint: "Handheld toy — size & color (Comfy)",
+  },
+  {
+    id: "vibrator",
+    label: "Vibrator",
+    hint: "Wand vibrator — size & color (Comfy)",
   },
   {
     id: "collar-leash",
@@ -305,23 +339,56 @@ export function isNudeClothing(c: CompanionClothing | string | undefined): boole
   return c === "nude";
 }
 
-/** Fetish outfits that need adult action chips / explicit prompts. */
+/** Soft / everyday looks that should stay xAI-friendly (no fetish language). */
+export function isSoftClothing(
+  c: CompanionClothing | string | undefined,
+): boolean {
+  return (
+    c === "lingerie" ||
+    c === "casual" ||
+    c === "dress" ||
+    c === "swimsuit" ||
+    c === "silk-slip" ||
+    c === "babydoll" ||
+    c === "lace-teddy" ||
+    !c
+  );
+}
+
+/** Fetish / explicit outfits — Comfy fallback when xAI moderates. */
 export function isFetishClothing(
   c: CompanionClothing | string | undefined,
 ): boolean {
   return (
     c === "strap-on" ||
+    c === "dildo" ||
+    c === "vibrator" ||
     c === "collar-leash" ||
     c === "ball-gag" ||
-    c === "leather-harness"
+    c === "leather-harness" ||
+    c === "pvc" ||
+    c === "leather" ||
+    c === "dominatrix" ||
+    c === "body-stocking" ||
+    c === "corset-stockings"
   );
 }
 
-/** True when strap-on size/color chips should show. */
+/**
+ * Sex toys that soft-censor on xAI and on person-img2img — route Comfy-first
+ * via /api/jobs mode=toy (product txt2img + masked composite).
+ */
+export function isSexToyClothing(
+  c: CompanionClothing | string | undefined,
+): boolean {
+  return c === "strap-on" || c === "dildo" || c === "vibrator";
+}
+
+/** True when size/color chips should show. */
 export function clothingUsesToyOptions(
   c: CompanionClothing | string | undefined,
 ): boolean {
-  return c === "strap-on";
+  return isSexToyClothing(c);
 }
 
 /** Feature groups shown under Customize → Features */
@@ -411,8 +478,9 @@ export function normalizeWardrobe(
 
 export function wardrobeKey(w: CompanionWardrobe): string {
   const n = normalizeWardrobe(w);
-  const toyBit =
-    n.clothing === "strap-on" ? `${n.toySize}.${n.toyColor}` : "none";
+  const toyBit = isSexToyClothing(n.clothing)
+    ? `${n.toySize}.${n.toyColor}`
+    : "none";
   return [
     n.eyeColor,
     n.hairColor,
@@ -568,13 +636,13 @@ function bustDirective(b: CompanionBust, hasRef: boolean): string {
 function expressionDirective(x: CompanionExpression): string {
   switch (x) {
     case "flirty-smile":
-      return "Expression: soft flirty smile, looking at the viewer.";
+      return "Expression: warm smile, looking at the viewer.";
     case "playful-pout":
-      return "Expression: playful pout, teasing companion energy.";
+      return "Expression: playful soft pout, friendly companion energy.";
     case "intimate":
-      return "Expression: intimate invitation, parted lips, locked eye contact.";
+      return "Expression: close warm gaze, gentle eye contact (tasteful).";
     default:
-      return "Expression: soft intimate gaze toward the viewer.";
+      return "Expression: soft gentle gaze toward the viewer.";
   }
 }
 
@@ -591,18 +659,23 @@ function lookDirective(l: CompanionLookStyle): string {
   }
 }
 
-function poseDirective(p: CompanionPose): string {
+function poseDirective(p: CompanionPose, soft: boolean): string {
   switch (p) {
     case "sitting":
-      return "POSE: sitting on a simple seat, full body visible, sexy composed posture.";
+      return soft
+        ? "POSE: sitting on a simple seat, full body visible, composed posture."
+        : "POSE: sitting on a simple seat, full body visible, composed posture.";
     case "leaning":
       return "POSE: leaning against a wall or railing, weight on one hip, full body visible.";
     case "all-fours":
-      return "POSE: on all fours (hands and knees), arched back, looking toward the viewer, full body visible adults 18+.";
+      // Soft outfits: never send all-fours to xAI — it trips moderation with lingerie.
+      return soft
+        ? "POSE: standing full-body, natural weight shift, head-to-toe in frame."
+        : "POSE: on all fours (hands and knees), arched back, looking toward the viewer, full body visible adults 18+.";
     case "over-shoulder":
       return "POSE: standing or half-turned, looking back over one shoulder at the viewer, full body visible.";
     case "legs-crossed":
-      return "POSE: seated with legs crossed, elegant sexy posture, full body visible.";
+      return "POSE: seated with legs crossed, elegant posture, full body visible.";
     default:
       return "POSE: standing full-body, natural weight shift, head-to-toe in frame.";
   }
@@ -662,34 +735,58 @@ function clothingDirective(
 ): string {
   switch (c) {
     case "casual":
-      return "Clothing: casual soft tee and shorts, full-body visible.";
+      return "Clothing: casual soft tee and shorts, full-body visible, tasteful anime fashion.";
     case "dress":
-      return "Clothing: flirty cocktail dress, full-body standing.";
+      return "Clothing: elegant cocktail dress, full-body standing, tasteful anime fashion.";
     case "goth":
-      return "Clothing: black gothic lace / straps, full-body.";
+      return "Clothing: black gothic lace fashion look, full-body.";
     case "swimsuit":
-      return "Clothing: slim fashionable bikini, full-body.";
+      return "Clothing: fashionable swimsuit / bikini, beach-ready anime look, full-body.";
     case "corset":
-      return "Clothing: sexy structured corset / bustier with garters, cleavage emphasized, full-body standing adults 18+.";
+      return "Clothing: structured corset / bustier fashion piece, full-body standing.";
     case "stockings-garter":
-      return "Clothing: lingerie bra/panties with sheer stockings and garter belt, full-body standing adults 18+.";
+      return "Clothing: coordinated lingerie with sheer stockings and garter belt, elegant anime fashion, full-body.";
+    case "corset-stockings":
+      return "Clothing: structured corset paired with sheer stockings and garter straps as one clear set, elegant anime fashion, full-body.";
+    case "body-stocking":
+      return "Clothing: sheer one-piece body stocking covering torso and legs, stylized anime fashion, full-body.";
+    case "pvc":
+      return "Clothing: shiny black PVC catsuit or tight PVC dress, high-gloss vinyl fashion, full-body standing adults 18+.";
+    case "leather":
+      return "Clothing: fitted black leather outfit (leather dress or leather bustier + pants), full-body standing adults 18+.";
+    case "dominatrix":
+      return [
+        "CLOTHING (adults 18+): dominatrix-inspired fashion — black latex or leather look,",
+        "thigh-high boots, gloves, optional harness accents,",
+        "full-body standing, premium companion illustration. No minors.",
+      ].join(" ");
     case "lace-teddy":
-      return "Clothing: sheer lace teddy one-piece, high-cut hips, full-body standing adults 18+.";
+      return "Clothing: lace teddy one-piece, elegant anime lingerie fashion, full-body.";
     case "babydoll":
-      return "Clothing: sheer babydoll nightie with tiny panties, short hem, full-body standing adults 18+.";
+      return "Clothing: soft babydoll nightie, short hem, elegant anime fashion, full-body.";
     case "sheer-robe":
-      return "Clothing: open sheer peignoir / robe over minimal lingerie or bare skin, full-body standing adults 18+.";
+      return "Clothing: sheer peignoir / robe over lingerie, elegant anime fashion, full-body.";
     case "micro-bikini":
-      return "Clothing: extreme micro bikini / sling bikini, minimal coverage, full-body standing adults 18+.";
+      return "Clothing: micro bikini fashion set, stylized anime look, full-body.";
     case "leather-harness":
-      return "Clothing: black leather body harness straps (not a full catsuit), sensual companion look, full-body standing adults 18+.";
+      return "Clothing: black leather body harness straps (fashion harness), full-body standing adults 18+.";
     case "silk-slip":
-      return "Clothing: bias-cut silk slip chemise, thin straps, clinging fabric, full-body standing adults 18+.";
+      return "Clothing: bias-cut silk slip chemise, thin straps, elegant anime fashion, full-body.";
     case "strap-on":
       return [
         `CLOTHING (adults 18+ fetish): adult anime companion wearing a strap-on harness with a clearly visible ${toySizeLabel(toySize)} ${toyColorLabel(toyColor)} strap-on dildo attached at the hips.`,
         "Show the full harness straps around hips/waist and the toy silhouette — not censored, not hidden behind fabric.",
         "Optional minimal lingerie under the harness OK. Full-body standing, premium anime illustration (not photoreal). No minors.",
+      ].join(" ");
+    case "dildo":
+      return [
+        `PROP (adults 18+): adult anime companion holding a clearly visible ${toySizeLabel(toySize)} ${toyColorLabel(toyColor)} silicone dildo.`,
+        "Toy fully visible — not censored. Full-body, premium anime illustration. No minors.",
+      ].join(" ");
+    case "vibrator":
+      return [
+        `PROP (adults 18+): adult anime companion holding a clearly visible ${toySizeLabel(toySize)} ${toyColorLabel(toyColor)} vibrator wand.`,
+        "Toy fully visible — not censored. Full-body, premium anime illustration. No minors.",
       ].join(" ");
     case "collar-leash":
       return [
@@ -707,7 +804,8 @@ function clothingDirective(
         "Same character identity; standing full-length head-to-toe. Premium anime illustration (not photoreal porn). No minors.",
       ].join(" ");
     default:
-      return "Clothing: delicate lingerie / lace matching set, sexy companion attire, full-body visible adults 18+.";
+      // Lingerie — keep soft for xAI; avoid fetish-adjacent wording.
+      return "Clothing: delicate lace lingerie matching set, elegant anime companion fashion, tasteful full-body illustration.";
   }
 }
 
@@ -732,6 +830,7 @@ export function companionWardrobePromptBits(
       : mode === "adjust"
         ? "ADJUST (adults 18+): keep the SAME illustrated companion identity from Image 1; apply trait/outfit changes only."
         : "CUSTOMIZE (adults 18+ — Image 1 face identity absolute; Natural traits match the Muse photo):";
+  const soft = isSoftClothing(w.clothing);
   return [
     "FRAMING: FULL-LENGTH anime companion — head-to-toe in frame (feet and head visible), Ani-like vertical scale, not a bust/portrait crop.",
     customizeLead,
@@ -744,8 +843,12 @@ export function companionWardrobePromptBits(
     expressionDirective(w.expression),
     lookDirective(w.look),
     clothingDirective(w.clothing, w.toySize, w.toyColor),
-    poseDirective(w.pose),
-    propDirective(w.prop),
+    poseDirective(w.pose, soft),
+    // Soft outfits: skip handcuffs/crop props in the xAI prompt (fetish-adjacent).
+    soft &&
+    (w.prop === "handcuffs" || w.prop === "riding-crop")
+      ? ""
+      : propDirective(w.prop),
     looksBit,
   ]
     .filter(Boolean)
