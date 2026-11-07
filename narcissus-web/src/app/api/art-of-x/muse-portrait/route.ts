@@ -123,11 +123,13 @@ export async function POST(req: NextRequest) {
     style === "anime" || style === "cartoon" ? "medium" : "low";
 
   const museImage: ImageRef = { url: photo, type: "image_url" };
+  // Companion full-length standing → tall frame; others stay 3:4
+  const aspectRatio = style === "cartoon" ? "9:16" : "3:4";
   let editBody: Record<string, unknown> = {
     model,
     prompt,
     image: museImage,
-    aspect_ratio: "3:4",
+    aspect_ratio: aspectRatio,
     quality,
     response_format: "b64_json",
     n: 1,
@@ -146,7 +148,7 @@ export async function POST(req: NextRequest) {
           museImage,
           { url: styleRef, type: "image_url" } satisfies ImageRef,
         ],
-        aspect_ratio: "3:4",
+        aspect_ratio: aspectRatio,
         quality,
         response_format: "b64_json",
         n: 1,
