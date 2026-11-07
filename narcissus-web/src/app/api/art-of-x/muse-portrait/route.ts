@@ -132,7 +132,7 @@ function refusalPayload(
   } else if (askingFetish && contentBlocked) {
     error = "content_refused";
     message =
-      "xAI blocked this fetish look (content moderation). Try Lingerie, another fetish option, or start the Comfy/RunPod pod — Companion will not fake fetish outfits with a filter.";
+      "xAI blocked this fetish look (content moderation). Companion will try Comfy FaceID edit when the GPU pod is RUNNING — or pick Lingerie. Never faking with a filter.";
   } else if (contentBlocked) {
     error = "content_refused";
     message =
