@@ -14,9 +14,11 @@ import { AppNav } from "@/components/AppNav";
 import { MusePresence } from "@/components/MusePresence";
 import {
   displayName,
+  emptyPartner,
   genderLabel,
   mainPhoto,
   PERSON_LABEL,
+  savePartners,
   type ChatMessage,
   type PartnerRecord,
 } from "@/lib/artOfX";
@@ -25,9 +27,11 @@ import {
   fetchChats,
   fetchPartners,
   persistChats,
+  persistPartners,
 } from "@/lib/artOfXStore";
 import {
   DEFAULT_MUSE_PRESENCE_STYLE,
+  savePresenceStyle,
   type MusePresenceStyle,
 } from "@/lib/musePresence";
 import type { ChatPov } from "@/lib/xai";
@@ -150,6 +154,27 @@ function ChatPageInner() {
   const companionFull = Boolean(partner) && presenceStyle === "cartoon";
   const threadKey = activeId != null ? String(activeId) : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
+
+  async function startCompanion() {
+    const scratch = {
+      ...emptyPartner("Companion", partners),
+      looks: "Ani / JuicyChat-class anime companion",
+    };
+    const next = [...partners, scratch];
+    // Local first so Generate works even if cloud persist fails.
+    savePartners(next);
+    setPartners(next);
+    setActiveId(scratch.id);
+    setPresenceStyle(DEFAULT_MUSE_PRESENCE_STYLE);
+    savePresenceStyle(scratch.id, DEFAULT_MUSE_PRESENCE_STYLE);
+    setError(null);
+    setChatOpen(true);
+    try {
+      await persistPartners(next);
+    } catch {
+      // Keep local scratch Companion — user can still Generate.
+    }
+  }
 
   async function resetChat() {
     if (!partner || resetting) return;
@@ -341,18 +366,27 @@ function ChatPageInner() {
             className="text-2xl text-[var(--ink)]"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
-            No Muse open yet
+            Start your Companion
           </p>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-[#c4b7a8]">
-            Add a Muse to open chat. Companion can be designed from traits —
-            a photo is optional for likeness lock.
+            Design an Ani-style anime companion from traits — no photo required.
+            Likeness lock is optional later.
           </p>
-          <Link
-            href="/art-of-x/partners"
-            className="mt-6 inline-flex rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--on-accent)]"
-          >
-            Open {PERSON_LABEL.plural}
-          </Link>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void startCompanion()}
+              className="inline-flex rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--on-accent)]"
+            >
+              Start Companion
+            </button>
+            <Link
+              href="/art-of-x/partners"
+              className="inline-flex rounded-sm border border-[var(--line)] px-4 py-2 text-sm font-medium text-[var(--ink)]"
+            >
+              Open {PERSON_LABEL.plural}
+            </Link>
+          </div>
         </div>
       ) : (
         <div

@@ -24,7 +24,8 @@ import {
 } from "@/lib/musePresence";
 
 export const runtime = "nodejs";
-export const maxDuration = 90;
+// Scratch generate often lands ~60s; leave headroom for slow xAI / adjust.
+export const maxDuration = 180;
 
 const XAI_IMAGE_EDITS_URL = "https://api.x.ai/v1/images/edits";
 const XAI_IMAGE_GEN_URL = "https://api.x.ai/v1/images/generations";
