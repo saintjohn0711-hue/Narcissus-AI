@@ -481,6 +481,15 @@ body {
   color: #f0c4b8;
 }
 
+.muse-companion-likeness {
+  margin: 0.15rem 0 0;
+  line-height: 1.35;
+}
+
+.muse-companion-likeness input {
+  accent-color: var(--glow);
+}
+
 @media (min-width: 1024px) {
   .muse-companion-dock {
     left: 1.25rem;
