@@ -3,6 +3,12 @@
  * Optional xAI image edit via /api/art-of-x/muse-portrait (no Comfy).
  */
 
+import {
+  companionWardrobePromptBits,
+  wardrobeKey,
+  type CompanionWardrobe,
+} from "@/lib/companionWardrobe";
+
 export type MusePresenceStyle =
   | "realistic"
   | "soft-glam"
@@ -64,8 +70,8 @@ export function isMusePresenceStyle(v: string): v is MusePresenceStyle {
 }
 
 const STYLE_STORAGE = "narcissus.artOfX.musePresenceStyle.v1";
-/** v3: Companion Ani / JuicyChat retarget — invalidate posterize caches. */
-const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v3";
+/** v4: Companion wardrobe options in cache key. */
+const PORTRAIT_STORAGE = "narcissus.artOfX.musePresencePortraits.v4";
 
 export function loadPresenceStyle(partnerId: number): MusePresenceStyle {
   if (typeof window === "undefined") return "realistic";
@@ -119,14 +125,18 @@ function portraitKey(
   partnerId: number,
   style: MusePresenceStyle,
   photoFp: string,
+  wardrobeFp = "",
 ): string {
-  return `${partnerId}:${style}:${photoFp}`;
+  return wardrobeFp
+    ? `${partnerId}:${style}:${photoFp}:${wardrobeFp}`
+    : `${partnerId}:${style}:${photoFp}`;
 }
 
 export function loadCachedPortrait(
   partnerId: number,
   style: MusePresenceStyle,
   photo?: string | null,
+  wardrobe?: CompanionWardrobe | null,
 ): string | null {
   if (typeof window === "undefined") return null;
   if (style === "realistic") return null;
@@ -134,7 +144,9 @@ export function loadCachedPortrait(
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     const map = raw ? (JSON.parse(raw) as PortraitCache) : {};
     const fp = photoFingerprint(photo);
-    const url = map[portraitKey(partnerId, style, fp)];
+    const wFp =
+      style === "cartoon" && wardrobe ? wardrobeKey(wardrobe) : "";
+    const url = map[portraitKey(partnerId, style, fp, wFp)];
     return typeof url === "string" && url.startsWith("data:image/")
       ? url
       : null;
@@ -148,6 +160,7 @@ export function saveCachedPortrait(
   style: MusePresenceStyle,
   dataUrl: string,
   photo?: string | null,
+  wardrobe?: CompanionWardrobe | null,
 ): void {
   if (typeof window === "undefined") return;
   if (style === "realistic") return;
@@ -155,10 +168,12 @@ export function saveCachedPortrait(
     const raw = localStorage.getItem(PORTRAIT_STORAGE);
     const map = raw ? (JSON.parse(raw) as PortraitCache) : {};
     const fp = photoFingerprint(photo);
-    map[portraitKey(partnerId, style, fp)] = dataUrl;
+    const wFp =
+      style === "cartoon" && wardrobe ? wardrobeKey(wardrobe) : "";
+    map[portraitKey(partnerId, style, fp, wFp)] = dataUrl;
     const keys = Object.keys(map);
-    if (keys.length > 24) {
-      for (const k of keys.slice(0, keys.length - 20)) {
+    if (keys.length > 36) {
+      for (const k of keys.slice(0, keys.length - 28)) {
         delete map[k];
       }
     }
@@ -177,6 +192,7 @@ export function styleEditPrompt(
   style: MusePresenceStyle,
   museName: string,
   looks?: string,
+  wardrobe?: CompanionWardrobe | null,
 ): string {
   const looksBit = looks?.trim()
     ? ` Match these notes exactly where visible: ${looks.trim().slice(0, 320)}.`
@@ -202,12 +218,15 @@ export function styleEditPrompt(
     case "cartoon":
       return [
         `Image 1 is the identity photo of adult ${museName}. Image 2 (when present) is the STYLE bible — JuicyChat / Grok Ani–class living anime companion portrait. Match Image 2's illustration craft exactly; keep Image 1's face identity.`,
-        `Create a sexy anime companion avatar of ${museName} — a living chat companion presence like Grok's Ani: flirty, intimate medium close-up bust, expressive face looking at the viewer.`,
-        `CRITICAL IDENTITY LOCK from Image 1: same hair color/length/parting/hairline, skin undertone, facial proportions, eye color, nose and mouth character. She must still read as the same Muse — never replace her with the style-ref girl.`,
+        `Create a sexy anime companion avatar of ${museName} — a living chat companion presence like Grok's Ani: full-body-capable intimate portrait, flirty, expressive face looking at the viewer, filling the frame like a companion app stage.`,
+        `CRITICAL IDENTITY LOCK from Image 1: same hair color/length/parting/hairline (unless customize overrides length/style only), skin undertone, facial proportions, eye color, nose and mouth character. She must still read as the same Muse — never replace her with the style-ref girl.`,
         `STYLE LOCK from Image 2: modern high-quality anime/manga illustration — clean dark outlines, soft cel shading plus subtle gradients, large crystalline expressive eyes with thick lashes and catchlights, soft blush, glossy lips, polished hair strands with rim light, fair smooth illustrated skin, shallow-DOF indoor companion mood.`,
         `NOT photoreal. NOT a CSS posterize or photo filter. NOT 3D plastic Character.AI doll. NOT chibi. Clearly hand-illustrated / digital-painted anime companion.${looksBit}`,
+        wardrobe ? companionWardrobePromptBits(wardrobe) : "",
         `Adults 18+ only. Single bust/portrait, no watermark, no text, no UI chrome.`,
-      ].join(" ");
+      ]
+        .filter(Boolean)
+        .join(" ");
     case "cyberpunk":
       return [
         `Edit this reference photo of adult ${museName} into cyberpunk neon glamour.`,

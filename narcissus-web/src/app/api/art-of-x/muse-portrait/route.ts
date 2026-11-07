@@ -13,6 +13,10 @@ import {
   xaiMissingKeyPayload,
 } from "@/lib/xai";
 import {
+  normalizeWardrobe,
+  type CompanionWardrobe,
+} from "@/lib/companionWardrobe";
+import {
   styleEditPrompt,
   styleUsesAnimeStyleRef,
   type MusePresenceStyle,
@@ -38,6 +42,8 @@ type Body = {
   photo?: string;
   name?: string;
   looks?: string;
+  /** Companion customize — Features / Style / Clothing / Nude */
+  wardrobe?: Partial<CompanionWardrobe>;
 };
 
 type ImageRef = { url: string; type: "image_url" };
@@ -102,7 +108,13 @@ export async function POST(req: NextRequest) {
       : "Muse";
   const looks =
     typeof body.looks === "string" ? body.looks.slice(0, 400) : undefined;
-  const prompt = styleEditPrompt(style, name, looks);
+  const wardrobe =
+    style === "cartoon" && body.wardrobe
+      ? normalizeWardrobe(body.wardrobe)
+      : style === "cartoon"
+        ? normalizeWardrobe({})
+        : null;
+  const prompt = styleEditPrompt(style, name, looks, wardrobe);
   const model =
     process.env.XAI_IMAGE_MODEL?.trim() || DEFAULT_IMAGE_MODEL;
   const apiKey = getXaiApiKey();
@@ -190,6 +202,7 @@ export async function POST(req: NextRequest) {
       model,
       usedStyleRef,
       source: "xai",
+      wardrobe: wardrobe || undefined,
     });
   } catch (err) {
     return NextResponse.json(
