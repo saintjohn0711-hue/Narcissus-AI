@@ -168,18 +168,40 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const detail = await upstream.text().catch(() => "");
+      const detailLower = detail.toLowerCase();
       const authRejected = upstream.status === 401 || upstream.status === 403;
+      const creditsExhausted =
+        detailLower.includes("spending limit") ||
+        detailLower.includes("available credits") ||
+        detailLower.includes("permission-denied");
+      const contentBlocked =
+        detailLower.includes("content") ||
+        detailLower.includes("safety") ||
+        detailLower.includes("moderation") ||
+        detailLower.includes("refused");
+      const askingNude = wardrobe?.clothing === "nude";
+      let message =
+        "xAI image restyle failed — API key is present; retry or use another Muse photo.";
+      let error = "xai_image_failed";
+      if (creditsExhausted) {
+        message =
+          "xAI image credits/spending limit reached — top up or raise the limit at console.x.ai, then regenerate.";
+      } else if (authRejected) {
+        message =
+          "xAI rejected the API key — rotate XAI_API_KEY in Vercel Production env and redeploy.";
+      } else if (askingNude && contentBlocked) {
+        error = "nude_refused";
+        message =
+          "xAI refused this Nude request — Companion will not fake nude with a clothed photo filter.";
+      }
       return NextResponse.json(
         {
-          error: "xai_image_failed",
+          error,
           status: upstream.status,
           detail: detail.slice(0, 500),
           model,
           usedStyleRef,
-          // Never include the key. Auth failures → rotate env; other failures ≠ missing key.
-          message: authRejected
-            ? "xAI rejected the API key — rotate XAI_API_KEY in Vercel Production env and redeploy."
-            : "xAI image restyle failed — API key is present; retry or use another Muse photo.",
+          message,
         },
         { status: 502 },
       );

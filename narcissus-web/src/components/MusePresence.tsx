@@ -16,12 +16,21 @@ import {
   COMPANION_CLOTHING,
   COMPANION_FEATURE_GROUPS,
   COMPANION_LOOK_STYLES,
+  isNudeClothing,
   loadCompanionWardrobe,
   saveCompanionWardrobe,
   type CompanionWardrobe,
 } from "@/lib/companionWardrobe";
 import {
+  actionsForClothing,
+  pickChatReaction,
+  type CompanionActionId,
+  type CompanionReactionId,
+  type StageFitMode,
+} from "@/lib/companionMotion";
+import {
   buildStyledCssFallback,
+  bustCompanionClothingCache,
   loadCachedPortrait,
   loadPresenceStyle,
   MUSE_PRESENCE_STYLES,
@@ -36,6 +45,10 @@ type MusePresenceProps = {
   variant?: "rail" | "compact" | "full";
   /** Notify parent when Look changes (for Companion full-stage layout). */
   onStyleChange?: (style: MusePresenceStyle) => void;
+  /** Latest Muse reply — triggers a short auto reaction on Companion. */
+  lastPartnerReply?: { id: string; text: string } | null;
+  /** Parent hid the chat drawer — reveal more of her body. */
+  chatCollapsed?: boolean;
 };
 
 type MatchSource = "xai" | "local" | null;
@@ -46,6 +59,8 @@ export function MusePresence({
   partner,
   variant = "rail",
   onStyleChange,
+  lastPartnerReply = null,
+  chatCollapsed = false,
 }: MusePresenceProps) {
   const photo = mainPhoto(partner);
   const photos = partner.photos || [];
@@ -60,7 +75,18 @@ export function MusePresence({
   const [genError, setGenError] = useState<string | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [fitMode, setFitMode] = useState<StageFitMode>("fit");
+  const [zoom, setZoom] = useState(1);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [actionId, setActionId] = useState<CompanionActionId | null>(null);
+  const [reactionId, setReactionId] = useState<CompanionReactionId | null>(
+    null,
+  );
   const autoKey = useRef<string>("");
+  const reactionCycle = useRef(0);
+  const lastReplySeen = useRef<string>("");
+  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reactionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const livePhoto = useMemo(() => {
     if (!photos.length) return photo;
@@ -89,8 +115,40 @@ export function MusePresence({
       ),
     );
     autoKey.current = "";
+    setActionId(null);
+    setReactionId(null);
+    lastReplySeen.current = "";
+    // Keep Look/Customize collapsed on full stage so feet stay visible
+    setPanelOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- parent callback stable enough
   }, [partner.id, partner.mainPhotoIndex, photos.length]);
+
+  useEffect(() => {
+    return () => {
+      if (actionTimer.current) clearTimeout(actionTimer.current);
+      if (reactionTimer.current) clearTimeout(reactionTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (style !== "cartoon" || !lastPartnerReply?.id) return;
+    if (lastPartnerReply.id === lastReplySeen.current) return;
+    if (!lastPartnerReply.text.trim()) return;
+    lastReplySeen.current = lastPartnerReply.id;
+    const next = pickChatReaction(
+      lastPartnerReply.text,
+      reactionCycle.current++,
+    );
+    setReactionId(next);
+    if (reactionTimer.current) clearTimeout(reactionTimer.current);
+    reactionTimer.current = setTimeout(() => setReactionId(null), 1600);
+  }, [lastPartnerReply, style]);
+
+  function playAction(id: CompanionActionId) {
+    setActionId(id);
+    if (actionTimer.current) clearTimeout(actionTimer.current);
+    actionTimer.current = setTimeout(() => setActionId(null), 2200);
+  }
 
   const displaySrc = useMemo(() => {
     if (style !== "realistic" && generated) return generated;
@@ -109,9 +167,18 @@ export function MusePresence({
     targetStyle: MusePresenceStyle,
     sourcePhoto: string,
     message: string,
-    opts?: { missingKey?: boolean },
+    opts?: { missingKey?: boolean; clothing?: string },
   ): Promise<boolean> {
     if (targetStyle !== "anime" && targetStyle !== "cartoon") return false;
+    // Nude must NEVER show a CSS-mangled clothed photo as a "nude" result.
+    if (isNudeClothing(opts?.clothing)) {
+      setGenerated(null);
+      setMatchSource(null);
+      setGenError(
+        `${message} Nude needs a fresh xAI illustrated companion — not a filter on her clothed photo. Try again when generation succeeds.`,
+      );
+      return true;
+    }
     const fallback = await buildStyledCssFallback(
       sourcePhoto,
       targetStyle === "cartoon" ? "cartoon" : "anime",
@@ -154,8 +221,20 @@ export function MusePresence({
               : "No XAI_API_KEY — CSS look stays on.",
       };
     }
-    if (err === "xai_image_failed") {
+    if (err === "xai_image_failed" || err === "nude_refused") {
       const status = data.status;
+      const detail = (data.detail || "").toLowerCase();
+      if (
+        detail.includes("spending limit") ||
+        detail.includes("available credits") ||
+        detail.includes("permission-denied")
+      ) {
+        return {
+          missingKey: false,
+          message:
+            "xAI image credits/spending limit reached — top up or raise the limit at console.x.ai, then regenerate Companion.",
+        };
+      }
       if (status === 401 || status === 403) {
         return {
           missingKey: false,
@@ -163,7 +242,18 @@ export function MusePresence({
             "xAI rejected the API key — rotate XAI_API_KEY in Vercel Project → Settings → Environment Variables → Production, then redeploy.",
         };
       }
-      const detail = (data.detail || "").toLowerCase();
+      if (
+        err === "nude_refused" ||
+        detail.includes("content") ||
+        detail.includes("safety") ||
+        detail.includes("moderation")
+      ) {
+        return {
+          missingKey: false,
+          message:
+            "xAI refused or blocked this Nude request — Companion will not fake nude with a clothed photo filter.",
+        };
+      }
       if (detail.includes("too small") || detail.includes("dimensions")) {
         return {
           missingKey: false,
@@ -236,7 +326,7 @@ export function MusePresence({
           targetStyle,
           sourcePhoto,
           message,
-          { missingKey },
+          { missingKey, clothing: nextWardrobe.clothing },
         );
         if (!used) setGenError(message);
         return;
@@ -261,7 +351,7 @@ export function MusePresence({
           targetStyle,
           sourcePhoto,
           "xAI returned no image.",
-          { missingKey: false },
+          { missingKey: false, clothing: nextWardrobe.clothing },
         );
         if (!used) setGenError("xAI returned no image — retry Companion restyle.");
       }
@@ -272,7 +362,7 @@ export function MusePresence({
         targetStyle === "cartoon"
           ? "AI companion restyle failed (network or timeout)."
           : "AI anime restyle failed (network or timeout).",
-        { missingKey: false },
+        { missingKey: false, clothing: nextWardrobe.clothing },
       );
       if (!used) setGenError("Restyle failed — CSS look stays on.");
     } finally {
@@ -313,9 +403,24 @@ export function MusePresence({
 
   function applyWardrobePatch(patch: Partial<CompanionWardrobe>) {
     const next = { ...wardrobe, ...patch };
+    const clothingChanged =
+      typeof patch.clothing === "string" && patch.clothing !== wardrobe.clothing;
     setWardrobe(next);
     saveCompanionWardrobe(partner.id, next);
     if (style !== "cartoon" || !livePhoto) return;
+    if (clothingChanged) {
+      // Never reuse a clothed (or other-outfit) cache under a new clothing pick.
+      bustCompanionClothingCache(partner.id, livePhoto);
+      setGenerated(null);
+      setMatchSource(null);
+      setGenError(
+        isNudeClothing(next.clothing)
+          ? "Summoning a new nude Companion illustration…"
+          : null,
+      );
+      void generateStyled("cartoon", livePhoto, next);
+      return;
+    }
     const cached = loadCachedPortrait(partner.id, "cartoon", livePhoto, next);
     if (cached) {
       setGenerated(cached);
@@ -359,10 +464,23 @@ export function MusePresence({
             },
           ];
 
+  const isFullCompanion = variant === "full" && style === "cartoon";
+  const companionActions = actionsForClothing(wardrobe.clothing);
+  const motionClass = [
+    actionId ? `muse-motion--${actionId}` : "",
+    reactionId ? `muse-react--${reactionId}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <aside
-      className={`muse-presence muse-presence--${variant} flex h-full flex-col`}
+      className={`muse-presence muse-presence--${variant} flex h-full flex-col${
+        chatCollapsed ? " muse-presence--chat-collapsed" : ""
+      }${panelOpen ? " muse-presence--panel-open" : ""}`}
       aria-label={`${displayName(partner)} living portrait`}
+      data-fit={isFullCompanion ? fitMode : undefined}
+      data-zoom={isFullCompanion ? String(zoom) : undefined}
     >
       <div
         className={`muse-presence-stage muse-presence-style-${style}${
@@ -373,46 +491,56 @@ export function MusePresence({
           style === "cartoon" && aiMatched
             ? " muse-presence-style-cartoon-matched"
             : ""
-        }${companionLiving ? " muse-presence--companion-living" : ""}`}
+        }${companionLiving ? " muse-presence--companion-living" : ""}${
+          isFullCompanion ? ` muse-presence-stage--fit-${fitMode}` : ""
+        } ${motionClass}`.trim()}
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
       >
         <div className="muse-presence-glow" aria-hidden />
-        {displaySrc ? (
-          <div
-            className="muse-presence-parallax"
-            style={{
-              transform: `translate3d(${parallax.x}px, ${parallax.y}px, 0)`,
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={displaySrc}
-              alt=""
-              className="muse-presence-photo"
-              draggable={false}
-            />
-            {companionLiving && (
-              <>
-                <span className="muse-presence-eye-shimmer" aria-hidden />
-                <span className="muse-presence-blink" aria-hidden />
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="muse-presence-empty">
-            <div className="muse-presence-silhouette" aria-hidden />
-            <span
-              className="relative z-[1] text-5xl font-semibold text-[var(--ink)]/85"
-              style={{ fontFamily: "var(--font-display), serif" }}
+        <div
+          className={`muse-presence-viewport${
+            isFullCompanion ? " muse-presence-viewport--pan" : ""
+          }`}
+        >
+          {displaySrc ? (
+            <div
+              className="muse-presence-parallax"
+              style={{
+                transform: `translate3d(${parallax.x}px, ${parallax.y}px, 0) scale(${
+                  isFullCompanion ? zoom : 1
+                })`,
+              }}
             >
-              {partner.name.slice(0, 1).toUpperCase()}
-            </span>
-            <p className="relative z-[1] mt-3 max-w-[14rem] text-center text-xs leading-relaxed text-[var(--soft)]">
-              Add photos on Muses — this panel becomes her living portrait.
-            </p>
-          </div>
-        )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={displaySrc}
+                alt=""
+                className="muse-presence-photo"
+                draggable={false}
+              />
+              {companionLiving && (
+                <>
+                  <span className="muse-presence-eye-shimmer" aria-hidden />
+                  <span className="muse-presence-blink" aria-hidden />
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="muse-presence-empty">
+              <div className="muse-presence-silhouette" aria-hidden />
+              <span
+                className="relative z-[1] text-5xl font-semibold text-[var(--ink)]/85"
+                style={{ fontFamily: "var(--font-display), serif" }}
+              >
+                {partner.name.slice(0, 1).toUpperCase()}
+              </span>
+              <p className="relative z-[1] mt-3 max-w-[14rem] text-center text-xs leading-relaxed text-[var(--soft)]">
+                Add photos on Muses — this panel becomes her living portrait.
+              </p>
+            </div>
+          )}
+        </div>
         <div className="muse-presence-veil" aria-hidden />
         <div className="muse-presence-nameplate">
           <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--glow)]/90">
@@ -439,7 +567,62 @@ export function MusePresence({
                     : styleLabel}
           </p>
         </div>
+
+        {isFullCompanion && (
+          <div className="muse-presence-stage-controls" role="toolbar" aria-label="Stage view">
+            <button
+              type="button"
+              className={fitMode === "fit" ? "is-active" : undefined}
+              aria-pressed={fitMode === "fit"}
+              onClick={() => setFitMode("fit")}
+            >
+              Fit full
+            </button>
+            <button
+              type="button"
+              className={fitMode === "fill" ? "is-active" : undefined}
+              aria-pressed={fitMode === "fill"}
+              onClick={() => setFitMode("fill")}
+            >
+              Fill
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(1.85, Number((z + 0.15).toFixed(2))))}
+              aria-label="Zoom in"
+            >
+              Zoom +
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(1, Number((z - 0.15).toFixed(2))))}
+              aria-label="Zoom out"
+              disabled={zoom <= 1}
+            >
+              Zoom −
+            </button>
+          </div>
+        )}
       </div>
+
+      {isFullCompanion && (
+        <div
+          className="muse-companion-actions"
+          role="toolbar"
+          aria-label="Companion actions"
+        >
+          {companionActions.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={actionId === a.id ? "is-active" : undefined}
+              onClick={() => playAction(a.id)}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {photos.length > 1 && style === "realistic" && (
         <div
@@ -468,7 +651,22 @@ export function MusePresence({
         </div>
       )}
 
-      <div className="muse-presence-looks mt-4 space-y-2.5 border-t border-[var(--line)] pt-3">
+      <div
+        className={`muse-presence-looks mt-4 space-y-2.5 border-t border-[var(--line)] pt-3${
+          isFullCompanion && !panelOpen ? " muse-presence-looks--collapsed" : ""
+        }`}
+      >
+        {isFullCompanion && (
+          <button
+            type="button"
+            className="muse-presence-panel-toggle"
+            aria-expanded={panelOpen}
+            onClick={() => setPanelOpen((v) => !v)}
+          >
+            {panelOpen ? "Hide Look / Customize" : "Look / Customize"}
+          </button>
+        )}
+        <div className="muse-presence-looks-body space-y-2.5">
         <div className="flex items-baseline justify-between gap-2">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent-strong)]">
             Look
@@ -605,8 +803,9 @@ export function MusePresence({
             ))}
             {wardrobe.clothing === "nude" && (
               <p className="text-[10px] leading-snug text-[#f0c4b8]/90">
-                Nude is adults 18+ only — explicit full-length illustrated
-                companion, same Muse face identity.
+                Nude is adults 18+ only — requires a fresh xAI full-length nude
+                illustration with her face locked. Never a CSS filter on a
+                clothed photo.
               </p>
             )}
           </div>
@@ -639,6 +838,7 @@ export function MusePresence({
             {genError}
           </p>
         )}
+        </div>
       </div>
     </aside>
   );

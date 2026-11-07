@@ -85,6 +85,10 @@ function ChatPageInner() {
   const [presenceStyle, setPresenceStyle] =
     useState<MusePresenceStyle>("realistic");
   const [chatOpen, setChatOpen] = useState(true);
+  const [reactionReply, setReactionReply] = useState<{
+    id: string;
+    text: string;
+  } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const skipPersist = useRef(false);
   const pickedFromUrl = useRef(false);
@@ -247,8 +251,9 @@ function ChatPageInner() {
       }
 
       const contentType = res.headers.get("content-type") || "";
+      let finalReply = "";
       if (contentType.includes("text/event-stream")) {
-        await readXaiSseStream(res, (delta) => {
+        finalReply = await readXaiSseStream(res, (delta) => {
           setChats((prev) => {
             const list = [...(prev[String(partner.id)] || [])];
             const idx = list.findIndex((m) => m.id === replyId);
@@ -265,6 +270,7 @@ function ChatPageInner() {
         if (data.model) setModelLabel(data.model);
         const replyText = data.text?.trim() || "";
         if (!replyText) throw new Error("empty_reply");
+        finalReply = replyText;
         setChats((prev) => {
           const list = [...(prev[String(partner.id)] || [])];
           const idx = list.findIndex((m) => m.id === replyId);
@@ -274,17 +280,17 @@ function ChatPageInner() {
         });
       }
 
-      setChats((prev) => {
-        const list = prev[String(partner.id)] || [];
-        const reply = list.find((m) => m.id === replyId);
-        if (reply && !reply.text.trim()) {
-          return {
-            ...prev,
-            [String(partner.id)]: list.filter((m) => m.id !== replyId),
-          };
-        }
-        return prev;
-      });
+      const trimmed = finalReply.trim();
+      if (!trimmed) {
+        setChats((prev) => ({
+          ...prev,
+          [String(partner.id)]: (prev[String(partner.id)] || []).filter(
+            (m) => m.id !== replyId,
+          ),
+        }));
+      } else {
+        setReactionReply({ id: replyId, text: trimmed });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Chat failed");
       setChats((prev) => ({
@@ -425,6 +431,8 @@ function ChatPageInner() {
                   partner={partner}
                   variant={companionFull ? "full" : "rail"}
                   onStyleChange={setPresenceStyle}
+                  lastPartnerReply={reactionReply}
+                  chatCollapsed={companionFull && !chatOpen}
                 />
               </div>
             ) : (
@@ -436,7 +444,7 @@ function ChatPageInner() {
             {companionFull && (
               <button
                 type="button"
-                className="muse-chat-drawer-toggle absolute bottom-4 right-4 z-40 rounded-sm border border-[var(--glow)]/40 bg-[#080b14]/85 px-3 py-2 text-xs font-medium text-[var(--glow)] backdrop-blur-md lg:hidden"
+                className="muse-chat-drawer-toggle absolute bottom-4 right-4 z-40 rounded-sm border border-[var(--glow)]/40 bg-[#080b14]/85 px-3 py-2 text-xs font-medium text-[var(--glow)] backdrop-blur-md"
                 onClick={() => setChatOpen((v) => !v)}
               >
                 {chatOpen ? "Hide chat" : "Open chat"}
@@ -447,7 +455,9 @@ function ChatPageInner() {
               className={
                 companionFull
                   ? `muse-chat-drawer z-20 flex flex-col border border-[var(--line)] bg-[#080b14]/88 backdrop-blur-md ${
-                      chatOpen ? "muse-chat-drawer--open" : "muse-chat-drawer--closed"
+                      chatOpen
+                        ? "muse-chat-drawer--open"
+                        : "muse-chat-drawer--closed"
                     }`
                   : "flex min-h-[22rem] flex-col lg:min-h-[36rem]"
               }
