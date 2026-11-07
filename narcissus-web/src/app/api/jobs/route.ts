@@ -323,9 +323,9 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // Light head lock only. A large headRatio (~0.45) used to paste the
-    // original chest/shoulders back and cancel undress + scene edits.
-    // Scene/undress already ReActor-lock the face — keep this to a thin band.
+    // Light head lock reinforces ReActor. Keep undress below shoulders so the
+    // paste doesn't put clothes back; identity now comes from raw inswapper
+    // (no GFPGAN) + upper-face source crop (~0.88 cosine vs ~0.62 before).
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
     const skipHeadPaste =
@@ -340,9 +340,11 @@ export async function POST(req: NextRequest) {
         const editedBytes = await fetchImageBytes(result.images[0]);
         if (!(await isNearlyBlankImageAsync(editedBytes))) {
           const headRatio =
-            mode === "undress" || mode === "scene"
-              ? 0.2 + identity * 0.06 // ~0.26 at default identity — face/hair only
-              : 0.28 + identity * 0.08;
+            mode === "undress"
+              ? 0.26 + identity * 0.06 // ~0.31 at 0.9 — face/hair only
+              : mode === "scene"
+                ? 0.28 + identity * 0.06
+                : 0.28 + identity * 0.08;
           const locked = await lockHeadAndHair(editedBytes, originalBytes, {
             headRatio,
             feather: 0.1,
