@@ -160,6 +160,7 @@ export default function StoriesPage() {
       intensity,
       roles,
       extra,
+      length,
     };
     if (opts.mode === "generate") {
       return { text: localGenerate(), source: "local" };
