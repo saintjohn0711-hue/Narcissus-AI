@@ -9,7 +9,9 @@ import {
 } from "react";
 import {
   displayName,
+  fileToPartnerPhoto,
   mainPhoto,
+  PARTNER_PHOTO_LIMITS,
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
@@ -65,9 +67,28 @@ type MusePresenceProps = {
   /** Companion dock: chat drawer open state + toggle (replaces floating button). */
   chatOpen?: boolean;
   onToggleChat?: () => void;
+  /** Persist Muse photos after in-dock likeness upload. */
+  onPartnerPhotosChange?: (
+    photos: string[],
+    mainPhotoIndex: number,
+  ) => void | Promise<void>;
 };
 
-type MatchSource = "xai" | "local" | null;
+type MatchSource = "xai" | "local" | "comfy" | null;
+
+/** Prefer scratch Companion cache; fall back to likeness (photo-keyed) art. */
+function loadCompanionPortrait(
+  partnerId: number,
+  photo: string | null | undefined,
+  wardrobe: CompanionWardrobe,
+): string | null {
+  return (
+    loadCachedPortrait(partnerId, "cartoon", photo, wardrobe, true) ||
+    (photo
+      ? loadCachedPortrait(partnerId, "cartoon", photo, wardrobe, false)
+      : null)
+  );
+}
 
 type WardrobeTab = "features" | "style" | "clothing";
 
@@ -81,6 +102,7 @@ export function MusePresence({
   onSelectMuse,
   chatOpen,
   onToggleChat,
+  onPartnerPhotosChange,
 }: MusePresenceProps) {
   const photo = mainPhoto(partner);
   const photos = partner.photos || [];
@@ -95,6 +117,9 @@ export function MusePresence({
   const [matchSource, setMatchSource] = useState<MatchSource>(null);
   const [busy, setBusy] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [genStatus, setGenStatus] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const likenessInputRef = useRef<HTMLInputElement | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   const [photoIndex, setPhotoIndex] = useState(0);
   const [fitMode, setFitMode] = useState<StageFitMode>("fit");
@@ -120,22 +145,22 @@ export function MusePresence({
     return photos[photoIndex] || photo;
   }, [photos, photoIndex, photo]);
 
+  // Full reset when switching Muse.
   useEffect(() => {
     const next = loadPresenceStyle(partner.id);
     const nextWardrobe = loadCompanionWardrobe(partner.id);
+    const main = mainPhoto(partner);
     setStyle(next);
     setWardrobe(nextWardrobe);
     onStyleChange?.(next);
-    const cached = loadCachedPortrait(
-      partner.id,
-      next,
-      mainPhoto(partner),
-      next === "cartoon" ? nextWardrobe : null,
-      next === "cartoon",
-    );
+    const cached =
+      next === "cartoon"
+        ? loadCompanionPortrait(partner.id, main, nextWardrobe)
+        : loadCachedPortrait(partner.id, next, main, null, false);
     setGenerated(cached);
     setMatchSource(cached ? "xai" : null);
     setGenError(null);
+    setGenStatus(null);
     setLikenessLock(false);
     setPhotoIndex(
       Math.min(
@@ -151,7 +176,17 @@ export function MusePresence({
     setFitMode("fit");
     setZoom(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- parent callback stable enough
-  }, [partner.id, partner.mainPhotoIndex, photos.length]);
+  }, [partner.id]);
+
+  // Keep index + live photo in range when gallery changes (upload / main swap).
+  useEffect(() => {
+    setPhotoIndex((idx) =>
+      Math.min(
+        Math.max(0, partner.mainPhotoIndex ?? idx),
+        Math.max(0, photos.length - 1),
+      ),
+    );
+  }, [partner.mainPhotoIndex, photos.length, photo?.length]);
 
   useEffect(() => {
     return () => {
@@ -187,11 +222,13 @@ export function MusePresence({
 
   const aiMatched =
     Boolean(generated) &&
-    matchSource === "xai" &&
+    (matchSource === "xai" || matchSource === "comfy") &&
     (style === "anime" || style === "cartoon");
 
   const companionLiving =
-    style === "cartoon" && Boolean(generated) && matchSource === "xai";
+    style === "cartoon" &&
+    Boolean(generated) &&
+    (matchSource === "xai" || matchSource === "comfy");
 
   async function applyLocalFallback(
     targetStyle: MusePresenceStyle,
@@ -333,7 +370,9 @@ export function MusePresence({
     nextWardrobe: CompanionWardrobe,
   ): Promise<boolean> {
     const base =
-      (generated && matchSource === "xai" ? generated : null) || sourcePhoto;
+      (generated && (matchSource === "xai" || matchSource === "comfy")
+        ? generated
+        : null) || sourcePhoto;
     if (!base?.startsWith("data:image/")) return false;
     const nude = isNudeClothing(nextWardrobe.clothing);
     const sexToy = isSexToyClothing(nextWardrobe.clothing);
@@ -409,7 +448,7 @@ export function MusePresence({
         });
       }
       setGenerated(image);
-      setMatchSource("xai");
+      setMatchSource("comfy");
       saveCachedPortrait(
         partner.id,
         "cartoon",
@@ -419,8 +458,10 @@ export function MusePresence({
         true,
       );
       setGenError(null);
+      setGenStatus(null);
       return true;
     } catch {
+      setGenStatus(null);
       setGenError(
         sexToy || fetish || nude
           ? "Comfy unreachable — start the RunPod Comfy pod, or stay on Lingerie."
@@ -446,7 +487,10 @@ export function MusePresence({
         mode = opts.forceMode;
       } else if (likenessLock && sourcePhoto) {
         mode = "likeness";
-      } else if (generated && matchSource === "xai") {
+      } else if (
+        generated &&
+        (matchSource === "xai" || matchSource === "comfy")
+      ) {
         mode = "adjust";
       } else {
         mode = "generate";
@@ -455,10 +499,11 @@ export function MusePresence({
 
     setBusy(true);
     setGenError(null);
+    setGenStatus(null);
     try {
       // Sex toys: skip xAI entirely (hard-blocks + Comfy person-img2img soft-censors).
       if (isCompanion && isSexToyClothing(nextWardrobe.clothing)) {
-        setGenError(
+        setGenStatus(
           `Comfy ${nextWardrobe.clothing} (${nextWardrobe.toySize}, ${nextWardrobe.toyColor})…`,
         );
         const usedComfy = await tryComfyWardrobeEdit(
@@ -466,6 +511,7 @@ export function MusePresence({
           nextWardrobe,
         );
         if (usedComfy) return;
+        setGenStatus(null);
         setGenError(
           "Comfy toy path needs a Companion image on stage — Generate Casual/Lingerie first, or start the RunPod Comfy pod.",
         );
@@ -511,7 +557,7 @@ export function MusePresence({
             (parsed.detail || "").toLowerCase().includes("content-moderated");
           // Lingerie/casual can also trip xAI — Comfy fallback for any moderated Companion look.
           if (moderated) {
-            setGenError(
+            setGenStatus(
               wantNude
                 ? "xAI blocked Nude — trying Comfy undress…"
                 : wantSoft
@@ -525,6 +571,7 @@ export function MusePresence({
               nextWardrobe,
             );
             if (usedComfy) return;
+            setGenStatus(null);
           }
           // Never CSS-fake a companion (esp. nude / fetish / lingerie)
           setGenError(message);
@@ -561,6 +608,7 @@ export function MusePresence({
           isCompanion && mode !== "likeness",
         );
         setGenError(null);
+        setGenStatus(null);
       } else {
         const used = await applyLocalFallback(
           targetStyle,
@@ -590,19 +638,16 @@ export function MusePresence({
     savePresenceStyle(partner.id, next);
     onStyleChange?.(next);
     setGenError(null);
+    setGenStatus(null);
     if (next === "realistic") {
       setGenerated(null);
       setMatchSource(null);
       return;
     }
-    const scratch = next === "cartoon";
-    const cached = loadCachedPortrait(
-      partner.id,
-      next,
-      livePhoto,
-      next === "cartoon" ? wardrobe : null,
-      scratch,
-    );
+    const cached =
+      next === "cartoon"
+        ? loadCompanionPortrait(partner.id, livePhoto, wardrobe)
+        : loadCachedPortrait(partner.id, next, livePhoto, null, false);
     setGenerated(cached);
     setMatchSource(cached ? "xai" : null);
     const meta = MUSE_PRESENCE_STYLES.find((s) => s.id === next);
@@ -635,7 +680,8 @@ export function MusePresence({
     if (clothingChanged) {
       bustCompanionClothingCache(partner.id, livePhoto, true);
       // Keep current illustration on stage while regenerating (adjust path).
-      setGenError(
+      setGenError(null);
+      setGenStatus(
         isNudeClothing(next.clothing)
           ? "Updating Companion to Nude…"
           : isSexToyClothing(next.clothing)
@@ -648,7 +694,7 @@ export function MusePresence({
       );
       void generateStyled("cartoon", livePhoto, next, {
         forceMode:
-          generated && matchSource === "xai"
+          generated && (matchSource === "xai" || matchSource === "comfy")
             ? "adjust"
             : likenessLock && livePhoto
               ? "likeness"
@@ -656,20 +702,57 @@ export function MusePresence({
       });
       return;
     }
-    const cached = loadCachedPortrait(
-      partner.id,
-      "cartoon",
-      livePhoto,
-      next,
-      true,
-    );
+    const cached = loadCompanionPortrait(partner.id, livePhoto, next);
     if (cached) {
       setGenerated(cached);
       setMatchSource("xai");
       setGenError(null);
+      setGenStatus(null);
       return;
     }
     void generateStyled("cartoon", livePhoto, next);
+  }
+
+  async function onLikenessPhoto(
+    files: FileList | null,
+    input?: HTMLInputElement | null,
+  ) {
+    if (!files?.length || !onPartnerPhotosChange || uploadingPhoto) return;
+    const file = files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setGenError("Choose an image file (JPEG, PNG, or WebP).");
+      if (input) input.value = "";
+      return;
+    }
+    const cap = PARTNER_PHOTO_LIMITS.perPartner;
+    if (photos.length >= cap) {
+      setGenError(`This Muse already has ${cap} photos.`);
+      if (input) input.value = "";
+      return;
+    }
+    setUploadingPhoto(true);
+    setGenError(null);
+    setGenStatus("Adding photo…");
+    try {
+      const dataUrl = await fileToPartnerPhoto(file);
+      const nextPhotos = [...photos, dataUrl];
+      const nextIndex = nextPhotos.length - 1;
+      await onPartnerPhotosChange(nextPhotos, nextIndex);
+      setPhotoIndex(nextIndex);
+      setLikenessLock(true);
+      setGenStatus(null);
+    } catch (err) {
+      setGenStatus(null);
+      setGenError(
+        err instanceof Error
+          ? err.message
+          : "Couldn’t read that photo — try another image.",
+      );
+    } finally {
+      setUploadingPhoto(false);
+      if (input) input.value = "";
+    }
   }
 
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
@@ -738,13 +821,17 @@ export function MusePresence({
     .filter(Boolean)
     .join(" ");
 
+  const hasCompanionArt =
+    Boolean(generated) &&
+    (matchSource === "xai" || matchSource === "comfy");
+
   const statusLine = busy
     ? style === "cartoon"
       ? "Generating companion…"
       : "Matching look…"
     : style === "realistic"
       ? "Photo"
-      : matchSource === "xai" && style === "cartoon"
+      : hasCompanionArt && style === "cartoon"
         ? `Companion · ${wardrobe.clothing}`
         : matchSource === "local"
           ? `${styleLabel} · unfinished`
@@ -767,12 +854,12 @@ export function MusePresence({
     ? style === "anime"
       ? "Matching…"
       : style === "cartoon"
-        ? generated && matchSource === "xai"
+        ? hasCompanionArt
           ? "Adjusting…"
           : "Designing…"
         : "Restyling…"
     : style === "cartoon"
-      ? generated && matchSource === "xai"
+      ? hasCompanionArt
         ? likenessLock
           ? "Regenerate with likeness"
           : "Adjust Companion"
@@ -884,7 +971,8 @@ export function MusePresence({
         )}
       </div>
 
-      {photos.length > 1 && style === "realistic" && (
+      {photos.length > 1 &&
+        (style === "realistic" || (isFullCompanion && likenessLock)) && (
         <div
           className="muse-presence-thumbs flex gap-2 overflow-x-auto px-1 pt-3"
           role="list"
@@ -1129,39 +1217,84 @@ export function MusePresence({
             </div>
           )}
 
-          <label className="muse-companion-likeness flex items-start gap-2 px-0.5 text-[11px] text-[var(--muted)]">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={likenessLock}
-              disabled={!livePhoto || busy}
-              onChange={(e) => setLikenessLock(e.target.checked)}
-            />
-            <span>
-              <span className="font-medium text-[var(--soft)]">
-                Likeness from photo
+          <div className="muse-companion-likeness space-y-1.5 px-0.5 text-[11px] text-[var(--muted)]">
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={likenessLock}
+                disabled={(!livePhoto && !onPartnerPhotosChange) || busy}
+                onChange={(e) => setLikenessLock(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium text-[var(--soft)]">
+                  Likeness from photo
+                </span>
+                {livePhoto
+                  ? " — optional lock to this Muse’s photo (secondary)."
+                  : " — add a photo below to enable."}
               </span>
-              {livePhoto
-                ? " — optional lock to this Muse’s photo (secondary)."
-                : " — add a Muse photo first to enable."}
-            </span>
-          </label>
+            </label>
+            {onPartnerPhotosChange && (
+              <div className="flex flex-wrap items-center gap-2 pl-5">
+                <input
+                  ref={likenessInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/*"
+                  className="sr-only"
+                  onChange={(e) =>
+                    void onLikenessPhoto(e.target.files, e.target)
+                  }
+                />
+                <button
+                  type="button"
+                  className="muse-companion-photo-add"
+                  disabled={busy || uploadingPhoto}
+                  onClick={() => likenessInputRef.current?.click()}
+                >
+                  {uploadingPhoto
+                    ? "Adding…"
+                    : livePhoto
+                      ? "Add photo"
+                      : "Add photo for likeness"}
+                </button>
+                {livePhoto && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={livePhoto}
+                    alt=""
+                    className="h-8 w-8 border border-[var(--line)] object-cover"
+                  />
+                )}
+              </div>
+            )}
+          </div>
           <button
             type="button"
             onClick={() =>
               void generateStyled(style, livePhoto, wardrobe, {
                 forceMode: likenessLock && livePhoto
                   ? "likeness"
-                  : generated && matchSource === "xai"
+                  : generated &&
+                      (matchSource === "xai" || matchSource === "comfy")
                     ? "adjust"
                     : "generate",
               })
             }
-            disabled={busy || (likenessLock && !livePhoto)}
+            disabled={
+              busy ||
+              uploadingPhoto ||
+              (likenessLock && !livePhoto)
+            }
             className="muse-companion-dock-cta"
           >
             {generateLabel}
           </button>
+          {genStatus && !genError && (
+            <p className="muse-companion-dock-status" role="status">
+              {genStatus}
+            </p>
+          )}
           {genError && (
             <p className="muse-companion-dock-error">{genError}</p>
           )}

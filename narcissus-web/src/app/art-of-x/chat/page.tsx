@@ -19,6 +19,7 @@ import {
   mainPhoto,
   PERSON_LABEL,
   savePartners,
+  withMainPhoto,
   type ChatMessage,
   type PartnerRecord,
 } from "@/lib/artOfX";
@@ -31,10 +32,16 @@ import {
 } from "@/lib/artOfXStore";
 import {
   DEFAULT_MUSE_PRESENCE_STYLE,
+  loadPresenceStyle,
   savePresenceStyle,
   type MusePresenceStyle,
 } from "@/lib/musePresence";
 import type { ChatPov } from "@/lib/xai";
+
+/** Chat prompt only needs text fields — strip heavy data-URLs. */
+function partnerForChatApi(p: PartnerRecord): PartnerRecord {
+  return { ...p, photos: [] };
+}
 
 async function readXaiSseStream(
   res: Response,
@@ -99,26 +106,34 @@ function ChatPageInner() {
   } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const skipPersist = useRef(false);
+  const streamingChats = useRef(false);
+  const chatsRef = useRef<Record<string, ChatMessage[]>>({});
   const pickedFromUrl = useRef(false);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [list, map] = await Promise.all([fetchPartners(), fetchChats()]);
-      if (cancelled) return;
-      setPartners(list);
-      setChats(map);
-      const fromUrl = museParam ? Number(museParam) : NaN;
-      if (Number.isFinite(fromUrl) && list.some((p) => p.id === fromUrl)) {
-        setActiveId(fromUrl);
-        pickedFromUrl.current = true;
-      } else if (list[0]) {
-        setActiveId(list[0].id);
+      try {
+        const [list, map] = await Promise.all([fetchPartners(), fetchChats()]);
+        if (cancelled) return;
+        setPartners(list);
+        setChats(map);
+        const fromUrl = museParam ? Number(museParam) : NaN;
+        if (Number.isFinite(fromUrl) && list.some((p) => p.id === fromUrl)) {
+          setActiveId(fromUrl);
+          pickedFromUrl.current = true;
+        } else if (list[0]) {
+          setActiveId(list[0].id);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Couldn’t load Muses or chats — refresh and try again.");
+        }
+      } finally {
+        if (!cancelled) setReady(true);
       }
-      setReady(true);
-    })().catch(() => {
-      if (!cancelled) setReady(true);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -135,12 +150,28 @@ function ChatPageInner() {
   }, [ready, museParam, partners]);
 
   useEffect(() => {
+    if (!ready || !activeId) return;
+    setPresenceStyle(loadPresenceStyle(activeId));
+  }, [ready, activeId]);
+
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+
+  useEffect(() => {
     if (!ready) return;
     if (skipPersist.current) {
       skipPersist.current = false;
       return;
     }
-    void persistChats(chats).catch(() => {});
+    if (streamingChats.current) return;
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      void persistChats(chatsRef.current).catch(() => {});
+    }, 600);
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
   }, [chats, ready]);
 
   useEffect(() => {
@@ -161,18 +192,52 @@ function ChatPageInner() {
       looks: "Ani / JuicyChat-class anime companion",
     };
     const next = [...partners, scratch];
-    // Local first so Generate works even if cloud persist fails.
-    savePartners(next);
-    setPartners(next);
-    setActiveId(scratch.id);
-    setPresenceStyle(DEFAULT_MUSE_PRESENCE_STYLE);
-    savePresenceStyle(scratch.id, DEFAULT_MUSE_PRESENCE_STYLE);
     setError(null);
     setChatOpen(true);
     try {
+      // Local first so Generate works even if cloud persist fails.
+      try {
+        savePartners(next);
+      } catch {
+        // Quota — still attempt cloud + in-memory Companion.
+      }
+      setPartners(next);
+      setActiveId(scratch.id);
+      setPresenceStyle(DEFAULT_MUSE_PRESENCE_STYLE);
+      savePresenceStyle(scratch.id, DEFAULT_MUSE_PRESENCE_STYLE);
       await persistPartners(next);
-    } catch {
-      // Keep local scratch Companion — user can still Generate.
+    } catch (err) {
+      // Keep in-memory scratch so Generate still works this session.
+      setPartners(next);
+      setActiveId(scratch.id);
+      setPresenceStyle(DEFAULT_MUSE_PRESENCE_STYLE);
+      savePresenceStyle(scratch.id, DEFAULT_MUSE_PRESENCE_STYLE);
+      setError(
+        err instanceof Error
+          ? `Companion started locally — cloud save failed (${err.message}).`
+          : "Companion started locally — cloud save failed.",
+      );
+    }
+  }
+
+  async function updatePartnerPhotos(photos: string[], mainPhotoIndex: number) {
+    if (!partner) return;
+    const updated = withMainPhoto({ ...partner, photos }, mainPhotoIndex);
+    const next = partners.map((p) => (p.id === partner.id ? updated : p));
+    setPartners(next);
+    try {
+      try {
+        savePartners(next);
+      } catch {
+        // ignore local quota
+      }
+      await persistPartners(next);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Photo saved on this device — cloud sync failed.",
+      );
     }
   }
 
@@ -234,13 +299,14 @@ function ChatPageInner() {
     setText("");
     setSending(true);
     setError(null);
+    streamingChats.current = true;
 
     try {
       const res = await fetch("/api/art-of-x/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          partner,
+          partner: partnerForChatApi(partner),
           messages: [...prior, you].map((m) => ({
             who: m.who,
             text: m.text,
@@ -311,6 +377,7 @@ function ChatPageInner() {
 
       const trimmed = finalReply.trim();
       if (!trimmed) {
+        setError("Muse returned an empty reply — try again.");
         setChats((prev) => ({
           ...prev,
           [String(partner.id)]: (prev[String(partner.id)] || []).filter(
@@ -318,6 +385,14 @@ function ChatPageInner() {
           ),
         }));
       } else {
+        // Ensure ref has final text before finally-persist (React state may lag).
+        const key = String(partner.id);
+        const list = [...(chatsRef.current[key] || [])];
+        const idx = list.findIndex((m) => m.id === replyId);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx]!, text: trimmed };
+          chatsRef.current = { ...chatsRef.current, [key]: list };
+        }
         setReactionReply({ id: replyId, text: trimmed });
       }
     } catch (err) {
@@ -329,7 +404,10 @@ function ChatPageInner() {
         ),
       }));
     } finally {
+      streamingChats.current = false;
       setSending(false);
+      // One persist after stream (mid-token writes were skipped).
+      void persistChats(chatsRef.current).catch(() => {});
     }
   }
 
@@ -474,6 +552,7 @@ function ChatPageInner() {
                   onToggleChat={
                     companionFull ? () => setChatOpen((v) => !v) : undefined
                   }
+                  onPartnerPhotosChange={updatePartnerPhotos}
                 />
               </div>
             ) : (
