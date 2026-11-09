@@ -13,8 +13,12 @@ import {
   type PartnerRecord,
   type SavedScene,
   type SceneLength,
+  type ScenePov,
 } from "@/lib/artOfX";
+import { partnerToSceneCard } from "@/lib/sceneCraft";
 import { fetchPartners, fetchScenes, persistScenes } from "@/lib/artOfXStore";
+
+type GenSource = "llm" | "local" | null;
 
 export default function StoriesPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -32,9 +36,13 @@ export default function StoriesPage() {
   const [surprises, setSurprises] = useState(1);
   const [extra, setExtra] = useState("");
   const [roles, setRoles] = useState("");
+  const [pov, setPov] = useState<ScenePov>("you");
   const [draft, setDraft] = useState("");
   const [direction, setDirection] = useState("");
   const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [source, setSource] = useState<GenSource>(null);
+  const [modelLabel, setModelLabel] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -77,36 +85,123 @@ export default function StoriesPage() {
     );
   }
 
-  function generate() {
-    if (!cast.length) {
-      alert("Select at least one partner.");
-      return;
-    }
-    setDraft(
-      buildStory({
-        partners: cast,
-        location: loc,
-        kinks,
-        length,
-        intensity,
-        extra,
-        roles,
-        surpriseCount: surprises,
-      }),
-    );
+  /** Local fallback — same initial-direction fields as the API payload. */
+  function localGenerate() {
+    return buildStory({
+      partners: cast,
+      location: loc,
+      kinks,
+      length,
+      intensity,
+      extra,
+      roles,
+      surpriseCount: surprises,
+      pov,
+    });
   }
 
-  function onContinue() {
+  async function requestScene(opts: {
+    mode: "generate" | "continue" | "steer";
+    previous?: string;
+    direction?: string;
+  }): Promise<{ text: string; source: GenSource; model?: string }> {
+    const payload = {
+      mode: opts.mode,
+      partners: cast.map(partnerToSceneCard),
+      location: loc,
+      kinks,
+      length,
+      intensity,
+      surprises,
+      extra,
+      roles,
+      pov,
+      previous: opts.previous || "",
+      direction: opts.direction || "",
+    };
+
+    try {
+      const res = await fetch("/api/art-of-x/generate-scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          text?: string;
+          model?: string;
+        };
+        if (data.text?.trim()) {
+          return {
+            text: data.text.trim(),
+            source: "llm",
+            model: data.model,
+          };
+        }
+      }
+    } catch {
+      // fall through to local craft
+    }
+
+    if (opts.mode === "generate") {
+      return { text: localGenerate(), source: "local" };
+    }
+    if (opts.mode === "steer" && opts.direction) {
+      return {
+        text: injectStoryDirection(
+          opts.previous || "",
+          opts.direction,
+          cast,
+        ),
+        source: "local",
+      };
+    }
+    return {
+      text: continueStory(opts.previous || "", cast, pov, kinks),
+      source: "local",
+    };
+  }
+
+  async function generate() {
+    if (!cast.length) {
+      alert("Select at least one Muse.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await requestScene({ mode: "generate" });
+      setDraft(result.text);
+      setSource(result.source);
+      setModelLabel(result.model || "");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onContinue() {
+    if (!cast.length) {
+      alert("Select at least one Muse.");
+      return;
+    }
     if (!draft) {
-      generate();
+      await generate();
       return;
     }
-    if (direction.trim()) {
-      setDraft(injectStoryDirection(draft, direction.trim(), cast));
-      setDirection("");
-      return;
+    setBusy(true);
+    try {
+      const mode = direction.trim() ? "steer" : "continue";
+      const result = await requestScene({
+        mode,
+        previous: draft,
+        direction: direction.trim(),
+      });
+      setDraft(result.text);
+      setSource(result.source);
+      setModelLabel(result.model || "");
+      if (mode === "steer") setDirection("");
+    } finally {
+      setBusy(false);
     }
-    setDraft(continueStory(draft, cast));
   }
 
   function saveCurrent() {
@@ -144,6 +239,13 @@ export default function StoriesPage() {
     alert("Image prompt copied.");
   }
 
+  const sourceBadge =
+    source === "llm"
+      ? `LLM · ${modelLabel || "xAI"}`
+      : source === "local"
+        ? "Local craft"
+        : null;
+
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
       <AppNav />
@@ -156,13 +258,13 @@ export default function StoriesPage() {
         </h1>
         <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
           ArkOfX craft — pick cast, place, kinks; generate a long explicit scene,
-          steer it, save it.
+          steer it, save it. Initial direction selections drive every generate.
         </p>
       </header>
 
       {partners.length === 0 ? (
         <p className="text-sm text-[#c4b7a8]">
-          Add partners first (or load Ark demo people) before building a scene.
+          Add Muses first (or load Ark demo people) before building a scene.
         </p>
       ) : (
         <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
@@ -240,7 +342,7 @@ export default function StoriesPage() {
               </div>
             </fieldset>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="grid gap-2 text-sm">
                 <span className="uppercase tracking-[0.16em]">Length</span>
                 <select
@@ -253,6 +355,18 @@ export default function StoriesPage() {
                   <option value="short">Short</option>
                   <option value="medium">Medium</option>
                   <option value="long">Long</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm">
+                <span className="uppercase tracking-[0.16em]">POV</span>
+                <select
+                  value={pov}
+                  onChange={(e) => setPov(e.target.value as ScenePov)}
+                  className="rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-[#f7f1e8]"
+                >
+                  <option value="you">You</option>
+                  <option value="partner">Lead Muse</option>
+                  <option value="third">Third person</option>
                 </select>
               </label>
               <label className="grid gap-2 text-sm">
@@ -307,10 +421,11 @@ export default function StoriesPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={generate}
-                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
+                onClick={() => void generate()}
+                disabled={busy}
+                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c] disabled:opacity-50"
               >
-                Generate scene
+                {busy ? "Generating…" : "Generate scene"}
               </button>
               <button
                 type="button"
@@ -324,9 +439,16 @@ export default function StoriesPage() {
 
           <section className="space-y-4">
             <div className="border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-5">
-              <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
-                Story · {loc.name}
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-[0.18em] text-[var(--muted)]">
+                  Story · {loc.name}
+                </p>
+                {sourceBadge && (
+                  <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--accent-strong)]">
+                    {sourceBadge}
+                  </span>
+                )}
+              </div>
               <h2
                 className="mt-1 text-2xl text-[var(--ink)]"
                 style={{ fontFamily: "var(--font-display), serif" }}
@@ -349,15 +471,16 @@ export default function StoriesPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={onContinue}
-                  className="rounded-sm border border-[var(--accent)]/50 px-4 py-2 text-sm text-[var(--accent-strong)]"
+                  onClick={() => void onContinue()}
+                  disabled={busy}
+                  className="rounded-sm border border-[var(--accent)]/50 px-4 py-2 text-sm text-[var(--accent-strong)] disabled:opacity-50"
                 >
                   {direction.trim() ? "Add to story" : "Continue"}
                 </button>
                 <button
                   type="button"
                   onClick={saveCurrent}
-                  disabled={!draft}
+                  disabled={!draft || busy}
                   className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[#1a120c] disabled:opacity-40"
                 >
                   Save scene

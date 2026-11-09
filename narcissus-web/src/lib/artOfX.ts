@@ -92,6 +92,9 @@ export type SceneLocation = {
 
 export type SceneLength = "short" | "medium" | "long";
 
+/** Story craft POV — initial direction control on Stories. */
+export type ScenePov = "you" | "partner" | "third";
+
 export type SavedScene = {
   id: string;
   title: string;
@@ -592,6 +595,134 @@ export function displayName(p: PartnerRecord): string {
   return p.name;
 }
 
+function pickOne<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]!;
+}
+
+function partnerTone(
+  p: PartnerRecord,
+): "dominant" | "gentle" | "playful" | "direct" {
+  const tags = (p.dynTags || []).map((t) => t.toLowerCase());
+  const dyn = (p.dynamics || "").toLowerCase();
+  if (
+    tags.some((t) =>
+      /dom|control|owns|rough|command/.test(t),
+    ) ||
+    /dom|control|owns|command/.test(dyn)
+  ) {
+    return "dominant";
+  }
+  if (tags.some((t) => /gentle|soft|care/.test(t)) || /gentle|soft/.test(dyn)) {
+    return "gentle";
+  }
+  if (tags.some((t) => /play|flirt|tease/.test(t))) {
+    return "playful";
+  }
+  return "direct";
+}
+
+function lookHook(p: PartnerRecord): string {
+  const name = displayName(p);
+  if (!p.looks?.trim()) return name;
+  const bit = p.looks.split(/[,.]/)[0]?.trim() || p.looks.trim();
+  return `${name} (${bit})`;
+}
+
+function hasKink(kinks: string[], re: RegExp): boolean {
+  return kinks.some((k) => re.test(k));
+}
+
+type KinkBeatKind =
+  | "oral"
+  | "anal"
+  | "vaginal"
+  | "edge"
+  | "talk"
+  | "group"
+  | "restraint"
+  | "toy"
+  | "finish"
+  | "roleplay"
+  | "piss"
+  | "generic";
+
+function kinkKind(tag: string): KinkBeatKind {
+  const t = tag.toLowerCase();
+  if (/oral|blow|face-fuck|facial|throat/.test(t)) return "oral";
+  if (/anal|peg|atm|ass|strap-on|strap on/.test(t)) return "anal";
+  if (/vaginal|breed|creampie/.test(t)) return "vaginal";
+  if (/edg|deny|chast/.test(t)) return "edge";
+  if (/cage/.test(t)) return "toy";
+  if (/dirty talk|degrad|praise|dom\s*\/\s*sub|femdom|ownership|directed/.test(t))
+    return "talk";
+  if (/group|threesome|voyeur|cuck|hotwife|free-use|public/.test(t))
+    return "group";
+  if (/bondage|spank|restrain/.test(t)) return "restraint";
+  if (/toy|vibrator|plug/.test(t)) return "toy";
+  if (/cum play|cum|facial/.test(t)) return "finish";
+  if (/roleplay|crossdress/.test(t)) return "roleplay";
+  if (/piss/.test(t)) return "piss";
+  return "generic";
+}
+
+/**
+ * Primary act beats driven by the user's scene kink selections, in selection
+ * order. Stock oral/anal only appears when those kinks were chosen.
+ */
+function kinkDrivenBeats(
+  partners: PartnerRecord[],
+  kinks: string[],
+  intensity: number,
+  roles?: string,
+): string[] {
+  const a = partners[0] ? displayName(partners[0]) : "They";
+  const b = partners[1] ? displayName(partners[1]) : null;
+  const roleBit = roles?.trim()
+    ? ` Roles stay clear: ${roles.trim()}.`
+    : "";
+
+  const lines: Record<KinkBeatKind, string> = {
+    oral: b
+      ? `${a} and ${b} trade your cock between mouths — spit strings, messy sounds, one holding eye contact while the other takes you deeper than polite.${roleBit}`
+      : `${a} works your cock with a wet, deliberate mouth — tongue under the head, then deeper, spit shining down the shaft while hands keep you exactly where they want you.${roleBit}`,
+    anal: `Attention drops to your ass: lube warm on fingers, pressure circling your hole, then a slow push that makes your breath catch. ${a} talks you through the stretch like it's the point${intensity >= 8 ? " — no mercy once you're open" : ""}.${roleBit}`,
+    vaginal: `${a} guides you onto them — heat, stretch, hips locking — fucking with a rhythm that matches the ${intensity}/10 heat they asked for.${roleBit}`,
+    edge: `Every time your hips start to chase it, they back off — lighter touch, almost-cruel patience — until you're shaking and swearing. Intensity ${intensity}/10 means they enjoy denying you.`,
+    talk: `The talk stays specific: what you look like open, how wet you already are, what they're going to put in you next — not generic porn lines, their voice.${roleBit}`,
+    group: b
+      ? `The room feels shared. Hands multiply. ${a} uses you while ${b} watches close enough to feel the heat off your skin — then trades places without asking twice.`
+      : `${a} treats you like something already claimed for the night — free-use energy, no performance, just appetite.`,
+    restraint: `A grip, a cuff, a hand pinning a wrist — bondage and control land as ${kinks.filter((k) => /bondage|spank|restrain/i.test(k)).join(" / ") || "restraint"} — enough that you feel the choice leave your body in the best way.`,
+    toy: `A toy comes out like it was always part of the plan — buzz, stretch, or lock — and ${a} uses it to keep you exactly where they want you.`,
+    finish: `They talk about finishing in/on you like it's already decided — warm, messy, owned — and make you wait for it anyway.`,
+    roleplay: `The roleplay holds: costumes, titles, the agreed fiction — and they refuse to break character while they take you apart.`,
+    piss: `${a} leans into the messier hunger you've already named — piss play heat, no flinch, treated as part of the night's claim on you.`,
+    generic: `${a} leans into ${kinks[0] || "what you asked for"} — hands and body working that hunger until it owns the room.${roleBit}`,
+  };
+
+  const seen = new Set<KinkBeatKind>();
+  const out: string[] = [];
+  for (const tag of kinks) {
+    const kind = kinkKind(tag);
+    if (seen.has(kind) && kind !== "generic") continue;
+    seen.add(kind);
+    if (kind === "generic") {
+      out.push(
+        `${a} makes "${tag}" the next beat — not a footnote, the act itself — at ${intensity}/10.${roleBit}`,
+      );
+    } else {
+      out.push(lines[kind]);
+    }
+  }
+
+  if (!out.length) {
+    out.push(
+      `${a} takes you apart with hands and mouth first, learning what makes your thighs jump before they decide how deep the night goes.${roleBit}`,
+    );
+  }
+  return out;
+}
+
 function surpriseBeats(n: number): string {
   const count = Math.max(0, Math.min(5, Math.floor(n)));
   if (count <= 0) return "";
@@ -601,10 +732,14 @@ function surpriseBeats(n: number): string {
     const j = Math.floor(Math.random() * pool.length);
     out.push(pool.splice(j, 1)[0]!);
   }
-  return `\n\nSurprises:\n- ${out.join("\n- ")}`;
+  // Weave as narrative turns, not a detached checklist label when possible.
+  return `\n\nThen the night twists:\n- ${out.join("\n- ")}`;
 }
 
-/** Port of ArkOfX buildStory — long explicit second-person scene craft. */
+/**
+ * Local scene craft driven by Stories initial-direction selections.
+ * (LLM path: POST /api/art-of-x/generate-scene with the same fields.)
+ */
 export function buildStory(opts: {
   partners: PartnerRecord[];
   location: SceneLocation;
@@ -614,74 +749,141 @@ export function buildStory(opts: {
   extra?: string;
   roles?: string;
   surpriseCount?: number;
+  pov?: ScenePov;
 }): string {
   const picks = opts.partners;
   if (!picks.length) return "";
-  const a = displayName(picks[0]!);
-  const b = picks[1] ? displayName(picks[1]) : null;
-  const c = picks[2] ? displayName(picks[2]) : null;
+  const a = picks[0]!;
+  const b = picks[1];
+  const c = picks[2];
   const loc = opts.location;
+  const tone = partnerTone(a);
+  const aName = displayName(a);
+  const pov = opts.pov || "you";
   const kinkArr = opts.kinks;
-  const intensity = opts.intensity;
 
-  let scene =
-    `${loc.desc} The air already feels thick with it — heat, breath, the knowledge of what is about to happen.\n\n` +
-    `You end up where they want you. ${a}`;
-  if (b) scene += ` and ${b}`;
-  if (c) scene += `, with ${c} close enough to touch`;
-  scene +=
-    " move in without hesitation, like this was decided before anyone spoke.\n\n";
+  const openings =
+    pov === "you"
+      ? [
+          `${loc.name}. ${loc.desc} Heat hangs in the air already — not rushed, just inevitable.`,
+          `${loc.name}. ${loc.desc} You feel it before anyone speaks: the decision already made in the way they look at you.`,
+          `${loc.name}. ${loc.desc} Clothes come off like an argument you've already lost — gladly.`,
+        ]
+      : [
+          `${loc.name}. ${loc.desc} The night tilts toward filthy the second ${lookHook(a)} decides it should.`,
+          `${loc.name}. ${loc.desc} Nobody pretends this is casual once hands start moving.`,
+        ];
 
-  if (b) {
+  let scene = `${pickOne(openings)}\n\n`;
+
+  if (opts.roles?.trim()) {
+    scene += `Agreed roles shape everything from the first touch: ${opts.roles.trim()}.\n\n`;
+  }
+  if (opts.extra?.trim()) {
+    scene += `Your direction sets the night: ${opts.extra.trim()}\n\n`;
+  }
+
+  if (pov === "you") {
+    scene += `${lookHook(a)}`;
+    if (b) scene += ` and ${lookHook(b)}`;
+    if (c) scene += `, with ${displayName(c)} close enough to touch`;
     scene +=
-      `${a} wraps fingers around the base of your cock and takes time looking at it before leaning down. Mouth opens over the head — warm, wet, deliberate — sucking slowly, taking a little more with each pass. Tongue works the underside; wet sound fills the space. A look up, then focus, spit already running down the shaft.\n\n` +
-      `${b} settles lower without being asked. Nuzzles under your balls, breathes on the skin, then drags tongue over them in long slow strokes. A hand slides between your thighs. A fingertip finds your hole, circles, presses, then pushes in to the first knuckle while mouth keeps working. A hum against you when you tighten.\n\n` +
-      `"He's already opening," ${b} murmurs. ${a} answers by taking you deeper, holding you in the throat for a beat and swallowing around the head.\n\n` +
-      `${a} pulls off just enough to speak, spit shining. "Keep fingering him. I want him soft and ready while I suck every bit of attention out of this cock."\n\n` +
-      `${b} adds a second finger. The stretch is slow and intentional. When the spot is found your hips jerk without permission. ${a} uses that moment to push you back into the throat and hold, swallowing, while ${b} finger-fucks your ass in the same rhythm.`;
+      tone === "dominant"
+        ? " move in like they own the next hour of your life.\n\n"
+        : tone === "gentle"
+          ? " ease in close — soft mouths, firm intent.\n\n"
+          : " close the distance without hesitation.\n\n";
+  } else if (pov === "partner") {
+    scene += `${lookHook(a)} takes the lead from inside their own hunger — watching you the way someone does when they already know how this ends.\n\n`;
   } else {
-    scene +=
-      `${a} takes time. Mouth on your cock — slow, thorough, spit running down the shaft and over fingers. Free hand reaches under you, presses two fingers against your hole, and works them in while keeping sucking. No rush. Every tongue stroke matches the push of fingers.\n\n` +
-      `"That's it," comes up for air, voice rough. "Take my fingers while I use this mouth on you. Stay open for me."`;
+    scene += `${lookHook(a)} takes the lead. The rest of the cast falls into orbit.\n\n`;
+  }
+
+  if (a.history?.trim()) {
+    scene += `They already know your body from before: ${a.history.trim().slice(0, 140)}${a.history.trim().length > 140 ? "…" : ""}\n\n`;
+  }
+
+  // Lead with selected kink acts — never a fixed oral/anal block.
+  // Length scales how many selected-kink beats are fully expanded.
+  const beats = kinkDrivenBeats(picks, kinkArr, opts.intensity, opts.roles);
+  const need =
+    opts.length === "short"
+      ? Math.min(2, beats.length)
+      : opts.length === "long"
+        ? beats.length
+        : Math.min(beats.length, Math.max(2, Math.ceil(beats.length * 0.75)));
+  for (let i = 0; i < need; i++) {
+    scene += `${beats[i]!}\n\n`;
+  }
+  // For short/medium, still name any remaining selected kinks so nothing is dropped.
+  if (need < beats.length) {
+    const rest = kinkArr.slice(need).join(", ");
+    if (rest) {
+      scene += `They keep pulling the night back to the rest of what you chose: ${rest}.\n\n`;
+    }
   }
 
   if (opts.length !== "short") {
-    scene +=
-      `\n\nThey settle into a rhythm meant to last. Long wet strokes. Fingers deeper. Edging every time you get close — pace drops, touch lightens, then harder again. Dirty talk stays constant and specific. Intensity sits at ${intensity}/10 and keeps climbing.`;
+    scene += `They settle into a rhythm meant to last — escalation tuned to ${opts.intensity}/10. Pace drops when you get close, then harder again. Talk stays specific to what you asked for.\n\n`;
     if (c) {
-      scene += `\n\n${c} watches for a stretch, then moves closer, stroking, waiting. "My turn soon. Don't finish him yet."`;
+      scene += `${displayName(c)} watches for a stretch, then moves closer. "My turn soon."\n\n`;
+    }
+    if (a.dynTags.length || a.dynamics?.trim()) {
+      scene += `The dynamic is unmistakable${a.dynamics?.trim() ? ` — ${a.dynamics.trim()}` : ""}${a.dynTags.length ? ` (${a.dynTags.join(", ")})` : ""}.\n\n`;
     }
   }
+
   if (opts.length === "long") {
     scene +=
-      "\n\nTime stretches. Positions shift without announcement. On your side so one can keep sucking while the other has better access to your ass. Then on your back with legs pushed up. Mouths trade places. Fingers become a tongue at your hole, then fingers again — deeper, wetter. They talk over you and to you. Nobody is in a hurry to end this.";
+      "Time stretches. Positions shift without announcement. Acts trade places around the kinks you chose. Nobody is in a hurry to end this.\n\n";
   }
 
-  if (kinkArr.length) scene += `\n\nKinks in play: ${kinkArr.join(", ")}.`;
-  if (opts.extra?.trim()) scene += `\n\nDirection applied: ${opts.extra.trim()}`;
-  if (opts.roles?.trim()) scene += `\n\nRoles: ${opts.roles.trim()}`;
+  if (kinkArr.length) {
+    scene += `Through-line kinks held the whole way: ${kinkArr.join(", ")}.`;
+  }
+
   scene += surpriseBeats(opts.surpriseCount ?? 0);
-  return scene;
+
+  if (pov === "third") {
+    scene = scene
+      .replace(/\bYou\b/g, "They")
+      .replace(/\byou\b/g, "they")
+      .replace(/\bYour\b/g, "Their")
+      .replace(/\byour\b/g, "their");
+  }
+  return scene.trim();
 }
 
 /** Continue beat — ArkOfX-style append when user gives no new direction. */
 export function continueStory(
   previous: string,
   partners: PartnerRecord[],
+  pov: ScenePov = "you",
+  kinks: string[] = [],
 ): string {
   const a = partners[0] ? displayName(partners[0]) : "They";
   const b = partners[1] ? displayName(partners[1]) : null;
+  const kinkHint = kinks.length
+    ? ` They keep the through-line on ${kinks.slice(0, 3).join(", ")}.`
+    : "";
   const variants = b
     ? [
-        `\n\n---\n\n${a} and ${b} do not let the pace drop. They trade mouths and hands, keeping you right on the edge until one of them decides you have earned more.`,
-        `\n\n---\n\n${b} takes over the cock while ${a} focuses lower — tongue, fingers, filthy praise — until your legs shake.`,
-        `\n\n---\n\nThey flip you. ${a} holds you open; ${b} uses that opening without hurry. Dirty talk stays specific and mean enough to make you drip.`,
+        `\n\n---\n\n${a} and ${b} refuse to let the pace drop. Mouths and hands trade places, keeping the edge sharp until one of them decides you've earned more.${kinkHint}`,
+        `\n\n---\n\n${b} takes over while ${a} goes lower — tongue, fingers, filthy praise — until legs shake and breath breaks.${kinkHint}`,
+        `\n\n---\n\nThey flip the angle. ${a} holds you open; ${b} uses that opening without hurry. Talk stays specific enough to make you drip.${kinkHint}`,
       ]
     : [
-        `\n\n---\n\n${a} keeps going — slower, then deeper — talking you through every inch until you forget how to hold still.`,
-        `\n\n---\n\n${a} edges you again on purpose, then takes you back into that wet heat and refuses to let you finish yet.`,
+        `\n\n---\n\n${a} keeps going — slower, then deeper — narrating every inch until holding still feels impossible.${kinkHint}`,
+        `\n\n---\n\n${a} edges on purpose, then pulls you back into that heat and refuses the finish a little longer.${kinkHint}`,
       ];
-  return previous + variants[Math.floor(Math.random() * variants.length)]!;
+  let beat = pickOne(variants);
+  if (pov === "third") {
+    beat = beat
+      .replace(/\byou\b/gi, "they")
+      .replace(/\byour\b/gi, "their")
+      .replace(/\byou've\b/gi, "they've");
+  }
+  return previous + beat;
 }
 
 export function injectStoryDirection(
@@ -697,7 +899,7 @@ export function injectStoryDirection(
   if (/edge|deny|don't come|dont come|not yet/.test(d)) {
     acted = true;
     beat +=
-      "They back off the moment you get close. Touch lightens. Mouths hover. You are held right there — shaking — until they decide you can have more.\n\n";
+      "They back off the second you get close. Touch lightens. Mouths hover. You're held right there — shaking — until they decide you can have more.\n\n";
   }
   if (/ass|anal|hole|peg|strap/.test(d)) {
     acted = true;
@@ -707,12 +909,22 @@ export function injectStoryDirection(
   if (/group|another|join|third|watch/.test(d)) {
     acted = true;
     beat +=
-      "The room gets more crowded. Another body moves in. Hands and mouths multiply. You are being shared.\n\n";
+      "The room gets more crowded. Another body moves in. Hands and mouths multiply. You're being shared.\n\n";
+  }
+  if (/mouth|suck|oral|throat|blow/.test(d)) {
+    acted = true;
+    beat +=
+      "A mouth claims you again — wetter, hungrier — while hands keep the rest of you busy so you can't think past the next stroke.\n\n";
+  }
+  if (/bondage|tie|cuff|spank/.test(d)) {
+    acted = true;
+    beat +=
+      "Restraint tightens — wrists pinned or cuffed — and the next stretch of the scene is about control as much as pleasure.\n\n";
   }
   if (!acted) {
     beat += b
-      ? `${a} and ${b} shift immediately to match that. The next stretch of the scene is built around your words — pace, acts, and talk — held long enough to land.\n\n`
-      : `${a} shifts immediately to match that. The next stretch of the scene is built around your words — pace, acts, and talk — held long enough to land.\n\n`;
+      ? `${a} and ${b} shift immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.\n\n`
+      : `${a} shifts immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.\n\n`;
   }
   beat +=
     "They do not snap back to the old rhythm. This is the new line of the story until you steer again.";
