@@ -71,12 +71,16 @@ function PhotoLightbox({
   name,
   onClose,
   onChange,
+  onSetMain,
+  isMain,
 }: {
   photos: string[];
   index: number;
   name: string;
   onClose: () => void;
   onChange: (index: number) => void;
+  onSetMain?: (index: number) => void;
+  isMain?: boolean;
 }) {
   const titleId = useId();
   const safeIndex = Math.min(Math.max(0, index), photos.length - 1);
@@ -142,26 +146,40 @@ function PhotoLightbox({
             className="max-h-[min(78vh,820px)] w-full object-contain"
           />
         </div>
-        {photos.length > 1 && (
-          <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {photos.length > 1 ? (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  onChange((safeIndex - 1 + photos.length) % photos.length)
+                }
+                className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange((safeIndex + 1) % photos.length)}
+                className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+              >
+                Next
+              </button>
+            </div>
+          ) : (
+            <span />
+          )}
+          {onSetMain && (
             <button
               type="button"
-              onClick={() =>
-                onChange((safeIndex - 1 + photos.length) % photos.length)
-              }
-              className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+              onClick={() => onSetMain(safeIndex)}
+              disabled={isMain}
+              className="rounded-sm border border-[var(--accent)]/45 px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] disabled:cursor-default disabled:opacity-50"
             >
-              Previous
+              {isMain ? "Main photo" : "Set as main"}
             </button>
-            <button
-              type="button"
-              onClick={() => onChange((safeIndex + 1) % photos.length)}
-              className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
-            >
-              Next
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -216,13 +234,23 @@ export function PartnerCard({
   const hasProseAbove = hasLooks || hasDynBlock || hasHistory || hasNotes;
   const initial = (p.name || "?").trim().slice(0, 1).toUpperCase();
 
+  /** Browse only — does not persist main/featured (that needs an explicit star). */
   const selectPhoto = useCallback(
     (index: number, open = true) => {
       if (!photos.length) return;
       const i = Math.min(Math.max(0, index), photos.length - 1);
       setActiveIndex(i);
-      onSelectPhoto?.(i);
       if (open) setLightboxIndex(i);
+    },
+    [photos.length],
+  );
+
+  const setAsMain = useCallback(
+    (index: number) => {
+      if (!photos.length) return;
+      const i = Math.min(Math.max(0, index), photos.length - 1);
+      setActiveIndex(i);
+      onSelectPhoto?.(i);
     },
     [onSelectPhoto, photos.length],
   );
@@ -280,7 +308,7 @@ export function PartnerCard({
               </p>
               {photos.length > 1 && (
                 <p className="text-[10px] text-[var(--muted)]">
-                  Scroll · tap to open
+                  Tap to open · set main in lightbox
                 </p>
               )}
             </div>
@@ -291,18 +319,21 @@ export function PartnerCard({
             >
               {photos.map((src, i) => {
                 const isActive = i === activeIndex;
+                const isMain = i === (p.mainPhotoIndex ?? 0);
                 return (
                   <button
                     key={i}
                     type="button"
                     role="listitem"
                     onClick={() => selectPhoto(i, true)}
-                    aria-label={`Photo ${i + 1}${isActive ? ", featured" : ""}`}
+                    aria-label={`Photo ${i + 1}${isMain ? ", main" : ""}`}
                     aria-current={isActive ? "true" : undefined}
                     className={`relative h-16 w-16 shrink-0 overflow-hidden bg-[#12100e] transition sm:h-[4.5rem] sm:w-[4.5rem] ${
-                      isActive
+                      isMain
                         ? "ring-1 ring-[var(--accent)]"
-                        : "ring-1 ring-[var(--line)] hover:ring-[var(--accent)]/45"
+                        : isActive
+                          ? "ring-1 ring-[var(--glow)]/50"
+                          : "ring-1 ring-[var(--line)] hover:ring-[var(--accent)]/45"
                     }`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -470,8 +501,9 @@ export function PartnerCard({
           onChange={(i) => {
             setLightboxIndex(i);
             setActiveIndex(i);
-            onSelectPhoto?.(i);
           }}
+          onSetMain={onSelectPhoto ? setAsMain : undefined}
+          isMain={lightboxIndex === (p.mainPhotoIndex ?? 0)}
         />
       )}
     </article>

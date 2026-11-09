@@ -300,13 +300,35 @@ export default function PartnersPage() {
     const cap = PARTNER_PHOTO_LIMITS.perPartner;
     const room = cap - editing.photos.length;
     if (room <= 0) {
+      setLooksNote(`Limit reached — ${cap} photos per Muse.`);
       if (input) input.value = "";
       return;
     }
+    const selected = Array.from(files);
+    const truncated = selected.length > room;
+    const batch = selected.slice(0, room);
     const hadNone = editing.photos.length === 0;
     const next = [...editing.photos];
-    for (const file of Array.from(files).slice(0, room)) {
-      next.push(await fileToPartnerPhoto(file));
+    const failed: string[] = [];
+    for (const file of batch) {
+      if (!file.type.startsWith("image/")) {
+        failed.push(file.name || "file");
+        continue;
+      }
+      try {
+        next.push(await fileToPartnerPhoto(file));
+      } catch {
+        failed.push(file.name || "photo");
+      }
+    }
+    if (next.length === editing.photos.length) {
+      setLooksNote(
+        failed.length
+          ? `Couldn’t read ${failed.length === 1 ? "that photo" : "those photos"} — try JPEG/PNG/WebP.`
+          : "No photos added.",
+      );
+      if (input) input.value = "";
+      return;
     }
     setEditing({
       ...editing,
@@ -321,6 +343,16 @@ export default function PartnersPage() {
       );
       setLooksFromIdx((prev) => [...new Set([...prev, ...added])]);
     }
+    const notes: string[] = [];
+    if (truncated) {
+      notes.push(`Only ${room} more photo${room === 1 ? "" : "s"} fit — extras skipped.`);
+    }
+    if (failed.length) {
+      notes.push(
+        `${failed.length} file${failed.length === 1 ? "" : "s"} couldn’t be read.`,
+      );
+    }
+    if (notes.length) setLooksNote(notes.join(" "));
     if (input) input.value = "";
   }
 
@@ -377,7 +409,7 @@ export default function PartnersPage() {
       setLooksNote(
         result.source === "vision"
           ? "Sexy looks blurb filled from chosen photo(s) via vision — edit freely."
-          : "Sensual looks draft from chosen photo(s) — edit as needed. Add a vision API key for sharper photo-true descriptions.",
+          : "Sensual looks draft from chosen photo(s) — edit as needed. Vision was unavailable (key, size, or upstream) — local draft used.",
       );
     } catch (err) {
       setLooksNote(

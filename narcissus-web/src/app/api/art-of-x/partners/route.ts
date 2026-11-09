@@ -106,6 +106,30 @@ export async function PUT(req: NextRequest) {
   const userId = auth.userId;
   const now = new Date();
 
+  // Reject oversized photo ledgers before delete-all (avoids wiping Muses on 413).
+  let photoChars = 0;
+  let photoCount = 0;
+  for (const p of list) {
+    const photos = Array.isArray(p?.photos) ? p.photos : [];
+    photoCount += photos.length;
+    for (const src of photos) {
+      if (typeof src === "string") photoChars += src.length;
+    }
+  }
+  // ~3.2M chars ≈ stay under typical ~4.5MB serverless body after JSON overhead.
+  if (photoChars > 3_200_000 || photoCount > 80) {
+    return NextResponse.json(
+      {
+        error: "payload_too_large",
+        message:
+          "Too many or too-large Muse photos for one save. Remove some photos and try again.",
+        photoCount,
+        photoChars,
+      },
+      { status: 413 },
+    );
+  }
+
   try {
     // Ids already held by other accounts (global PK) — must not reuse.
     const otherRows = await db

@@ -717,7 +717,7 @@ function kinkDrivenBeats(
 
   if (!out.length) {
     out.push(
-      `${a} takes you apart with hands and mouth first, learning what makes your thighs jump before they decide how deep the night goes.${roleBit}`,
+      `${a} takes you apart with hands and body first — slow maps of skin, breath, and pressure — learning what makes your thighs jump before they decide how deep the night goes.${roleBit}`,
     );
   }
   return out;
@@ -815,9 +815,18 @@ export function buildStory(opts: {
   for (let i = 0; i < need; i++) {
     scene += `${beats[i]!}\n\n`;
   }
-  // For short/medium, still name any remaining selected kinks so nothing is dropped.
-  if (need < beats.length) {
-    const rest = kinkArr.slice(need).join(", ");
+  // For short/medium, name kinks that didn't get a dedicated beat.
+  if (need < beats.length && kinkArr.length) {
+    const seenKinds = new Set<KinkBeatKind>();
+    const expandedTags: string[] = [];
+    for (const tag of kinkArr) {
+      const kind = kinkKind(tag);
+      if (seenKinds.has(kind) && kind !== "generic") continue;
+      seenKinds.add(kind);
+      expandedTags.push(tag);
+      if (expandedTags.length >= need) break;
+    }
+    const rest = kinkArr.filter((t) => !expandedTags.includes(t)).join(", ");
     if (rest) {
       scene += `They keep pulling the night back to the rest of what you chose: ${rest}.\n\n`;
     }
@@ -854,46 +863,99 @@ export function buildStory(opts: {
   return scene.trim();
 }
 
+export type StoryContinueOpts = {
+  partners: PartnerRecord[];
+  pov?: ScenePov;
+  kinks?: string[];
+  location?: SceneLocation;
+  intensity?: number;
+  roles?: string;
+  extra?: string;
+};
+
+function applyScenePov(text: string, pov: ScenePov): string {
+  if (pov === "third") {
+    return text
+      .replace(/\bYou\b/g, "They")
+      .replace(/\byou\b/g, "they")
+      .replace(/\bYour\b/g, "Their")
+      .replace(/\byour\b/g, "their")
+      .replace(/\bYou've\b/g, "They've")
+      .replace(/\byou've\b/g, "they've");
+  }
+  if (pov === "partner") {
+    return text
+      .replace(/\bYou say what you want:/g, "They name what they want:")
+      .replace(/\bYou say\b/g, "They say");
+  }
+  return text;
+}
+
 /** Continue beat — ArkOfX-style append when user gives no new direction. */
 export function continueStory(
   previous: string,
-  partners: PartnerRecord[],
-  pov: ScenePov = "you",
-  kinks: string[] = [],
+  partnersOrOpts: PartnerRecord[] | StoryContinueOpts,
+  povArg: ScenePov = "you",
+  kinksArg: string[] = [],
 ): string {
+  const opts: StoryContinueOpts = Array.isArray(partnersOrOpts)
+    ? { partners: partnersOrOpts, pov: povArg, kinks: kinksArg }
+    : partnersOrOpts;
+  const partners = opts.partners;
+  const pov = opts.pov || "you";
+  const kinks = opts.kinks || [];
   const a = partners[0] ? displayName(partners[0]) : "They";
   const b = partners[1] ? displayName(partners[1]) : null;
   const kinkHint = kinks.length
     ? ` They keep the through-line on ${kinks.slice(0, 3).join(", ")}.`
     : "";
+  const locHint = opts.location
+    ? ` The ${opts.location.name.toLowerCase()} still frames every move.`
+    : "";
+  const roleHint = opts.roles?.trim()
+    ? ` Roles stay locked: ${opts.roles.trim()}.`
+    : "";
+  const intensityHint =
+    typeof opts.intensity === "number"
+      ? ` Intensity holds at ${opts.intensity}/10.`
+      : "";
+  const extraHint = opts.extra?.trim()
+    ? ` Your earlier direction still steers them: ${opts.extra.trim().slice(0, 120)}.`
+    : "";
   const variants = b
     ? [
-        `\n\n---\n\n${a} and ${b} refuse to let the pace drop. Mouths and hands trade places, keeping the edge sharp until one of them decides you've earned more.${kinkHint}`,
-        `\n\n---\n\n${b} takes over while ${a} goes lower — tongue, fingers, filthy praise — until legs shake and breath breaks.${kinkHint}`,
-        `\n\n---\n\nThey flip the angle. ${a} holds you open; ${b} uses that opening without hurry. Talk stays specific enough to make you drip.${kinkHint}`,
+        `\n\n---\n\n${a} and ${b} refuse to let the pace drop. Mouths and hands trade places, keeping the edge sharp until one of them decides you've earned more.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `\n\n---\n\n${b} takes over while ${a} goes lower — tongue, fingers, filthy praise — until legs shake and breath breaks.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `\n\n---\n\nThey flip the angle. ${a} holds you open; ${b} uses that opening without hurry. Talk stays specific enough to make you drip.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
       ]
     : [
-        `\n\n---\n\n${a} keeps going — slower, then deeper — narrating every inch until holding still feels impossible.${kinkHint}`,
-        `\n\n---\n\n${a} edges on purpose, then pulls you back into that heat and refuses the finish a little longer.${kinkHint}`,
+        `\n\n---\n\n${a} keeps going — slower, then deeper — narrating every inch until holding still feels impossible.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `\n\n---\n\n${a} edges on purpose, then pulls you back into that heat and refuses the finish a little longer.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
       ];
   let beat = pickOne(variants);
-  if (pov === "third") {
-    beat = beat
-      .replace(/\byou\b/gi, "they")
-      .replace(/\byour\b/gi, "their")
-      .replace(/\byou've\b/gi, "they've");
-  }
+  beat = applyScenePov(beat, pov);
   return previous + beat;
 }
 
 export function injectStoryDirection(
   previous: string,
   direction: string,
-  partners: PartnerRecord[],
+  partnersOrOpts: PartnerRecord[] | StoryContinueOpts,
 ): string {
+  const opts: StoryContinueOpts = Array.isArray(partnersOrOpts)
+    ? { partners: partnersOrOpts }
+    : partnersOrOpts;
+  const partners = opts.partners;
+  const pov = opts.pov || "you";
   const a = partners[0] ? displayName(partners[0]) : "They";
   const b = partners[1] ? displayName(partners[1]) : null;
   const d = direction.toLowerCase();
+  const kinkHint = opts.kinks?.length
+    ? ` Through-line kinks stay in play: ${opts.kinks.slice(0, 3).join(", ")}.`
+    : "";
+  const locHint = opts.location
+    ? ` Still in the ${opts.location.name.toLowerCase()}.`
+    : "";
   let beat = `\n\n---\n\nYou say what you want: "${direction.trim()}"\n\n`;
   let acted = false;
   if (/edge|deny|don't come|dont come|not yet/.test(d)) {
@@ -927,7 +989,8 @@ export function injectStoryDirection(
       : `${a} shifts immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.\n\n`;
   }
   beat +=
-    "They do not snap back to the old rhythm. This is the new line of the story until you steer again.";
+    `They do not snap back to the old rhythm. This is the new line of the story until you steer again.${kinkHint}${locHint}`;
+  beat = applyScenePov(beat, pov);
   return previous + beat;
 }
 
@@ -1143,6 +1206,13 @@ export async function fileToPartnerPhoto(
   file: File,
   maxSide = PARTNER_PHOTO_LIMITS.maxSidePx,
 ): Promise<string> {
+  if (file.type && !file.type.startsWith("image/")) {
+    throw new Error("Choose an image file (JPEG, PNG, or WebP)");
+  }
+  // Soft client cap (~12MB) before decode — keeps canvas path responsive.
+  if (file.size > 12 * 1024 * 1024) {
+    throw new Error("Photo is too large — use an image under 12MB");
+  }
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
