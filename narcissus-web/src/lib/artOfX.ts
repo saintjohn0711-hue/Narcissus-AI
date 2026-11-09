@@ -542,6 +542,71 @@ export const SURPRISES = [
   "Cleanup becomes the focus after the main act.",
 ];
 
+/** Clickable role boxes on Stories — toggle into the roles brief. */
+export const SCENE_ROLE_CHIPS = [
+  "You lead",
+  "Muse leads",
+  "Switch",
+  "Service top",
+  "Service bottom",
+  "Dom / sub",
+  "Free-use",
+  "Watcher joins",
+] as const;
+
+/** Snapshot of direction boxes used to detect steer deltas after a scene exists. */
+export type StoryDirectionBrief = {
+  locId: string;
+  locName: string;
+  kinks: string[];
+  roles: string;
+  surprises: number;
+  extra: string;
+  intensity: number;
+};
+
+/**
+ * Build a steer `direction` string from box/picker deltas since the last
+ * generate or continue. Empty string means no box-driven steer (plain continue).
+ */
+export function buildSteerDirectionFromBoxes(
+  committed: StoryDirectionBrief | null,
+  next: StoryDirectionBrief,
+): string {
+  if (!committed) return "";
+  const parts: string[] = [];
+  if (next.locId !== committed.locId) {
+    parts.push(`Move the scene to ${next.locName}`);
+  }
+  const added = next.kinks.filter((k) => !committed.kinks.includes(k));
+  const removed = committed.kinks.filter((k) => !next.kinks.includes(k));
+  if (added.length) parts.push(`Lean into: ${added.join(", ")}`);
+  if (removed.length) parts.push(`Ease off: ${removed.join(", ")}`);
+  const nextRoles = next.roles.trim();
+  const prevRoles = committed.roles.trim();
+  if (nextRoles && nextRoles !== prevRoles) {
+    parts.push(`Roles / who leads: ${nextRoles}`);
+  } else if (!nextRoles && prevRoles) {
+    parts.push("Drop the previous role notes and follow the cast’s chemistry");
+  }
+  if (next.surprises !== committed.surprises) {
+    parts.push(
+      next.surprises > 0
+        ? `Fold in ${next.surprises} surprise turn(s)`
+        : "No surprise turns — keep the arc clean",
+    );
+  }
+  if (next.intensity !== committed.intensity) {
+    parts.push(`Shift intensity to ${next.intensity}/10`);
+  }
+  const nextExtra = next.extra.trim();
+  const prevExtra = committed.extra.trim();
+  if (nextExtra && nextExtra !== prevExtra) {
+    parts.push(nextExtra);
+  }
+  return parts.join(". ");
+}
+
 export function normalizeKinks(
   list: Array<string | KinkEntry> | undefined,
 ): KinkEntry[] {

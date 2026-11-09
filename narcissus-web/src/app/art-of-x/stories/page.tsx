@@ -5,7 +5,9 @@ import { AppNav } from "@/components/AppNav";
 import {
   ALL_KINKS,
   DEFAULT_LOCS,
+  SCENE_ROLE_CHIPS,
   buildImagePrompt,
+  buildSteerDirectionFromBoxes,
   buildStory,
   continueStory,
   displayName,
@@ -14,11 +16,16 @@ import {
   type SavedScene,
   type SceneLength,
   type ScenePov,
+  type StoryDirectionBrief,
 } from "@/lib/artOfX";
 import { partnerToSceneCard } from "@/lib/sceneCraft";
 import { fetchPartners, fetchScenes, persistScenes } from "@/lib/artOfXStore";
 
 type GenSource = "llm" | "local" | null;
+
+const chipOn =
+  "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]";
+const chipOff = "border-[var(--line)] text-[#c4b7a8]";
 
 export default function StoriesPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -44,6 +51,9 @@ export default function StoriesPage() {
   const [source, setSource] = useState<GenSource>(null);
   const [modelLabel, setModelLabel] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Brief locked in after last generate/continue — box deltas steer from this. */
+  const [committedBrief, setCommittedBrief] =
+    useState<StoryDirectionBrief | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +90,31 @@ export default function StoriesPage() {
   );
   const loc = DEFAULT_LOCS.find((l) => l.id === locId) || DEFAULT_LOCS[0]!;
 
+  const currentBrief = useMemo<StoryDirectionBrief>(
+    () => ({
+      locId: loc.id,
+      locName: loc.name,
+      kinks: [...kinks],
+      roles,
+      surprises,
+      extra,
+      intensity,
+    }),
+    [loc.id, loc.name, kinks, roles, surprises, extra, intensity],
+  );
+
+  const boxSteer = useMemo(
+    () =>
+      draft.trim()
+        ? buildSteerDirectionFromBoxes(committedBrief, currentBrief)
+        : "",
+    [draft, committedBrief, currentBrief],
+  );
+
+  const hasStory = Boolean(draft.trim());
+  const continueEnabled = hasStory && !busy && cast.length > 0;
+  const willSteer = Boolean(boxSteer || direction.trim());
+
   function togglePartner(id: number) {
     setSelectedIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
@@ -92,6 +127,35 @@ export default function StoriesPage() {
     setKinks((prev) =>
       prev.includes(tag) ? prev.filter((k) => k !== tag) : [...prev, tag],
     );
+  }
+
+  function toggleRoleChip(chip: string) {
+    setRoles((prev) => {
+      const parts = prev
+        .split(/[,·|/]+/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      const on = parts.some((p) => p.toLowerCase() === chip.toLowerCase());
+      const next = on
+        ? parts.filter((p) => p.toLowerCase() !== chip.toLowerCase())
+        : [...parts, chip];
+      return next.join(", ");
+    });
+  }
+
+  function roleChipOn(chip: string) {
+    return roles
+      .split(/[,·|/]+/)
+      .map((p) => p.trim().toLowerCase())
+      .filter(Boolean)
+      .includes(chip.toLowerCase());
+  }
+
+  function commitBrief(brief: StoryDirectionBrief = currentBrief) {
+    setCommittedBrief({
+      ...brief,
+      kinks: [...brief.kinks],
+    });
   }
 
   /** Local fallback — same initial-direction fields as the API payload. */
@@ -192,6 +256,8 @@ export default function StoriesPage() {
       setDraft(result.text);
       setSource(result.source);
       setModelLabel(result.model || "");
+      commitBrief();
+      setDirection("");
     } finally {
       setBusy(false);
     }
@@ -202,17 +268,16 @@ export default function StoriesPage() {
       alert("Select at least one Muse.");
       return;
     }
-    if (!draft) {
-      await generate();
-      return;
-    }
+    if (!draft.trim()) return;
     setBusy(true);
     try {
-      const mode = direction.trim() ? "steer" : "continue";
+      const freeText = direction.trim();
+      const steerDir = [boxSteer, freeText].filter(Boolean).join(". ");
+      const mode = steerDir ? "steer" : "continue";
       const result = await requestScene({
         mode,
         previous: draft,
-        direction: direction.trim(),
+        direction: steerDir,
       });
       // LLM returns append-only beat; local helpers already include previous.
       // If the model ignored instructions and rewrote the whole scene, keep its text.
@@ -231,6 +296,7 @@ export default function StoriesPage() {
       setDraft(nextText);
       setSource(result.source);
       setModelLabel(result.model || "");
+      commitBrief();
       if (mode === "steer") setDirection("");
     } finally {
       setBusy(false);
@@ -240,7 +306,11 @@ export default function StoriesPage() {
   function loadScene(s: SavedScene) {
     setDraft(s.text);
     if (Array.isArray(s.partnerIds) && s.partnerIds.length) {
-      setSelectedIds(s.partnerIds.filter((id) => partners.some((p) => p.id === id)).slice(0, 3));
+      setSelectedIds(
+        s.partnerIds
+          .filter((id) => partners.some((p) => p.id === id))
+          .slice(0, 3),
+      );
     }
     if (s.locationId && DEFAULT_LOCS.some((l) => l.id === s.locationId)) {
       setLocId(s.locationId);
@@ -250,6 +320,21 @@ export default function StoriesPage() {
     if (s.length === "short" || s.length === "medium" || s.length === "long") {
       setLength(s.length);
     }
+    const loadedLoc =
+      DEFAULT_LOCS.find((l) => l.id === s.locationId) || loc;
+    const nextIntensity =
+      typeof s.intensity === "number" ? s.intensity : intensity;
+    const nextKinks = Array.isArray(s.kinks) ? [...s.kinks] : [];
+    commitBrief({
+      locId: loadedLoc.id,
+      locName: loadedLoc.name,
+      kinks: nextKinks,
+      roles,
+      surprises,
+      extra,
+      intensity: nextIntensity,
+    });
+    setDirection("");
   }
 
   function saveCurrent() {
@@ -305,8 +390,8 @@ export default function StoriesPage() {
           Scene builder
         </h1>
         <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          ArkOfX craft — pick cast, place, kinks; generate a long explicit scene,
-          steer it, save it. Initial direction selections drive every generate.
+          Art of X craft with Muses — pick cast, place, and kink boxes; generate
+          a scene, then continue or click more boxes to steer the next beat.
         </p>
       </header>
 
@@ -383,9 +468,7 @@ export default function StoriesPage() {
                       type="button"
                       onClick={() => togglePartner(p.id)}
                       className={`rounded-sm border px-3 py-1.5 text-sm ${
-                        on
-                          ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                          : "border-[var(--line)] text-[#c4b7a8]"
+                        on ? chipOn : chipOff
                       }`}
                     >
                       {p.name}
@@ -406,9 +489,7 @@ export default function StoriesPage() {
                     type="button"
                     onClick={() => setLocId(l.id)}
                     className={`rounded-sm border px-3 py-1.5 text-sm ${
-                      locId === l.id
-                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                        : "border-[var(--line)] text-[#c4b7a8]"
+                      locId === l.id ? chipOn : chipOff
                     }`}
                   >
                     {l.name}
@@ -431,9 +512,7 @@ export default function StoriesPage() {
                       type="button"
                       onClick={() => toggleKink(tag)}
                       className={`rounded-sm border px-2.5 py-1 text-xs ${
-                        on
-                          ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
-                          : "border-[var(--line)] text-[#c4b7a8]"
+                        on ? chipOn : chipOff
                       }`}
                     >
                       {tag}
@@ -443,7 +522,71 @@ export default function StoriesPage() {
               </div>
             </fieldset>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <fieldset className="space-y-2">
+              <legend className="text-sm uppercase tracking-[0.16em] text-[var(--ink)]">
+                Roles
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {SCENE_ROLE_CHIPS.map((chip) => {
+                  const on = roleChipOn(chip);
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => toggleRoleChip(chip)}
+                      className={`rounded-sm border px-2.5 py-1 text-xs ${
+                        on ? chipOn : chipOff
+                      }`}
+                    >
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
+              <input
+                value={roles}
+                onChange={(e) => setRoles(e.target.value)}
+                className="prompt-field mt-1 w-full rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+                placeholder="Or type role notes — who leads, who receives…"
+              />
+            </fieldset>
+
+            <fieldset className="space-y-2">
+              <legend className="text-sm uppercase tracking-[0.16em] text-[var(--ink)]">
+                Surprises
+              </legend>
+              <div className="flex flex-wrap gap-2">
+                {[0, 1, 2, 3].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setSurprises(n)}
+                    className={`min-w-[2.5rem] rounded-sm border px-3 py-1.5 text-sm ${
+                      surprises === n ? chipOn : chipOff
+                    }`}
+                    aria-pressed={surprises === n}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-[#c4b7a8]">
+                How many surprise turns to fold into the next beat.
+              </p>
+            </fieldset>
+
+            {hasStory && (
+              <p
+                className="rounded-sm border border-[var(--accent)]/25 bg-[var(--accent)]/5 px-3 py-2 text-xs leading-relaxed text-[var(--accent-strong)]"
+                role="status"
+              >
+                {boxSteer
+                  ? "New direction from your boxes will steer Continue the story."
+                  : "Click more location, kink, role, or surprise boxes to set a new direction for Continue."}
+              </p>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <label className="grid gap-2 text-sm">
                 <span className="uppercase tracking-[0.16em]">Length</span>
                 <select
@@ -483,30 +626,8 @@ export default function StoriesPage() {
                   className="accent-[var(--accent)]"
                 />
               </label>
-              <label className="grid gap-2 text-sm">
-                <span className="uppercase tracking-[0.16em]">
-                  Surprises {surprises}
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={3}
-                  value={surprises}
-                  onChange={(e) => setSurprises(Number(e.target.value))}
-                  className="accent-[var(--accent)]"
-                />
-              </label>
             </div>
 
-            <label className="grid gap-2 text-sm">
-              <span className="uppercase tracking-[0.16em]">Roles / notes</span>
-              <input
-                value={roles}
-                onChange={(e) => setRoles(e.target.value)}
-                className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
-                placeholder="Who leads, who receives…"
-              />
-            </label>
             <label className="grid gap-2 text-sm">
               <span className="uppercase tracking-[0.16em]">
                 Extra direction
@@ -516,25 +637,58 @@ export default function StoriesPage() {
                 onChange={(e) => setExtra(e.target.value)}
                 rows={2}
                 className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2"
+                placeholder="Optional free-text — boxes above are enough for most steers."
               />
             </label>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void generate()}
-                disabled={busy}
-                className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c] disabled:opacity-50"
-              >
-                {busy ? "Generating…" : "Generate scene"}
-              </button>
-              <button
-                type="button"
-                onClick={copyPrompt}
-                className="rounded-sm border border-[var(--line)] px-4 py-2 text-sm text-[#c4b7a8]"
-              >
-                Copy image prompt
-              </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void generate()}
+                  disabled={busy || !cast.length}
+                  className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c] disabled:opacity-50"
+                >
+                  {busy && !hasStory ? "Generating…" : "Generate scene"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onContinue()}
+                  disabled={!continueEnabled}
+                  title={
+                    hasStory
+                      ? willSteer
+                        ? "Continue with new direction from boxes"
+                        : "Continue the story"
+                      : "Generate a scene first"
+                  }
+                  className="rounded-sm border border-[var(--accent)]/55 px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {busy && hasStory
+                    ? willSteer
+                      ? "Steering…"
+                      : "Continuing…"
+                    : "Continue the story"}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyPrompt}
+                  className="rounded-sm border border-[var(--line)] px-4 py-2 text-sm text-[#c4b7a8]"
+                >
+                  Copy image prompt
+                </button>
+              </div>
+              {!hasStory && (
+                <p className="text-xs text-[#c4b7a8]">
+                  Continue the story unlocks after you generate (or load) a
+                  scene.
+                </p>
+              )}
+              {hasStory && boxSteer && (
+                <p className="text-xs leading-relaxed text-[var(--accent-strong)]">
+                  Next steer: {boxSteer}
+                </p>
+              )}
             </div>
           </section>
 
@@ -562,22 +716,24 @@ export default function StoriesPage() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <textarea
-                value={direction}
-                onChange={(e) => setDirection(e.target.value)}
-                rows={2}
-                placeholder="Steer the story — what should happen next…"
-                className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
-              />
+              <label className="grid gap-1 text-sm">
+                <span className="uppercase tracking-[0.16em] text-[var(--muted)]">
+                  Optional text steer
+                </span>
+                <textarea
+                  value={direction}
+                  onChange={(e) => setDirection(e.target.value)}
+                  rows={2}
+                  disabled={!hasStory}
+                  placeholder={
+                    hasStory
+                      ? "Optional — boxes already steer Continue. Add a specific beat if you want."
+                      : "Generate a scene first, then steer with boxes or text."
+                  }
+                  className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm disabled:opacity-50"
+                />
+              </label>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void onContinue()}
-                  disabled={busy}
-                  className="rounded-sm border border-[var(--accent)]/50 px-4 py-2 text-sm text-[var(--accent-strong)] disabled:opacity-50"
-                >
-                  {direction.trim() ? "Add to story" : "Continue"}
-                </button>
                 <button
                   type="button"
                   onClick={saveCurrent}
