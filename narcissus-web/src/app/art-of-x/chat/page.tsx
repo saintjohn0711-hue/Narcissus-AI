@@ -485,16 +485,16 @@ function ChatPageInner() {
             <div
               className={
                 companionFull
-                  ? `muse-chat-drawer z-20 flex flex-col border border-[var(--line)] bg-[#080b14]/88 backdrop-blur-md ${
+                  ? `muse-chat-drawer z-20 flex flex-col ${
                       chatOpen
                         ? "muse-chat-drawer--open"
                         : "muse-chat-drawer--closed"
                     }`
-                  : "flex min-h-[22rem] flex-col lg:min-h-[36rem]"
+                  : "flex min-h-[22rem] flex-col border border-[var(--line)] bg-[var(--bg-elevated)] lg:min-h-[36rem]"
               }
             >
               {partner && (
-                <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] px-4 py-3 sm:px-5">
+                <div className="muse-chat-drawer-header flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)]">
                   <div className="min-w-0">
                     <h2
                       className="text-xl text-[var(--ink)]"
@@ -536,14 +536,20 @@ function ChatPageInner() {
               )}
 
               {error && (
-                <div className="border-b border-[var(--line)] bg-[#3a1814]/60 px-4 py-2 text-sm text-[#f0c4b8]">
+                <div className="border-b border-[var(--line)] bg-[#3a1814] px-4 py-2.5 text-sm text-[#f0c4b8] sm:px-5">
                   {error}
                 </div>
               )}
 
-              <div className="flex-1 space-y-3 overflow-auto p-4 sm:p-5">
+              <div
+                className={`muse-chat-drawer-messages flex-1 overflow-auto ${
+                  messages.length === 0
+                    ? "muse-chat-drawer-messages--empty flex flex-col justify-center"
+                    : "space-y-3"
+                }`}
+              >
                 {messages.length === 0 && (
-                  <p className="text-sm text-[#c4b7a8]">
+                  <p className="muse-chat-empty text-sm leading-relaxed text-[#e8dcd0]">
                     Say something filthy. Her portrait stays with you.
                   </p>
                 )}
@@ -572,19 +578,19 @@ function ChatPageInner() {
 
               <form
                 onSubmit={send}
-                className="flex gap-2 border-t border-[var(--line)] p-3"
+                className="muse-chat-drawer-composer flex gap-2 border-t border-[var(--line)]"
               >
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Message…"
                   disabled={sending || !partner}
-                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2 text-sm disabled:opacity-60"
+                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2.5 text-sm disabled:opacity-60"
                 />
                 <button
                   type="submit"
                   disabled={sending || !partner || !text.trim()}
-                  className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
+                  className="rounded-sm bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
                 >
                   {sending ? "…" : "Send"}
                 </button>
