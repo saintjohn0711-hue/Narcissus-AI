@@ -337,11 +337,15 @@ function ChatPageInner() {
     <div
       className={
         companionFull
-          ? "muse-chat-page muse-chat-page--companion-full flex min-h-[100dvh] flex-col"
+          ? "muse-chat-page muse-chat-page--companion-full relative flex min-h-[100dvh] flex-col"
           : "mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-7 sm:px-8 sm:py-10"
       }
     >
-      {!companionFull && <AppNav />}
+      {companionFull ? (
+        <AppNav variant="companion" />
+      ) : (
+        <AppNav />
+      )}
       {!companionFull && (
         <header className="mb-6">
           <p className="mb-2 text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -511,6 +515,23 @@ function ChatPageInner() {
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {companionFull && (
+                      <>
+                        <Link
+                          href="/art-of-x"
+                          className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                        >
+                          Art of X
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setChatOpen(false)}
+                          className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)] md:hidden"
+                        >
+                          Hide
+                        </button>
+                      </>
+                    )}
                     <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
                       POV
                       <select
