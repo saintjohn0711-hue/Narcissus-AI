@@ -158,6 +158,8 @@ export function MusePresence({
   const likenessInputRef = useRef<HTMLInputElement | null>(null);
   const [parallax, setParallax] = useState({ x: 0, y: 0 });
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [slidePaused, setSlidePaused] = useState(false);
   const [fitMode, setFitMode] = useState<StageFitMode>("fit");
   const [zoom, setZoom] = useState(1);
   /** Full-stage dock: only one section open; null = calm hero. */
@@ -256,6 +258,69 @@ export function MusePresence({
     return livePhoto;
   }, [style, generated, livePhoto]);
 
+  /** Stage slideshow: Muse photos + cast photos + Companion art when present. */
+  const stageSlides = useMemo(() => {
+    const out: { key: string; src: string; label: string }[] = [];
+    const seen = new Set<string>();
+    const add = (
+      src: string | null | undefined,
+      label: string,
+      key: string,
+    ) => {
+      if (!src || seen.has(src)) return;
+      seen.add(src);
+      out.push({ key, src, label });
+    };
+    photos.forEach((src, i) =>
+      add(src, displayName(partner), `muse-${partner.id}-${i}`),
+    );
+    if (!photos.length) {
+      add(photo, displayName(partner), `muse-${partner.id}-main`);
+    }
+    for (const c of sceneCast) {
+      const castPhotos = c.photos || [];
+      if (castPhotos.length) {
+        castPhotos.slice(0, 3).forEach((src, i) =>
+          add(src, displayName(c), `cast-${c.id}-${i}`),
+        );
+      } else {
+        add(mainPhoto(c), displayName(c), `cast-${c.id}-main`);
+      }
+    }
+    if (generated && style !== "realistic") {
+      add(generated, "Companion", `companion-${partner.id}`);
+    }
+    return out;
+  }, [photos, photo, partner, sceneCast, generated, style]);
+
+  const activeSlide = stageSlides[slideIndex] || null;
+  const stageSrc = activeSlide?.src || displaySrc;
+  const canSlideshow = stageSlides.length > 1;
+
+  useEffect(() => {
+    setSlideIndex(0);
+  }, [partner.id, stageSlides.length]);
+
+  useEffect(() => {
+    if (slideIndex >= stageSlides.length) {
+      setSlideIndex(0);
+    }
+  }, [slideIndex, stageSlides.length]);
+
+  useEffect(() => {
+    if (!canSlideshow || slidePaused) return;
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setSlideIndex((i) => (i + 1) % stageSlides.length);
+    }, 5200);
+    return () => window.clearInterval(timer);
+  }, [canSlideshow, slidePaused, stageSlides.length]);
+
   const aiMatched =
     Boolean(generated) &&
     (matchSource === "xai" || matchSource === "comfy") &&
@@ -264,7 +329,8 @@ export function MusePresence({
   const companionLiving =
     style === "cartoon" &&
     Boolean(generated) &&
-    (matchSource === "xai" || matchSource === "comfy");
+    (matchSource === "xai" || matchSource === "comfy") &&
+    Boolean(activeSlide?.key.startsWith("companion") || !canSlideshow);
 
   async function applyLocalFallback(
     targetStyle: MusePresenceStyle,
@@ -915,7 +981,9 @@ export function MusePresence({
     <aside
       className={`muse-presence muse-presence--${variant} flex h-full flex-col${
         chatCollapsed ? " muse-presence--chat-collapsed" : ""
-      }${dockSection ? " muse-presence--dock-open" : ""}`}
+      }${chatOpen ? " muse-presence--chat-open" : ""}${
+        dockSection ? " muse-presence--dock-open" : ""
+      }`}
       aria-label={`${displayName(partner)} living portrait`}
       data-fit={isFullCompanion ? fitMode : undefined}
     >
@@ -930,9 +998,27 @@ export function MusePresence({
             : ""
         }${companionLiving ? " muse-presence--companion-living" : ""}${
           isFullCompanion ? ` muse-presence-stage--fit-${fitMode}` : ""
+        }${canSlideshow ? " muse-presence-stage--slideshow" : ""}${
+          activeSlide && !activeSlide.key.startsWith("companion")
+            ? " muse-presence-stage--muse-photo"
+            : ""
         } ${motionClass}`.trim()}
         onPointerMove={onPointerMove}
-        onPointerLeave={onPointerLeave}
+        onPointerLeave={() => {
+          onPointerLeave();
+          setSlidePaused(false);
+        }}
+        onPointerEnter={() => {
+          if (canSlideshow) setSlidePaused(true);
+        }}
+        onFocusCapture={() => {
+          if (canSlideshow) setSlidePaused(true);
+        }}
+        onBlurCapture={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            setSlidePaused(false);
+          }
+        }}
       >
         <div className="muse-presence-glow" aria-hidden />
         <div
@@ -948,20 +1034,40 @@ export function MusePresence({
                 : undefined
             }
           >
-            {displaySrc ? (
+            {stageSrc ? (
               <div
                 className="muse-presence-parallax"
                 style={{
                   transform: `translate3d(${parallax.x}px, ${parallax.y}px, 0)`,
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={displaySrc}
-                  alt=""
-                  className="muse-presence-photo"
-                  draggable={false}
-                />
+                {stageSlides.length > 0 ? (
+                  stageSlides.map((slide, i) => (
+                    <div
+                      key={slide.key}
+                      className={`muse-presence-slide${
+                        i === slideIndex ? " is-active" : ""
+                      }`}
+                      aria-hidden={i !== slideIndex}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={slide.src}
+                        alt=""
+                        className="muse-presence-photo"
+                        draggable={false}
+                      />
+                    </div>
+                  ))
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={stageSrc}
+                    alt=""
+                    className="muse-presence-photo"
+                    draggable={false}
+                  />
+                )}
                 {companionLiving && (
                   <>
                     <span className="muse-presence-eye-shimmer" aria-hidden />
@@ -988,6 +1094,55 @@ export function MusePresence({
           </div>
         </div>
         <div className="muse-presence-veil" aria-hidden />
+        {canSlideshow && (
+          <div
+            className="muse-presence-slideshow-chrome"
+            role="group"
+            aria-label="Photo slideshow"
+          >
+            <button
+              type="button"
+              className="muse-presence-slideshow-nav"
+              aria-label="Previous photo"
+              onClick={() =>
+                setSlideIndex(
+                  (i) => (i - 1 + stageSlides.length) % stageSlides.length,
+                )
+              }
+            >
+              ‹
+            </button>
+            <div className="muse-presence-slideshow-dots" aria-hidden>
+              {stageSlides.map((slide, i) => (
+                <button
+                  key={slide.key}
+                  type="button"
+                  className={`muse-presence-slideshow-dot${
+                    i === slideIndex ? " is-active" : ""
+                  }`}
+                  aria-label={`Show ${slide.label} photo ${i + 1}`}
+                  onClick={() => setSlideIndex(i)}
+                />
+              ))}
+            </div>
+            <button
+              type="button"
+              className="muse-presence-slideshow-nav"
+              aria-label="Next photo"
+              onClick={() =>
+                setSlideIndex((i) => (i + 1) % stageSlides.length)
+              }
+            >
+              ›
+            </button>
+            {activeSlide && (
+              <p className="muse-presence-slideshow-label">
+                {activeSlide.label}
+                {slidePaused ? " · paused" : ""}
+              </p>
+            )}
+          </div>
+        )}
         {busy && (
           <div className="muse-presence-loading" role="status">
             <span className="muse-presence-loading-dot" aria-hidden />
@@ -1047,14 +1202,19 @@ export function MusePresence({
               key={i}
               type="button"
               role="listitem"
-              onClick={() => setPhotoIndex(i)}
+              onClick={() => {
+                setPhotoIndex(i);
+                setSlideIndex(i);
+              }}
               className={`h-12 w-12 shrink-0 overflow-hidden border transition ${
-                i === photoIndex
+                i === photoIndex || i === slideIndex
                   ? "border-[var(--glow)]/60"
                   : "border-[var(--line)] opacity-75 hover:opacity-100"
               }`}
               aria-label={`Photo ${i + 1}`}
-              aria-current={i === photoIndex ? "true" : undefined}
+              aria-current={
+                i === photoIndex || i === slideIndex ? "true" : undefined
+              }
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={src} alt="" className="h-full w-full object-cover" />
