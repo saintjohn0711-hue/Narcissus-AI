@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   DEFAULT_VOICE_PREVIEW_LINE,
+  getVoiceHint,
   isVoicePreviewActive,
   narrationSupported,
   naturalTtsAvailable,
@@ -20,6 +21,8 @@ export type MuseVoicePreviewApi = {
   /** True when OpenAI TTS is configured server-side. */
   natural: boolean;
   previewing: boolean;
+  /** Soft status (missing key / browser recovery) — never blocks chat. */
+  hint: string | null;
   preview: (settings: MuseVoiceSettings) => void;
   stop: () => void;
 };
@@ -32,6 +35,7 @@ export function useMuseVoicePreview(
   const [supported, setSupported] = useState(false);
   const [natural, setNatural] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
 
   useEffect(() => {
     setSupported(narrationSupported());
@@ -39,6 +43,7 @@ export function useMuseVoicePreview(
     void naturalTtsAvailable().then(setNatural);
     const unsub = subscribeNarration(() => {
       setPreviewing(isVoicePreviewActive());
+      setHint(getVoiceHint());
     });
     return () => {
       cool();
@@ -57,6 +62,7 @@ export function useMuseVoicePreview(
     supported,
     natural,
     previewing,
+    hint,
     preview,
     stop: stopNarration,
   };
@@ -136,9 +142,19 @@ export function MuseVoicePreviewBar({
         </button>
       </div>
       <p className="muse-voice-preview-hint">
-        Selecting gender, accent, or delivery plays a short{" "}
-        {api.natural ? "natural" : "browser"} voice test.
+        {api.natural
+          ? "Selecting gender, accent, or delivery plays a short natural voice test."
+          : "Using this browser’s voice for now — natural Muse TTS needs OPENAI_API_KEY on the server. Chat stays usable either way."}
       </p>
+      {api.hint ? (
+        <p
+          className="muse-voice-preview-hint muse-voice-preview-hint--soft"
+          data-testid="muse-voice-soft-hint"
+          role="status"
+        >
+          {api.hint}
+        </p>
+      ) : null}
     </div>
   );
 }

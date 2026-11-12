@@ -1793,11 +1793,20 @@ function ChatPageInner() {
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-[#c4b7a8]">
                         {!speechOk
-                          ? "Speech isn’t available in this browser."
+                          ? "Speech isn’t available in this browser — chat still works without voice."
                           : naturalTts || voicePreview.natural
                             ? "Natural voice — pick accent + delivery (each plays a short test). Tap Play on a bubble."
-                            : "Browser speech fallback — set OPENAI_API_KEY for natural voice. Pick accent + delivery; tap Play on a bubble."}
+                            : "Using this browser’s voice for now. Add OPENAI_API_KEY on Vercel for natural Muse TTS — Preview/Play soft-recover; chat is never blocked."}
                       </p>
+                      {voicePreview.hint ? (
+                        <p
+                          className="mt-1 text-xs leading-relaxed text-[#c4b7a8]"
+                          data-testid="muse-voice-panel-hint"
+                          role="status"
+                        >
+                          {voicePreview.hint}
+                        </p>
+                      ) : null}
                     </div>
                     <button
                       type="button"

@@ -386,6 +386,74 @@ export function warmSpeechVoices(): () => void {
   return () => synth.removeEventListener?.("voiceschanged", onChange);
 }
 
+/**
+ * Wait until SpeechSynthesis voices are populated (or timeout).
+ * Chrome often returns [] until `voiceschanged`.
+ */
+export function waitForSpeechVoices(
+  timeoutMs = 1800,
+): Promise<SpeechSynthesisVoice[]> {
+  if (!speechSupported()) return Promise.resolve([]);
+  const existing = listVoices();
+  if (existing.length > 0) return Promise.resolve(existing);
+
+  return new Promise((resolve) => {
+    const synth = window.speechSynthesis;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      try {
+        synth.removeEventListener?.("voiceschanged", onChange);
+      } catch {
+        /* ignore */
+      }
+      resolve(listVoices());
+    };
+    const onChange = () => {
+      if (listVoices().length > 0) finish();
+    };
+    try {
+      synth.addEventListener?.("voiceschanged", onChange);
+      void synth.getVoices();
+    } catch {
+      finish();
+      return;
+    }
+    window.setTimeout(finish, Math.max(120, timeoutMs));
+  });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/** Benign Web Speech errors from cancel / supersede — not user-facing failures. */
+function isBenignSpeechError(error: string | undefined): boolean {
+  return error === "canceled" || error === "interrupted";
+}
+
+/**
+ * Chrome can leave speechSynthesis paused after cancel(); resume before speak.
+ * Also kick getVoices so a cold engine wakes up under the user gesture.
+ */
+function primeSpeechEngine() {
+  if (!speechSupported()) return;
+  const synth = window.speechSynthesis;
+  try {
+    void synth.getVoices();
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (synth.paused) synth.resume();
+  } catch {
+    /* ignore */
+  }
+}
+
 function normalizeLangTag(lang: string): string {
   return String(lang || "")
     .trim()
@@ -492,6 +560,10 @@ let pauseWhenReady = false;
 let speakGeneration = 0;
 let naturalTtsCache: boolean | null = null;
 let listeners = new Set<() => void>();
+/** Soft voice status — never blocks chat; UI may show as a hint. */
+let voiceHint: string | null = null;
+let voiceHintTimer: number | null = null;
+let webSpeechSpeakTimer: number | null = null;
 
 export function getActiveNarrationId(): string | null {
   return activeMessageId;
@@ -501,6 +573,11 @@ export function getActiveNarrationEngine(): NarrationEngine {
   return activeEngine;
 }
 
+/** Transient soft message for Preview/Play (missing key / soft recovery). */
+export function getVoiceHint(): string | null {
+  return voiceHint;
+}
+
 export function subscribeNarration(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -508,6 +585,24 @@ export function subscribeNarration(listener: () => void): () => void {
 
 function notify() {
   for (const l of listeners) l();
+}
+
+function setVoiceHint(next: string | null, clearAfterMs = 0) {
+  voiceHint = next;
+  if (voiceHintTimer !== null) {
+    window.clearTimeout(voiceHintTimer);
+    voiceHintTimer = null;
+  }
+  if (next && clearAfterMs > 0 && typeof window !== "undefined") {
+    voiceHintTimer = window.setTimeout(() => {
+      voiceHintTimer = null;
+      if (voiceHint === next) {
+        voiceHint = null;
+        notify();
+      }
+    }, clearAfterMs);
+  }
+  notify();
 }
 
 function clearActive() {
@@ -582,6 +677,10 @@ export function textForSpeech(raw: string): string {
 
 export function stopNarration() {
   speakGeneration += 1;
+  if (webSpeechSpeakTimer !== null) {
+    window.clearTimeout(webSpeechSpeakTimer);
+    webSpeechSpeakTimer = null;
+  }
   if (activeAudio) {
     try {
       activeAudio.onended = null;
@@ -598,6 +697,12 @@ export function stopNarration() {
   if (speechSupported()) {
     try {
       window.speechSynthesis.cancel();
+    } catch {
+      /* ignore */
+    }
+    // Unstick Chrome's paused-after-cancel state without speaking.
+    try {
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     } catch {
       /* ignore */
     }
@@ -666,13 +771,28 @@ export function narrationStateFor(messageId: string): SpeakState {
   return "idle";
 }
 
-function speakWithWebSpeech(
+/**
+ * Soft Web Speech speak with voices-loaded wait, cancel-race delay,
+ * Chrome pause unstick, and one retry. Never throws into chat.
+ */
+async function speakWithWebSpeech(
   messageId: string,
   cleaned: string,
   settings: MuseVoiceSettings,
   generation: number,
-): SpeakController | null {
-  if (!speechSupported()) return null;
+  attempt = 0,
+): Promise<boolean> {
+  if (!speechSupported()) return false;
+  if (speakGeneration !== generation) return true;
+
+  await waitForSpeechVoices(attempt === 0 ? 1800 : 400);
+  if (speakGeneration !== generation) return true;
+
+  // Settle after any prior cancel() so Chrome doesn't fire canceled/interrupted.
+  await delay(attempt === 0 ? 60 : 140);
+  if (speakGeneration !== generation) return true;
+
+  primeSpeechEngine();
 
   const preset = getVoicePreset(settings.preset);
   const accent = getVoiceAccent(normalizeVoiceAccent(settings.accent));
@@ -690,29 +810,90 @@ function speakWithWebSpeech(
   activeLoading = false;
   notify();
 
-  utter.onend = () => {
-    if (speakGeneration === generation && activeUtterance === utter) {
-      clearActive();
-    }
-  };
-  utter.onerror = () => {
-    if (speakGeneration === generation && activeUtterance === utter) {
-      clearActive();
-    }
-  };
+  return await new Promise<boolean>((resolve) => {
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      resolve(ok);
+    };
 
-  window.setTimeout(() => {
-    if (speakGeneration !== generation || activeUtterance !== utter) return;
-    window.speechSynthesis.speak(utter);
-    notify();
-  }, 20);
+    utter.onstart = () => {
+      // Started under the engine — resolve so callers don't await full playback.
+      finish(true);
+    };
+    utter.onend = () => {
+      if (speakGeneration === generation && activeUtterance === utter) {
+        clearActive();
+      }
+      finish(true);
+    };
+    utter.onerror = (ev) => {
+      const errName =
+        ev && typeof ev === "object" && "error" in ev
+          ? String((ev as SpeechSynthesisErrorEvent).error || "")
+          : "";
+      // Stop / supersede bumped generation — ignore, not a user-facing fail.
+      if (speakGeneration !== generation) {
+        finish(true);
+        return;
+      }
+      if (activeUtterance === utter) {
+        activeUtterance = null;
+        notify();
+      }
+      // Same generation + canceled/interrupted usually means cancel-race on
+      // speak() — soft-fail so we retry once instead of hard-failing Preview.
+      if (isBenignSpeechError(errName)) {
+        finish(false);
+        return;
+      }
+      finish(false);
+    };
 
-  return {
-    stop: stopNarration,
-    pause: pauseNarration,
-    resume: resumeNarration,
-    getState: () => narrationStateFor(messageId),
-  };
+    if (webSpeechSpeakTimer !== null) {
+      window.clearTimeout(webSpeechSpeakTimer);
+      webSpeechSpeakTimer = null;
+    }
+    webSpeechSpeakTimer = window.setTimeout(() => {
+      webSpeechSpeakTimer = null;
+      if (speakGeneration !== generation || activeUtterance !== utter) {
+        finish(true);
+        return;
+      }
+      try {
+        primeSpeechEngine();
+        window.speechSynthesis.speak(utter);
+        notify();
+      } catch {
+        finish(false);
+      }
+    }, 20);
+  }).then(async (ok) => {
+    if (ok || speakGeneration !== generation) return ok;
+    if (attempt >= 1) {
+      setVoiceHint(
+        "Browser voice didn’t start — tap Play or Preview again.",
+        5000,
+      );
+      if (activeMessageId === messageId && !activeAudio) clearActive();
+      return false;
+    }
+    // Soft retry once after a longer settle (cancel race / cold engine).
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      /* ignore */
+    }
+    primeSpeechEngine();
+    return speakWithWebSpeech(
+      messageId,
+      cleaned,
+      settings,
+      generation,
+      attempt + 1,
+    );
+  });
 }
 
 async function speakWithOpenAiAudio(
@@ -796,7 +977,8 @@ async function speakWithOpenAiAudio(
 
 /**
  * Narrate `text` for a chat bubble (or preview id).
- * Tries natural OpenAI TTS first; falls back to Web Speech.
+ * Tries natural OpenAI TTS when configured; otherwise Web Speech.
+ * Missing key / upstream / browser quirks soft-recover — never hard-fails chat.
  */
 export function speakMessage(
   messageId: string,
@@ -808,11 +990,28 @@ export function speakMessage(
   const cleaned = textForSpeech(text);
   if (!cleaned) return null;
 
+  // Preserve a user-gesture prime before stop/cancel (helps Safari / Chrome).
+  const hadGesturePrime = speechSupported();
+  if (hadGesturePrime) primeSpeechEngine();
+
   stopNarration();
   const generation = speakGeneration;
   activeMessageId = messageId;
-  activeLoading = audioPlaybackSupported();
-  activeEngine = audioPlaybackSupported() ? "openai" : "web-speech";
+
+  // Skip the OpenAI round-trip when we already know the key is missing —
+  // keeps speak() closer to the user gesture and avoids a hard fail path.
+  const tryNatural =
+    audioPlaybackSupported() && naturalTtsCache !== false;
+  activeLoading = tryNatural;
+  activeEngine = tryNatural ? "openai" : "web-speech";
+  if (!tryNatural && naturalTtsCache === false) {
+    setVoiceHint(
+      "Using this browser’s voice — add OPENAI_API_KEY on Vercel for natural Muse TTS.",
+      7000,
+    );
+  } else {
+    setVoiceHint(null);
+  }
   notify();
 
   const controller: SpeakController = {
@@ -822,8 +1021,30 @@ export function speakMessage(
     getState: () => narrationStateFor(messageId),
   };
 
-  if (!audioPlaybackSupported()) {
-    return speakWithWebSpeech(messageId, cleaned, settings, generation);
+  const runWebSpeech = async () => {
+    if (!speechSupported()) {
+      setVoiceHint(
+        "Speech isn’t available in this browser — chat still works without voice.",
+        6000,
+      );
+      clearActive();
+      return;
+    }
+    const ok = await speakWithWebSpeech(
+      messageId,
+      cleaned,
+      settings,
+      generation,
+    );
+    if (!ok && speakGeneration === generation) {
+      // speakWithWebSpeech already set a soft hint on final failure
+      if (activeMessageId === messageId && !activeAudio) clearActive();
+    }
+  };
+
+  if (!tryNatural) {
+    void runWebSpeech();
+    return controller;
   }
 
   void (async () => {
@@ -836,20 +1057,21 @@ export function speakMessage(
         Boolean(opts?.preview),
       );
       if (speakGeneration !== generation) return;
-      if (ok) return;
-      // Fall back to Web Speech (missing key / upstream / play error)
-      if (speechSupported()) {
-        speakWithWebSpeech(messageId, cleaned, settings, generation);
-      } else {
-        clearActive();
+      if (ok) {
+        setVoiceHint(null);
+        return;
       }
+      // Missing key / upstream / play error → soft Web Speech recovery
+      if (naturalTtsCache === false) {
+        setVoiceHint(
+          "Using this browser’s voice — add OPENAI_API_KEY on Vercel for natural Muse TTS.",
+          7000,
+        );
+      }
+      await runWebSpeech();
     } catch {
       if (speakGeneration !== generation) return;
-      if (speechSupported()) {
-        speakWithWebSpeech(messageId, cleaned, settings, generation);
-      } else {
-        clearActive();
-      }
+      await runWebSpeech();
     }
   })();
 

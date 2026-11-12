@@ -1197,6 +1197,11 @@ body {
   color: var(--muted);
 }
 
+.muse-voice-preview-hint--soft {
+  margin-top: 0.35rem;
+  color: #c4b7a8;
+}
+
 .muse-chat-msg-edit-btn {
   min-height: 2rem;
   min-width: 2.75rem;
