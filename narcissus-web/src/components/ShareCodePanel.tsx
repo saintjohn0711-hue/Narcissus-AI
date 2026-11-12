@@ -174,20 +174,20 @@ export function ShareCodePanel({
   return (
     <section className={shell}>
       <h2
-        className="text-2xl text-[var(--ink)] sm:text-3xl"
+        className="text-2xl text-[var(--ink)]"
         style={{ fontFamily: "var(--font-display), serif" }}
       >
         Circle code
       </h2>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#c4b7a8]">
+      <p className="mt-2 text-sm leading-relaxed text-[#c4b7a8]">
         Share this code so another signed-in adult can link as a{" "}
         <em className="not-italic text-[var(--ink)]">linked viewer</em> of your
-        Circle profile. Rotate or revoke anytime. Not password sharing — Art of
-        X vault stays private.
+        Circle profile. Rotating or revoking invalidates the old code. This is
+        not password sharing — Art of X vault stays private.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        <code className="min-w-[10rem] rounded-sm border border-[var(--accent)]/25 bg-[#0a0908] px-4 py-3 font-mono text-lg tracking-[0.22em] text-[var(--accent-strong)] sm:text-xl">
+        <code className="rounded-sm border border-[var(--line)] bg-[#0a0908] px-4 py-2.5 font-mono text-lg tracking-[0.2em] text-[var(--accent-strong)]">
           {busy && !code ? "……" : code || "— revoked —"}
         </code>
         {code && (

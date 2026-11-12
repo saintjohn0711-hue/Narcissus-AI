@@ -62,7 +62,7 @@ function formatMemberSince(iso: string): string {
 
 /**
  * Echo — polished Narcissus account profile card.
- * Clear hierarchy: identity → highlights → share code → linked viewers → sign out.
+ * One composition: identity + highlights + Circle code + linked viewers.
  */
 export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
   const router = useRouter();
@@ -154,40 +154,40 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
 
   if (!signedIn) {
     return (
-      <article className="echo-card overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/55">
-        <div className="relative px-6 py-12 sm:px-8">
+      <article className="overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/50">
+        <div className="relative px-6 py-10 sm:px-8">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-90"
+            className="pointer-events-none absolute inset-0 opacity-80"
             style={{
               background:
-                "radial-gradient(620px 240px at 0% 0%, rgba(232,168,124,0.18), transparent 60%), linear-gradient(135deg, rgba(22,19,16,0.25), transparent)",
+                "radial-gradient(600px 220px at 0% 0%, rgba(232,168,124,0.16), transparent 60%), linear-gradient(135deg, rgba(22,19,16,0.2), transparent)",
             }}
           />
           <div className="relative">
-            <p className="echo-section-label text-[10px] uppercase text-[var(--muted)]">
+            <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
               Echo
             </p>
             <h2
               className="mt-3 text-3xl text-[var(--ink)] sm:text-4xl"
               style={{ fontFamily: "var(--font-display), serif" }}
             >
-              Sign in to open your card
+              Your account card
             </h2>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-[#c4b7a8]">
-              Highlights, Circle codes, cloud-save status, and linked viewers
-              live here once you’re on an 18+ Narcissus account.
+              Sign in to see highlights, Circle codes, and cloud-save status for
+              your Narcissus account.
             </p>
-            <div className="mt-7 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap gap-3">
               <Link
                 href="/sign-in"
-                className="rounded-sm bg-[var(--accent)]/90 px-5 py-2.5 text-sm font-medium text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
+                className="rounded-sm bg-[var(--accent)]/90 px-4 py-2.5 text-sm font-medium text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
               >
                 Sign in
               </Link>
               <Link
                 href="/sign-up"
-                className="rounded-sm border border-[var(--line)] px-5 py-2.5 text-sm text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+                className="rounded-sm border border-[var(--line)] px-4 py-2.5 text-sm text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
               >
                 Create account
               </Link>
@@ -227,32 +227,29 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
   ];
 
   return (
-    <article className="echo-card overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/60">
-      {/* 1. Identity */}
-      <section
-        aria-labelledby="echo-identity"
-        className="relative border-b border-[var(--line)] px-5 py-7 sm:px-8 sm:py-8"
-      >
+    <article className="echo-card overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/55">
+      {/* Identity band */}
+      <div className="relative border-b border-[var(--line)] px-5 py-6 sm:px-8 sm:py-7">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(720px 260px at 6% -25%, rgba(232,168,124,0.24), transparent 55%), radial-gradient(420px 180px at 100% 0%, rgba(90,70,50,0.3), transparent 50%)",
+              "radial-gradient(700px 240px at 8% -20%, rgba(232,168,124,0.22), transparent 55%), radial-gradient(420px 180px at 100% 0%, rgba(90,70,50,0.28), transparent 50%)",
           }}
         />
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4 sm:gap-5">
+        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={image}
                 alt=""
-                className="h-[4.5rem] w-[4.5rem] object-cover ring-1 ring-[var(--accent)]/35 sm:h-20 sm:w-20"
+                className="h-16 w-16 object-cover ring-1 ring-[var(--accent)]/30 sm:h-[4.5rem] sm:w-[4.5rem]"
               />
             ) : (
               <div
-                className="flex h-[4.5rem] w-[4.5rem] items-center justify-center bg-[#1a1511] text-2xl tracking-wide text-[var(--accent-strong)] ring-1 ring-[var(--accent)]/30 sm:h-20 sm:w-20 sm:text-3xl"
+                className="flex h-16 w-16 items-center justify-center bg-[#1a1511] text-xl tracking-wide text-[var(--accent-strong)] ring-1 ring-[var(--accent)]/25 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-2xl"
                 style={{ fontFamily: "var(--font-display), serif" }}
                 aria-hidden
               >
@@ -260,73 +257,36 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
               </div>
             )}
             <div className="min-w-0">
-              <p className="echo-section-label text-[10px] uppercase text-[var(--muted)]">
-                Profile
+              <p className="text-[10px] uppercase tracking-[0.3em] text-[var(--muted)]">
+                Echo · Account
               </p>
               <h2
-                id="echo-identity"
                 className="mt-1 truncate text-3xl text-[var(--ink)] sm:text-4xl"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
                 {displayName}
               </h2>
               {email && (
-                <p className="mt-1.5 truncate text-sm text-[#c4b7a8]" title={email}>
+                <p className="mt-1 truncate text-sm text-[#c4b7a8]" title={email}>
                   {email}
-                </p>
-              )}
-              {echo?.circle.discoverable && (
-                <p className="mt-2 text-xs text-[var(--ok)]">
-                  <span
-                    className="echo-cloud-dot mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-[var(--ok)] align-middle"
-                    aria-hidden
-                  />
-                  On Circle discovery
-                  {echo.circle.displayName
-                    ? ` as “${echo.circle.displayName}”`
-                    : ""}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-            <Link
-              href="/circle/me"
-              className="rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/12 px-3.5 py-2 text-sm text-[var(--accent-strong)] transition hover:bg-[var(--accent)]/22"
-            >
-              Circle profile
-            </Link>
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              disabled={signingOut}
-              className="echo-signout rounded-sm border border-[var(--line)] bg-[#0f0d0b]/40 px-3.5 py-2 text-sm text-[#c4b7a8] hover:border-[var(--danger)]/45 hover:text-[var(--danger)] disabled:opacity-50"
-            >
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Highlights */}
-      <section
-        aria-labelledby="echo-highlights"
-        className="border-b border-[var(--line)] px-5 py-6 sm:px-8"
-      >
-        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-          <h3
-            id="echo-highlights"
-            className="text-xl text-[var(--ink)] sm:text-2xl"
-            style={{ fontFamily: "var(--font-display), serif" }}
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            disabled={signingOut}
+            className="self-start rounded-sm border border-[var(--line)] px-3.5 py-2 text-sm text-[#c4b7a8] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)] disabled:opacity-50 sm:self-center"
           >
-            Highlights
-          </h3>
-          <p className="text-xs text-[var(--muted)]">
-            Saved across Art of X and Circle
-          </p>
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
         </div>
+      </div>
 
+      {/* Highlights */}
+      <div className="border-b border-[var(--line)] px-5 py-5 sm:px-8">
         {loading && !echo ? (
           <p className="text-sm text-[var(--muted)]">Loading highlights…</p>
         ) : error && !echo ? (
@@ -340,7 +300,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
                     {stat.label}
                   </dt>
                   <dd
-                    className={`mt-1.5 text-2xl tabular-nums ${
+                    className={`mt-1.5 text-xl tabular-nums ${
                       stat.tone === "ok"
                         ? "text-[var(--ok)]"
                         : "text-[var(--ink)]"
@@ -358,7 +318,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
                 </>
               );
               const className =
-                "echo-stat border border-[var(--line)] bg-[#0f0d0b]/55 px-3 py-3.5 hover:border-[var(--accent)]/40 hover:bg-[#14110e]/8";
+                "border border-[var(--line)] bg-[#0f0d0b]/55 px-3 py-3 transition hover:border-[var(--accent)]/35";
               return stat.href ? (
                 <Link key={stat.label} href={stat.href} className={className}>
                   {inner}
@@ -371,31 +331,33 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
             })}
           </dl>
         )}
-      </section>
+        {echo?.circle.discoverable && (
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Circle discovery is on
+            {echo.circle.displayName
+              ? ` as “${echo.circle.displayName}”`
+              : ""}
+            .{" "}
+            <Link
+              href="/circle/me"
+              className="text-[var(--accent-strong)] underline-offset-2 hover:underline"
+            >
+              Edit profile
+            </Link>
+          </p>
+        )}
+      </div>
 
-      {/* 3. Share code */}
-      <section
-        aria-labelledby="echo-share"
-        className="border-b border-[var(--line)] px-5 py-6 sm:px-8"
-      >
-        <p
-          id="echo-share"
-          className="echo-section-label mb-3 text-[10px] uppercase text-[var(--muted)]"
-        >
-          Share
-        </p>
+      {/* Circle code (embedded) */}
+      <div className="border-b border-[var(--line)] px-5 py-6 sm:px-8">
         <ShareCodePanel signedIn={signedIn} variant="embedded" />
-      </section>
+      </div>
 
-      {/* 4. Linked viewers */}
-      <section
-        aria-labelledby="echo-links"
-        className="border-b border-[var(--line)] px-5 py-6 sm:px-8"
-      >
+      {/* Linked viewers */}
+      <div className="px-5 py-6 sm:px-8">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3
-            id="echo-links"
-            className="text-xl text-[var(--ink)] sm:text-2xl"
+            className="text-2xl text-[var(--ink)]"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
             Linked viewers
@@ -405,13 +367,13 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
               href="/circle"
               className="text-[var(--accent-strong)] underline-offset-2 hover:underline"
             >
-              Browse Circle
+              Open Circle
             </Link>
             <Link
               href="/circle/me"
               className="text-[#c4b7a8] underline-offset-2 hover:text-[var(--ink)] hover:underline"
             >
-              Edit profile
+              My Circle profile
             </Link>
           </div>
         </div>
@@ -420,10 +382,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
         </p>
 
         {links.length === 0 ? (
-          <p className="mt-5 text-sm text-[var(--muted)]">
-            No links yet. Share your Circle code above, or redeem someone
-            else’s.
-          </p>
+          <p className="mt-4 text-sm text-[var(--muted)]">No links yet.</p>
         ) : (
           <ul className="mt-5 flex flex-col gap-3">
             {links.map((l) => (
@@ -466,22 +425,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
             ))}
           </ul>
         )}
-      </section>
-
-      {/* 5. Account actions */}
-      <footer className="flex flex-wrap items-center justify-between gap-3 bg-[#0a0908]/45 px-5 py-5 sm:px-8">
-        <p className="text-xs text-[var(--muted)]">
-          Signed in on Narcissus · Echo keeps your trail private to you
-        </p>
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          disabled={signingOut}
-          className="echo-signout rounded-sm border border-[var(--line)] px-4 py-2 text-sm text-[#c4b7a8] hover:border-[var(--danger)]/50 hover:bg-[var(--danger)]/10 hover:text-[var(--danger)] disabled:opacity-50"
-        >
-          {signingOut ? "Signing out…" : "Sign out of Echo"}
-        </button>
-      </footer>
+      </div>
     </article>
   );
 }
