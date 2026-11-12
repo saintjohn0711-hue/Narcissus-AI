@@ -134,6 +134,19 @@ export const partners = pgTable("partners", {
     .default([]),
   /** When true, Muse may introduce new acts / tones / modes. */
   tryNewThings: boolean("try_new_things").notNull().default(false),
+  /** Sex ribbons earned with this Muse (light chat game). */
+  sexRibbons: jsonb("sex_ribbons")
+    .$type<
+      Array<{
+        id: string;
+        ribbonId: string;
+        at: string;
+        source: string;
+        note?: string;
+      }>
+    >()
+    .notNull()
+    .default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

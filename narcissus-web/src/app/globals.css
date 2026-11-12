@@ -710,6 +710,13 @@ body {
   background: #0a0e18;
 }
 
+/* Sex ribbons panel — compact so portrait / messages keep room */
+.muse-ribbons-panel {
+  flex-shrink: 0;
+  max-height: min(42dvh, 320px);
+  overflow-y: auto;
+}
+
 .muse-chat-drawer-messages {
   min-height: 0;
   padding: 1rem 1.1rem;

@@ -49,6 +49,18 @@ import {
   savePresenceStyle,
   type MusePresenceStyle,
 } from "@/lib/musePresence";
+import {
+  SEX_RIBBON_CATALOG,
+  autoAwardFromContext,
+  awardRibbon,
+  globalRibbonCollection,
+  hasRibbon,
+  isTaskComplete,
+  normalizeSexRibbons,
+  ribbonDef,
+  tierLabel,
+  type SexRibbonId,
+} from "@/lib/sexRibbons";
 import type { ChatPov } from "@/lib/xai";
 
 /** Chat prompt only needs text fields — strip heavy data-URLs. */
@@ -127,6 +139,8 @@ function ChatPageInner() {
   );
   const [chatOpen, setChatOpen] = useState(true);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [ribbonsOpen, setRibbonsOpen] = useState(false);
+  const [ribbonFlash, setRibbonFlash] = useState<string | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
   const [memoryKind, setMemoryKind] = useState<MuseMemoryKind>("relationship");
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
@@ -234,6 +248,12 @@ function ChatPageInner() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chats, activeId, sending]);
 
+  useEffect(() => {
+    if (!ribbonFlash) return;
+    const t = setTimeout(() => setRibbonFlash(null), 4200);
+    return () => clearTimeout(t);
+  }, [ribbonFlash]);
+
   const partner = useMemo(
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],
@@ -269,6 +289,27 @@ function ChatPageInner() {
   }, [partner, castPartner]);
   const tryNewActive = Boolean(
     partner?.tryNewThings || castPartner?.tryNewThings,
+  );
+  const museRibbons = useMemo(
+    () => normalizeSexRibbons(partner?.sexRibbons),
+    [partner?.sexRibbons],
+  );
+  const ribbonCtx = useMemo(() => {
+    const recentText = messages
+      .slice(-12)
+      .map((m) => m.text)
+      .join("\n");
+    return {
+      memories: partner?.memories || [],
+      tryNewThings: tryNewActive,
+      dualCast: Boolean(castPartner),
+      messageCount: messages.length,
+      recentText,
+    };
+  }, [partner?.memories, tryNewActive, castPartner, messages]);
+  const collection = useMemo(
+    () => globalRibbonCollection(partners),
+    [partners],
   );
 
   async function persistPartnerPatch(
@@ -320,7 +361,23 @@ function ChatPageInner() {
     const now = new Date().toISOString();
     const list = partnersRef.current.map((p) => {
       if (samePartnerId(p.id, partner.id)) {
-        return { ...p, tryNewThings: enabled, updatedAt: now };
+        let next = { ...p, tryNewThings: enabled, updatedAt: now };
+        if (enabled) {
+          const awarded = autoAwardFromContext(next.sexRibbons, {
+            memories: next.memories,
+            tryNewThings: true,
+            dualCast: Boolean(castPartner),
+            messageCount: messages.length,
+            recentText: messages.map((m) => m.text).join("\n"),
+          });
+          next = { ...next, sexRibbons: awarded.awards };
+          if (awarded.granted.length) {
+            setRibbonFlash(
+              awarded.granted.map((id) => ribbonDef(id).name).join(" · "),
+            );
+          }
+        }
+        return next;
       }
       if (castPartner && samePartnerId(p.id, castPartner.id)) {
         return { ...p, tryNewThings: enabled, updatedAt: now };
@@ -347,6 +404,61 @@ function ChatPageInner() {
     }
   }
 
+  async function claimRibbon(ribbonId: SexRibbonId) {
+    if (!partner) return;
+    if (hasRibbon(partner.sexRibbons, ribbonId)) return;
+    if (!isTaskComplete(ribbonId, ribbonCtx)) {
+      setError("Finish the task before claiming that ribbon.");
+      return;
+    }
+    const def = ribbonDef(ribbonId);
+    await persistPartnerPatch((p) => ({
+      ...p,
+      sexRibbons: awardRibbon(p.sexRibbons, ribbonId, "claim"),
+      updatedAt: new Date().toISOString(),
+    }));
+    setRibbonFlash(def.name);
+  }
+
+  async function syncRibbonsFromContext(
+    targetId: number,
+    ctxOverride?: Partial<typeof ribbonCtx>,
+  ) {
+    const p = partnersRef.current.find((x) => samePartnerId(x.id, targetId));
+    if (!p) return;
+    const ctx = {
+      memories: p.memories || [],
+      tryNewThings: Boolean(p.tryNewThings || castPartner?.tryNewThings),
+      dualCast: Boolean(castPartner),
+      messageCount: messages.length,
+      recentText: messages.map((m) => m.text).join("\n"),
+      ...ctxOverride,
+    };
+    const { awards, granted } = autoAwardFromContext(p.sexRibbons, ctx);
+    if (!granted.length) return;
+    const now = new Date().toISOString();
+    const list = partnersRef.current.map((row) =>
+      samePartnerId(row.id, targetId)
+        ? { ...row, sexRibbons: awards, updatedAt: now }
+        : row,
+    );
+    setPartners(list);
+    partnersRef.current = list;
+    setRibbonFlash(granted.map((id) => ribbonDef(id).name).join(" · "));
+    try {
+      try {
+        savePartners(list);
+      } catch {
+        // ignore
+      }
+      const saved = await persistPartners(list);
+      setPartners(saved);
+      partnersRef.current = saved;
+    } catch {
+      // local already has awards
+    }
+  }
+
   async function addMemoriesToPartner(
     incoming: MuseMemory[],
     targetId?: number,
@@ -355,16 +467,30 @@ function ChatPageInner() {
     const id = targetId ?? partner?.id;
     if (id == null) return;
     const now = new Date().toISOString();
+    let grantedFlash: string | null = null;
     const list = partnersRef.current.map((p) => {
       if (!samePartnerId(p.id, id)) return p;
+      const memories = mergeMemories(normalizeMemories(p.memories), incoming);
+      const { awards, granted } = autoAwardFromContext(p.sexRibbons, {
+        memories,
+        tryNewThings: Boolean(p.tryNewThings || castPartner?.tryNewThings),
+        dualCast: Boolean(castPartner),
+        messageCount: messages.length,
+        recentText: messages.map((m) => m.text).join("\n"),
+      });
+      if (granted.length) {
+        grantedFlash = granted.map((rid) => ribbonDef(rid).name).join(" · ");
+      }
       return {
         ...p,
-        memories: mergeMemories(normalizeMemories(p.memories), incoming),
+        memories,
+        sexRibbons: awards,
         updatedAt: now,
       };
     });
     setPartners(list);
     partnersRef.current = list;
+    if (grantedFlash) setRibbonFlash(grantedFlash);
     try {
       try {
         savePartners(list);
@@ -394,9 +520,8 @@ function ChatPageInner() {
     const text = memoryDraft.trim();
     if (!text || !partner) return;
     if (editingMemoryId) {
-      await persistPartnerPatch((p) => ({
-        ...p,
-        memories: normalizeMemories(p.memories).map((m) =>
+      await persistPartnerPatch((p) => {
+        const memories = normalizeMemories(p.memories).map((m) =>
           m.id === editingMemoryId
             ? {
                 ...m,
@@ -407,9 +532,24 @@ function ChatPageInner() {
                 pairWith: castPartner?.id ?? m.pairWith ?? null,
               }
             : m,
-        ),
-        updatedAt: new Date().toISOString(),
-      }));
+        );
+        const { awards, granted } = autoAwardFromContext(p.sexRibbons, {
+          memories,
+          tryNewThings: Boolean(p.tryNewThings || castPartner?.tryNewThings),
+          dualCast: Boolean(castPartner),
+          messageCount: messages.length,
+          recentText: messages.map((m) => m.text).join("\n"),
+        });
+        if (granted.length) {
+          setRibbonFlash(granted.map((id) => ribbonDef(id).name).join(" · "));
+        }
+        return {
+          ...p,
+          memories,
+          sexRibbons: awards,
+          updatedAt: new Date().toISOString(),
+        };
+      });
       setEditingMemoryId(null);
       setMemoryDraft("");
       setMemoryKind("relationship");
@@ -708,6 +848,17 @@ function ChatPageInner() {
         }
         setReactionReply({ id: replyId, text: trimmed });
         void harvestMemoriesAfterTurn(userText, trimmed);
+        const nextCount = (chatsRef.current[key] || []).length;
+        const recentBlob = [...prior, you, { text: trimmed }]
+          .map((m) => ("text" in m ? m.text : ""))
+          .join("\n");
+        void syncRibbonsFromContext(partner.id, {
+          dualCast: Boolean(castPartner),
+          messageCount: nextCount,
+          recentText: recentBlob,
+          tryNewThings: tryNewActive,
+          memories: partner.memories || [],
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Chat failed");
@@ -975,7 +1126,10 @@ function ChatPageInner() {
                     )}
                     <button
                       type="button"
-                      onClick={() => setMemoriesOpen((v) => !v)}
+                      onClick={() => {
+                        setMemoriesOpen((v) => !v);
+                        setRibbonsOpen(false);
+                      }}
                       className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
                         memoriesOpen
                           ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
@@ -986,6 +1140,26 @@ function ChatPageInner() {
                       Memories
                       {visibleMemories.length
                         ? ` (${visibleMemories.length})`
+                        : ""}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRibbonsOpen((v) => !v);
+                        setMemoriesOpen(false);
+                      }}
+                      className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
+                        ribbonsOpen
+                          ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
+                          : "border-[var(--line)] text-[var(--soft)] hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                      }`}
+                      title="Sex ribbons — complete chat tasks, collect across Muses"
+                      data-testid="muse-ribbons-toggle"
+                    >
+                      Ribbons
+                      {museRibbons.length ? ` (${museRibbons.length})` : ""}
+                      {collection.totalCount
+                        ? ` · ${collection.totalCount}`
                         : ""}
                     </button>
                     <button
@@ -1025,6 +1199,126 @@ function ChatPageInner() {
                       {resetting ? "Resetting…" : "Reset chat"}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {partner && ribbonFlash && (
+                <div
+                  className="border-b border-[var(--accent)]/35 bg-[linear-gradient(90deg,#12182a_0%,#1a1420_55%,#12182a_100%)] px-4 py-2 text-xs text-[var(--accent-strong)] sm:px-5"
+                  data-testid="muse-ribbon-flash"
+                >
+                  Ribbon earned · {ribbonFlash}
+                </div>
+              )}
+
+              {partner && ribbonsOpen && (
+                <div
+                  className="muse-ribbons-panel border-b border-[var(--line)] bg-[#0a0e18]/95 px-4 py-3 sm:px-5"
+                  data-testid="muse-ribbons-panel"
+                >
+                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <p
+                      className="text-sm text-[var(--ink)]"
+                      style={{ fontFamily: "var(--font-display), serif" }}
+                    >
+                      Sex ribbons
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                      {collection.totalCount} total ·{" "}
+                      {collection.uniqueTypes.length}/
+                      {SEX_RIBBON_CATALOG.length} types
+                    </p>
+                  </div>
+                  <p className="mb-3 text-xs leading-relaxed text-[#c4b7a8]">
+                    Complete light chat tasks with {displayName(partner)} to
+                    earn ribbons. Collection spans every Muse.
+                  </p>
+
+                  <ul className="mb-3 max-h-44 space-y-2 overflow-y-auto">
+                    {SEX_RIBBON_CATALOG.map((def) => {
+                      const earned = hasRibbon(museRibbons, def.id);
+                      const ready = !earned && isTaskComplete(def.id, ribbonCtx);
+                      return (
+                        <li
+                          key={def.id}
+                          className="flex items-start justify-between gap-3 border border-[var(--line)]/70 bg-[#12182a]/55 px-2.5 py-2"
+                          data-testid={`muse-ribbon-task-${def.id}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
+                              {tierLabel(def.tier)} · {def.name}
+                              {earned ? " · earned" : ready ? " · ready" : ""}
+                            </p>
+                            <p className="mt-0.5 text-sm leading-snug text-[#f7f1e8]">
+                              {def.task}
+                            </p>
+                          </div>
+                          <div className="shrink-0">
+                            {earned ? (
+                              <span className="rounded-sm border border-[var(--accent)]/40 px-2 py-1 text-[10px] font-medium text-[var(--accent-strong)]">
+                                Collected
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!ready}
+                                onClick={() => void claimRibbon(def.id)}
+                                className="rounded-sm border border-[var(--line)] px-2 py-1 text-[10px] font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40"
+                                data-testid={`muse-ribbon-claim-${def.id}`}
+                              >
+                                Claim
+                              </button>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {museRibbons.length > 0 && (
+                    <div className="mb-3">
+                      <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        With {displayName(partner)}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {museRibbons.map((a) => {
+                          const def = ribbonDef(a.ribbonId);
+                          return (
+                            <span
+                              key={a.id}
+                              className="rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-2 py-1 text-[10px] font-medium text-[var(--accent-strong)]"
+                              title={def.blurb}
+                            >
+                              {def.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {collection.byMuse.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Across all Muses
+                      </p>
+                      <ul className="max-h-24 space-y-1 overflow-y-auto text-xs text-[#c4b7a8]">
+                        {collection.byMuse.map((row) => (
+                          <li
+                            key={row.partnerId}
+                            className="flex justify-between gap-3"
+                          >
+                            <span className="truncate text-[var(--ink)]">
+                              {row.name}
+                            </span>
+                            <span className="shrink-0 text-[var(--accent)]">
+                              {row.count}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
