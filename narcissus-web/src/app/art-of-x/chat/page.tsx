@@ -1265,7 +1265,9 @@ function ChatPageInner() {
           <section
             className={
               companionFull
-                ? "muse-chat-stage muse-chat-stage--companion-full relative flex min-h-[100dvh] flex-1 overflow-hidden"
+                ? `muse-chat-stage muse-chat-stage--companion-full relative flex min-h-[100dvh] flex-1 overflow-hidden${
+                    chatOpen ? " muse-chat-stage--chat-open" : ""
+                  }`
                 : "muse-chat-stage grid overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/40 lg:grid-cols-[minmax(300px,38%)_minmax(0,1fr)]"
             }
           >

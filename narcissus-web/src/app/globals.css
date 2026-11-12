@@ -647,6 +647,42 @@ body {
   .muse-presence--chat-collapsed .muse-companion-dock .muse-companion-dock-body {
     max-height: min(36dvh, 280px);
   }
+
+  /* Chat open: slim dock so the Muse photo band above the sheet stays visible */
+  .muse-chat-stage--chat-open .muse-companion-dock,
+  .muse-presence--chat-open .muse-companion-dock {
+    left: 0.45rem;
+    right: 0.45rem;
+    width: auto;
+    bottom: calc(min(54dvh, 500px) + 0.4rem);
+    max-height: none;
+    padding: 0.4rem 0.55rem;
+    gap: 0.2rem;
+  }
+
+  .muse-chat-stage--chat-open .muse-companion-dock-tabs,
+  .muse-chat-stage--chat-open .muse-companion-dock-body,
+  .muse-chat-stage--chat-open .muse-companion-dock-cta,
+  .muse-chat-stage--chat-open .muse-companion-likeness,
+  .muse-chat-stage--chat-open .muse-companion-photo-add,
+  .muse-chat-stage--chat-open .muse-companion-dock-error,
+  .muse-chat-stage--chat-open .muse-companion-dock-status,
+  .muse-chat-stage--chat-open .muse-companion-dock-fit,
+  .muse-presence--chat-open .muse-companion-dock-tabs,
+  .muse-presence--chat-open .muse-companion-dock-body,
+  .muse-presence--chat-open .muse-companion-dock-cta,
+  .muse-presence--chat-open .muse-companion-likeness,
+  .muse-presence--chat-open .muse-companion-photo-add,
+  .muse-presence--chat-open .muse-companion-dock-error,
+  .muse-presence--chat-open .muse-companion-dock-status,
+  .muse-presence--chat-open .muse-companion-dock-fit {
+    display: none;
+  }
+
+  .muse-chat-stage--chat-open .muse-companion-dock-kicker,
+  .muse-presence--chat-open .muse-companion-dock-kicker {
+    font-size: 9px;
+  }
 }
 
 /* Compact Muse strip on Companion stage */
@@ -1108,7 +1144,7 @@ body {
   }
 }
 
-/* Phone: force tall bottom sheet (~66dvh) so chat reads without feeling cramped */
+/* Phone: tall bottom sheet; when open leave a Muse photo band above */
 @media (max-width: 640px) {
   .muse-chat-drawer {
     left: 0.35rem;
@@ -1117,6 +1153,12 @@ body {
     width: auto;
     height: min(66dvh, 580px);
     max-height: min(66dvh, 580px);
+  }
+
+  .muse-chat-stage--chat-open .muse-chat-drawer {
+    /* ~46% of viewport for photo + slim dock; sheet stays large/readable */
+    height: min(54dvh, 500px);
+    max-height: min(54dvh, 500px);
   }
 }
 
@@ -1130,6 +1172,123 @@ body {
     linear-gradient(165deg, #12182a 0%, #080b14 55%, #05070e 100%);
   border: 1px solid rgba(0, 229, 255, 0.14);
   box-shadow: inset 0 0 48px rgba(0, 229, 255, 0.04);
+}
+
+.muse-presence-slide {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.15s ease;
+  pointer-events: none;
+}
+
+.muse-presence-slide.is-active {
+  opacity: 1;
+}
+
+.muse-presence-slideshow-chrome {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 18;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem 0.55rem;
+  max-width: min(22rem, calc(100% - 1.5rem));
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(229, 195, 178, 0.22);
+  border-radius: 2px;
+  background: #080b14;
+  transform: translateX(-50%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+}
+
+.muse-presence--full .muse-presence-slideshow-chrome,
+.muse-presence--chat-open .muse-presence-slideshow-chrome {
+  bottom: auto;
+  top: max(3.75rem, calc(env(safe-area-inset-top, 0px) + 3.1rem));
+}
+
+.muse-presence-slideshow-nav {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  border: 1px solid rgba(229, 195, 178, 0.28);
+  border-radius: 2px;
+  background: transparent;
+  color: #e5c3b2;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.muse-presence-slideshow-nav:hover,
+.muse-presence-slideshow-nav:focus-visible {
+  border-color: rgba(229, 195, 178, 0.7);
+  color: #f7f1e8;
+}
+
+.muse-presence-slideshow-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.muse-presence-slideshow-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(229, 195, 178, 0.28);
+  cursor: pointer;
+}
+
+.muse-presence-slideshow-dot.is-active {
+  background: #e5c3b2;
+  box-shadow: 0 0 0 1px rgba(229, 195, 178, 0.35);
+}
+
+.muse-presence-slideshow-label {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(229, 195, 178, 0.85);
+}
+
+@media (max-width: 640px) {
+  .muse-presence--chat-open .muse-presence-slideshow-chrome {
+    top: max(3.4rem, calc(env(safe-area-inset-top, 0px) + 2.75rem));
+    padding: 0.28rem 0.45rem;
+  }
+
+  .muse-presence--chat-open .muse-presence-slideshow-label {
+    display: none;
+  }
+}
+
+/* Muse photo slides fill the stage (Companion art still uses contain/fit) */
+.muse-presence-stage--muse-photo .muse-presence-photo,
+.muse-presence-stage--muse-photo.muse-presence-stage--fit-fit .muse-presence-photo,
+.muse-presence-stage--muse-photo.muse-presence-stage--fit-fill .muse-presence-photo,
+.muse-presence-style-cartoon.muse-presence-stage--muse-photo .muse-presence-photo {
+  object-fit: cover !important;
+  object-position: center 18% !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
+}
+
+/* Keep faces in the visible stage band left of the opaque chat rail */
+@media (min-width: 1024px) {
+  .muse-chat-stage--chat-open .muse-presence-stage--muse-photo .muse-presence-photo {
+    object-position: 38% center !important;
+  }
 }
 
 .muse-presence-parallax {
@@ -1888,6 +2047,7 @@ body {
   .partner-card,
   .partner-lightbox,
   .muse-presence-photo,
+  .muse-presence-slide,
   .muse-presence-glow,
   .muse-presence--companion-living .muse-presence-parallax,
   .muse-presence-eye-shimmer,
@@ -1919,5 +2079,9 @@ body {
   .echo-stat:hover,
   .circle-filter-chip:hover {
     transform: none !important;
+  }
+
+  .muse-presence-slide {
+    transition: none !important;
   }
 }
