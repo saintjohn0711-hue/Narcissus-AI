@@ -18,6 +18,7 @@ import {
   samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import { normalizeMemories } from "@/lib/museChatMemory";
 
 type PartnerCardProps = {
   partner: PartnerRecord;
@@ -433,6 +434,16 @@ export function PartnerCard({
                 className="text-[var(--glow-mid)] underline-offset-2 hover:text-[var(--glow)] hover:underline"
               >
                 Chat
+              </Link>
+              <Link
+                href={`/art-of-x/partners/${p.id}/memories`}
+                className="text-[var(--accent-strong)] underline-offset-2 hover:underline"
+                data-testid="muse-card-memories-link"
+              >
+                Memories
+                {normalizeMemories(p.memories).length
+                  ? ` (${normalizeMemories(p.memories).length})`
+                  : ""}
               </Link>
               {onTogglePairing && (
                 <button

@@ -38,6 +38,7 @@ import {
   extractExplicitRemember,
   heuristicExtractMemories,
   memoriesForPrompt,
+  MEMORY_KIND_LABEL,
   mergeMemories,
   normalizeMemories,
   type MuseMemory,
@@ -67,17 +68,6 @@ import type { ChatPov } from "@/lib/xai";
 function partnerForChatApi(p: PartnerRecord): PartnerRecord {
   return { ...p, photos: [] };
 }
-
-const MEMORY_KIND_LABEL: Record<MuseMemoryKind, string> = {
-  fact: "Fact",
-  relationship: "Relationship",
-  kink: "Kink",
-  place: "Place",
-  nickname: "Nickname",
-  scene: "Scene",
-  preference: "Preference",
-  mode: "Mode",
-};
 
 async function readXaiSseStream(
   res: Response,
@@ -1344,9 +1334,18 @@ function ChatPageInner() {
                     >
                       What {displayName(partner)} remembers
                     </p>
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                      Survives reset · loads into chat
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/art-of-x/partners/${partner.id}/memories`}
+                        className="text-[10px] uppercase tracking-[0.14em] text-[var(--accent-strong)] underline-offset-2 hover:underline"
+                        data-testid="muse-memories-full-page-link"
+                      >
+                        Full page
+                      </Link>
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Survives reset · loads into chat
+                      </p>
+                    </div>
                   </div>
                   <p className="mb-3 text-xs leading-relaxed text-[#c4b7a8]">
                     Add lasting facts for realism — e.g. “Joey is Carrie’s
