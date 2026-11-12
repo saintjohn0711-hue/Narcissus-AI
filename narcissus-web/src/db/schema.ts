@@ -151,7 +151,7 @@ export const partners = pgTable("partners", {
   voiceGender: text("voice_gender").notNull().default("female"),
   /** Named delivery preset (auto / sultry / deep / …). */
   voicePreset: text("voice_preset").notNull().default("auto"),
-  /** Optional browser voiceURI override. */
+  /** Accent as accent:<BCP47> or exact SpeechSynthesisVoice.voiceURI. */
   voiceId: text("voice_id").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

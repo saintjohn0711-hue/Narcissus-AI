@@ -44,8 +44,12 @@ import {
 } from "@/lib/dreamMuse";
 import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
 import {
+  accentFromVoiceId,
   defaultVoiceGender,
+  encodeAccentVoiceId,
+  MUSE_VOICE_ACCENTS,
   presetsForGender,
+  type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
 } from "@/lib/museVoice";
@@ -912,7 +916,7 @@ export default function PartnersPage() {
             </legend>
             <p className="text-xs text-[var(--muted)]">
               Sexy female or male narration for Companion chat (browser speech —
-              no API key). Pick gender + a delivery preset.
+              no API key). Pick gender, accent (locale), and delivery.
             </p>
             <div className="flex flex-wrap gap-2">
               {VOICE_GENDERS.map((g) => (
@@ -924,7 +928,10 @@ export default function PartnersPage() {
                       ...editing,
                       voiceGender: g,
                       voicePreset: "auto",
-                      voiceId: "",
+                      // Keep accent locale across gender flips
+                      voiceId: encodeAccentVoiceId(
+                        accentFromVoiceId(editing.voiceId),
+                      ),
                     })
                   }
                   className={`rounded-sm border px-3 py-1.5 text-sm capitalize ${
@@ -938,28 +945,65 @@ export default function PartnersPage() {
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2">
-              {presetsForGender(editing.voiceGender || "female").map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  title={p.blurb}
-                  onClick={() =>
-                    setEditing({
-                      ...editing,
-                      voicePreset: p.id as MuseVoicePresetId,
-                    })
-                  }
-                  className={`rounded-sm border px-3 py-1.5 text-sm ${
-                    editing.voicePreset === p.id
-                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                      : "border-[var(--line)] text-[#c4b7a8]"
-                  }`}
-                  data-testid={`muse-voice-preset-${p.id}`}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div>
+              <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                Accent
+              </p>
+              <div className="muse-voice-chip-row">
+                {MUSE_VOICE_ACCENTS.map((a) => {
+                  const selected =
+                    accentFromVoiceId(editing.voiceId) === a.id;
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      title={a.blurb}
+                      onClick={() =>
+                        setEditing({
+                          ...editing,
+                          voiceId: encodeAccentVoiceId(
+                            a.id as MuseVoiceAccentId,
+                          ),
+                        })
+                      }
+                      className={`muse-voice-chip ${
+                        selected ? "muse-voice-chip--on" : ""
+                      }`}
+                      data-testid={`muse-voice-accent-${a.id}`}
+                    >
+                      {a.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                Delivery
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {presetsForGender(editing.voiceGender || "female").map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    title={p.blurb}
+                    onClick={() =>
+                      setEditing({
+                        ...editing,
+                        voicePreset: p.id as MuseVoicePresetId,
+                      })
+                    }
+                    className={`rounded-sm border px-3 py-1.5 text-sm ${
+                      editing.voicePreset === p.id
+                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                    data-testid={`muse-voice-preset-${p.id}`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </fieldset>
 

@@ -33,8 +33,12 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
+  accentFromVoiceId,
+  accentLabel,
   DEFAULT_CHAT_VOICE_PREFS,
+  encodeAccentVoiceId,
   loadChatVoicePrefs,
+  MUSE_VOICE_ACCENTS,
   presetsForGender,
   saveChatVoicePrefs,
   speakMessage,
@@ -43,6 +47,7 @@ import {
   voiceSettingsFromPartner,
   warmSpeechVoices,
   type ChatVoicePrefs,
+  type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
 } from "@/lib/museVoice";
@@ -231,6 +236,7 @@ function ChatPageInner() {
     setCastPickerOpen(false);
     setMemoriesOpen(false);
     setRibbonsOpen(false);
+    setVoicePanelOpen(false);
   }
 
   useEffect(() => {
@@ -612,6 +618,7 @@ function ChatPageInner() {
   async function setMuseVoice(patch: {
     voiceGender?: MuseVoiceGender;
     voicePreset?: MuseVoicePresetId;
+    voiceAccent?: MuseVoiceAccentId;
     voiceId?: string;
   }) {
     if (!partner) return;
@@ -625,12 +632,15 @@ function ChatPageInner() {
             voicePreset:
               patch.voicePreset ??
               (patch.voiceGender ? "auto" : p.voicePreset),
+            // Gender change keeps accent (locale); only clear exact URI overrides.
             voiceId:
               patch.voiceId !== undefined
                 ? patch.voiceId
-                : patch.voiceGender
-                  ? ""
-                  : p.voiceId,
+                : patch.voiceAccent !== undefined
+                  ? encodeAccentVoiceId(patch.voiceAccent)
+                  : patch.voiceGender
+                    ? encodeAccentVoiceId(accentFromVoiceId(p.voiceId))
+                    : p.voiceId,
             updatedAt: now,
           }
         : p,
@@ -1496,6 +1506,7 @@ function ChatPageInner() {
                       onClick={() => {
                         setMemoriesOpen((v) => !v);
                         setRibbonsOpen(false);
+                        setVoicePanelOpen(false);
                       }}
                       className={`muse-chat-tool ${
                         memoriesOpen ? "muse-chat-tool--on" : ""
@@ -1512,6 +1523,7 @@ function ChatPageInner() {
                       onClick={() => {
                         setRibbonsOpen((v) => !v);
                         setMemoriesOpen(false);
+                        setVoicePanelOpen(false);
                       }}
                       className={`muse-chat-tool ${
                         ribbonsOpen ? "muse-chat-tool--on" : ""
@@ -1549,11 +1561,22 @@ function ChatPageInner() {
                       className={`muse-chat-tool ${
                         voicePanelOpen ? "muse-chat-tool--on" : ""
                       }`}
-                      title="Muse voice — gender, preset, auto-play"
+                      title={
+                        voicePanelOpen
+                          ? "Hide Muse voice options"
+                          : "Muse voice — gender, accent, preset, auto-play"
+                      }
+                      aria-expanded={voicePanelOpen}
                       data-testid="muse-voice-toggle"
                     >
                       Voice
                       {partner.voiceGender === "male" ? " · ♂" : " · ♀"}
+                      {(() => {
+                        const accent = accentFromVoiceId(partner.voiceId);
+                        return accent !== "auto"
+                          ? ` · ${accentLabel(accent)}`
+                          : "";
+                      })()}
                     </button>
                     <label className="muse-chat-tool muse-chat-tool--pov">
                       <span>POV</span>
@@ -1584,107 +1607,157 @@ function ChatPageInner() {
                   className="muse-voice-panel border-b border-[var(--line)] bg-[#0a0e18]/95 px-4 py-3 sm:px-5"
                   data-testid="muse-voice-panel"
                 >
-                  <p
-                    className="mb-1 text-sm text-[var(--ink)]"
-                    style={{ fontFamily: "var(--font-display), serif" }}
-                  >
-                    Chat voice
-                  </p>
-                  <p className="mb-3 text-xs leading-relaxed text-[#c4b7a8]">
-                    {speechOk
-                      ? "Browser speech narrates Muse replies — tap Play on a bubble. No API key."
-                      : "Speech isn’t available in this browser."}
-                  </p>
-                  <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Muse gender
-                  </p>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {VOICE_GENDERS.map((g) => (
-                      <button
-                        key={g}
-                        type="button"
-                        onClick={() => void setMuseVoice({ voiceGender: g })}
-                        className={`rounded-sm border px-2.5 py-1.5 text-xs capitalize ${
-                          partner.voiceGender === g
-                            ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                            : "border-[var(--line)] text-[var(--soft)]"
-                        }`}
-                        data-testid={`chat-voice-gender-${g}`}
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div>
+                      <p
+                        className="text-sm text-[var(--ink)]"
+                        style={{ fontFamily: "var(--font-display), serif" }}
                       >
-                        {g}
-                      </button>
-                    ))}
+                        Chat voice
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-[#c4b7a8]">
+                        {speechOk
+                          ? "Browser speech — Pick accent + delivery. Tap Play on a bubble."
+                          : "Speech isn’t available in this browser."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVoicePanelOpen(false)}
+                      className="muse-chat-tool shrink-0"
+                      data-testid="muse-voice-close"
+                      aria-label="Close voice menu"
+                    >
+                      Close
+                    </button>
                   </div>
-                  <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                    Preset
-                  </p>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    {presetsForGender(partner.voiceGender || "female").map(
-                      (p) => (
+
+                  <div className="muse-voice-panel-body">
+                    <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Muse gender
+                    </p>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {VOICE_GENDERS.map((g) => (
                         <button
-                          key={p.id}
+                          key={g}
                           type="button"
-                          title={p.blurb}
-                          onClick={() =>
-                            void setMuseVoice({
-                              voicePreset: p.id as MuseVoicePresetId,
-                            })
-                          }
-                          className={`rounded-sm border px-2.5 py-1.5 text-xs ${
-                            partner.voicePreset === p.id
+                          onClick={() => void setMuseVoice({ voiceGender: g })}
+                          className={`rounded-sm border px-2.5 py-1.5 text-xs capitalize ${
+                            partner.voiceGender === g
                               ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
                               : "border-[var(--line)] text-[var(--soft)]"
                           }`}
-                          data-testid={`chat-voice-preset-${p.id}`}
+                          data-testid={`chat-voice-gender-${g}`}
                         >
-                          {p.label}
+                          {g}
                         </button>
-                      ),
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setVoicePrefs((prev) => ({
-                          ...prev,
-                          autoNarrateMuse: !prev.autoNarrateMuse,
-                        }))
-                      }
-                      className={`muse-chat-tool ${
-                        voicePrefs.autoNarrateMuse ? "muse-chat-tool--on" : ""
-                      }`}
-                      data-testid="chat-voice-auto"
+                      ))}
+                    </div>
+
+                    <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Accent
+                    </p>
+                    <div
+                      className="muse-voice-chip-row mb-3"
+                      role="group"
+                      aria-label="Voice accent"
                     >
-                      {voicePrefs.autoNarrateMuse
-                        ? "Auto-play · on"
-                        : "Auto-play Muse"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setVoicePrefs((prev) => ({
-                          ...prev,
-                          narrateUser: !prev.narrateUser,
-                        }))
-                      }
-                      className={`muse-chat-tool ${
-                        voicePrefs.narrateUser ? "muse-chat-tool--on" : ""
-                      }`}
-                      data-testid="chat-voice-user"
-                    >
-                      {voicePrefs.narrateUser
-                        ? "Your lines · on"
-                        : "Your lines · off"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => stopNarration()}
-                      className="muse-chat-tool"
-                      data-testid="chat-voice-stop-all"
-                    >
-                      Stop
-                    </button>
+                      {MUSE_VOICE_ACCENTS.map((a) => {
+                        const selected =
+                          accentFromVoiceId(partner.voiceId) === a.id;
+                        return (
+                          <button
+                            key={a.id}
+                            type="button"
+                            title={a.blurb}
+                            onClick={() =>
+                              void setMuseVoice({
+                                voiceAccent: a.id as MuseVoiceAccentId,
+                              })
+                            }
+                            className={`muse-voice-chip ${
+                              selected ? "muse-voice-chip--on" : ""
+                            }`}
+                            data-testid={`chat-voice-accent-${a.id}`}
+                          >
+                            {a.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Delivery
+                    </p>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {presetsForGender(partner.voiceGender || "female").map(
+                        (p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            title={p.blurb}
+                            onClick={() =>
+                              void setMuseVoice({
+                                voicePreset: p.id as MuseVoicePresetId,
+                              })
+                            }
+                            className={`rounded-sm border px-2.5 py-1.5 text-xs ${
+                              partner.voicePreset === p.id
+                                ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                                : "border-[var(--line)] text-[var(--soft)]"
+                            }`}
+                            data-testid={`chat-voice-preset-${p.id}`}
+                          >
+                            {p.label}
+                          </button>
+                        ),
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVoicePrefs((prev) => ({
+                            ...prev,
+                            autoNarrateMuse: !prev.autoNarrateMuse,
+                          }))
+                        }
+                        className={`muse-chat-tool ${
+                          voicePrefs.autoNarrateMuse ? "muse-chat-tool--on" : ""
+                        }`}
+                        data-testid="chat-voice-auto"
+                      >
+                        {voicePrefs.autoNarrateMuse
+                          ? "Auto-play · on"
+                          : "Auto-play Muse"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVoicePrefs((prev) => ({
+                            ...prev,
+                            narrateUser: !prev.narrateUser,
+                          }))
+                        }
+                        className={`muse-chat-tool ${
+                          voicePrefs.narrateUser ? "muse-chat-tool--on" : ""
+                        }`}
+                        data-testid="chat-voice-user"
+                      >
+                        {voicePrefs.narrateUser
+                          ? "Your lines · on"
+                          : "Your lines · off"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => stopNarration()}
+                        className="muse-chat-tool"
+                        data-testid="chat-voice-stop-all"
+                      >
+                        Stop
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
