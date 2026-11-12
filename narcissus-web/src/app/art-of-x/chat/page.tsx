@@ -69,6 +69,9 @@ import {
 } from "@/lib/sexRibbons";
 import type { ChatPov } from "@/lib/xai";
 
+/** Persist Companion drawer open/closed across visits (optional preference). */
+const COMPANION_CHAT_OPEN_KEY = "narcissus.artOfX.companionChatOpen";
+
 /** Chat prompt only needs text fields — strip heavy data-URLs. */
 function partnerForChatApi(p: PartnerRecord): PartnerRecord {
   return { ...p, photos: [] };
@@ -135,6 +138,7 @@ function ChatPageInner() {
     DEFAULT_MUSE_PRESENCE_STYLE,
   );
   const [chatOpen, setChatOpen] = useState(true);
+  const [chatPrefReady, setChatPrefReady] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [ribbonsOpen, setRibbonsOpen] = useState(false);
   const [ribbonFlash, setRibbonFlash] = useState<string | null>(null);
@@ -157,6 +161,37 @@ function ChatPageInner() {
   const castFromUrl = useRef(false);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const urlSyncSkip = useRef(true);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COMPANION_CHAT_OPEN_KEY);
+      if (raw === "0") setChatOpen(false);
+      else if (raw === "1") setChatOpen(true);
+    } catch {
+      /* private mode / blocked storage */
+    }
+    setChatPrefReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!chatPrefReady) return;
+    try {
+      localStorage.setItem(COMPANION_CHAT_OPEN_KEY, chatOpen ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [chatOpen, chatPrefReady]);
+
+  function openChatPanel() {
+    setChatOpen(true);
+  }
+
+  function closeChatPanel() {
+    setChatOpen(false);
+    setCastPickerOpen(false);
+    setMemoriesOpen(false);
+    setRibbonsOpen(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -1183,9 +1218,6 @@ function ChatPageInner() {
                       : undefined
                   }
                   chatOpen={companionFull ? chatOpen : undefined}
-                  onToggleChat={
-                    companionFull ? () => setChatOpen((v) => !v) : undefined
-                  }
                   onPartnerPhotosChange={updatePartnerPhotos}
                 />
               </div>
@@ -1193,6 +1225,18 @@ function ChatPageInner() {
               <div className="flex min-h-64 items-center justify-center border-b border-[var(--line)] p-6 text-sm text-[var(--muted)] lg:border-b-0 lg:border-r">
                 Select a {PERSON_LABEL.singularLower}
               </div>
+            )}
+
+            {companionFull && partner && !chatOpen && (
+              <button
+                type="button"
+                className="muse-chat-fab z-30"
+                onClick={openChatPanel}
+                data-testid="muse-chat-fab"
+                aria-label="Open chat"
+              >
+                Chat
+              </button>
             )}
 
             <div
@@ -1205,158 +1249,163 @@ function ChatPageInner() {
                     }`
                   : "flex min-h-[22rem] flex-col border border-[var(--line)] bg-[var(--bg-elevated)] lg:min-h-[36rem]"
               }
+              aria-hidden={companionFull ? !chatOpen : undefined}
             >
               {partner && (
-                <div className="muse-chat-drawer-header flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)]">
-                  <div className="min-w-0 flex-1">
-                    <h2
-                      className="muse-chat-drawer-header-title text-xl text-[var(--ink)]"
-                      style={{ fontFamily: "var(--font-display), serif" }}
-                      title={castLabel}
-                    >
-                      {castPartners.length >= 2 && partner
-                        ? `${displayName(partner)} + ${castPartners.length}`
-                        : castLabel}
-                    </h2>
-                    <p className="mt-1 truncate text-xs text-[#c4b7a8]" title={castLabel}>
-                      {castModeLabel
-                        ? castPartners.length >= 2
-                          ? `${castModeLabel} · ${castLabel}`
-                          : castModeLabel
-                        : companionFull
-                          ? "Companion · Adults 18+"
-                          : partner.dynTags.slice(0, 3).join(" · ") ||
-                            "No dynamics tagged"}
-                      {modelLabel ? ` · ${modelLabel}` : ""}
-                    </p>
-                    {castPickOptions.length > 0 && (
-                      <div className="muse-chat-cast-chrome">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setCastPickerOpen((v) => !v)}
-                            className="rounded-sm border border-[var(--line)] px-2.5 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
-                            aria-expanded={castPickerOpen}
-                            data-testid="muse-cast-picker-toggle"
-                          >
-                            {castPartners.length === 0
-                              ? "Add Muses to cast"
-                              : `Cast · ${castPartners.length + 1} of ${MAX_MUSE_CAST_MATES + 1}`}
-                          </button>
-                          {castPartners.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCastSelection([]);
-                                setCastPickerOpen(false);
-                              }}
-                              className="min-h-[1.85rem] px-1 text-[11px] text-[var(--muted)] underline-offset-2 hover:text-[var(--ink)] hover:underline"
-                            >
-                              Solo
-                            </button>
-                          )}
-                        </div>
-                        {castPartners.length > 0 && (
-                          <ul
-                            className="muse-chat-cast-chips mt-1.5"
-                            aria-label="Active cast"
-                          >
-                            {castPartners.map((p) => (
-                              <li key={p.id}>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleCastMate(p.id)}
-                                  className="muse-chat-cast-chip"
-                                  title={`Remove ${displayName(p)}`}
-                                >
-                                  {mainPhoto(p) ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                      src={mainPhoto(p)!}
-                                      alt=""
-                                    />
-                                  ) : null}
-                                  {displayName(p)}
-                                  <span aria-hidden className="text-[var(--muted)]">
-                                    ×
-                                  </span>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {castPickerOpen && (
-                          <div
-                            className="muse-chat-cast-picker"
-                            data-testid="muse-cast-picker"
-                          >
-                            <p className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
-                              Pick up to {MAX_MUSE_CAST_MATES} more ·{" "}
-                              {MAX_MUSE_CAST_MATES + 1} total
-                            </p>
-                            <ul className="flex flex-col gap-1">
-                              {castPickOptions.map((p) => {
-                                const on = castPartners.some((c) =>
-                                  samePartnerId(c.id, p.id),
-                                );
-                                const paired = pairedOptions.some((x) =>
-                                  samePartnerId(x.id, p.id),
-                                );
-                                return (
-                                  <li key={p.id}>
-                                    <label className="flex min-h-[2.25rem] cursor-pointer items-center gap-2 px-1 py-1 text-sm text-[var(--ink)] hover:bg-[var(--glow)]/5">
-                                      <input
-                                        type="checkbox"
-                                        checked={on}
-                                        onChange={() => toggleCastMate(p.id)}
-                                        className="accent-[var(--accent)]"
-                                      />
-                                      <span className="min-w-0 flex-1 truncate">
-                                        {displayName(p)}
-                                      </span>
-                                      {paired ? (
-                                        <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
-                                          together
-                                        </span>
-                                      ) : null}
-                                    </label>
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
+                <div className="muse-chat-drawer-header border-b border-[var(--line)]">
+                  <div className="muse-chat-drawer-header-top">
+                    <div className="min-w-0 flex-1">
+                      <h2
+                        className="muse-chat-drawer-header-title text-xl text-[var(--ink)]"
+                        style={{ fontFamily: "var(--font-display), serif" }}
+                        title={castLabel}
+                      >
+                        {castPartners.length >= 2 && partner
+                          ? `${displayName(partner)} + ${castPartners.length}`
+                          : castLabel}
+                      </h2>
+                      <p
+                        className="mt-0.5 truncate text-xs text-[#c4b7a8]"
+                        title={castLabel}
+                      >
+                        {castModeLabel
+                          ? castPartners.length >= 2
+                            ? `${castModeLabel} · ${castLabel}`
+                            : castModeLabel
+                          : companionFull
+                            ? "Companion · Adults 18+"
+                            : partner.dynTags.slice(0, 3).join(" · ") ||
+                              "No dynamics tagged"}
+                        {modelLabel ? ` · ${modelLabel}` : ""}
+                      </p>
+                    </div>
+                    {companionFull && (
+                      <button
+                        type="button"
+                        onClick={closeChatPanel}
+                        className="muse-chat-drawer-close"
+                        data-testid="muse-chat-close"
+                        aria-label="Close chat"
+                        title="Close chat — show more of the Muse"
+                      >
+                        Close
+                      </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {companionFull && (
-                      <>
-                        <Link
-                          href="/art-of-x"
-                          className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
-                        >
-                          Art of X
-                        </Link>
+
+                  {castPickOptions.length > 0 && (
+                    <div className="muse-chat-cast-chrome">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => setChatOpen(false)}
-                          className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)] md:hidden"
+                          onClick={() => setCastPickerOpen((v) => !v)}
+                          className="rounded-sm border border-[var(--line)] px-2.5 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                          aria-expanded={castPickerOpen}
+                          data-testid="muse-cast-picker-toggle"
                         >
-                          Hide
+                          {castPartners.length === 0
+                            ? "Add Muses to cast"
+                            : `Cast · ${castPartners.length + 1} of ${MAX_MUSE_CAST_MATES + 1}`}
                         </button>
-                      </>
-                    )}
+                        {castPartners.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCastSelection([]);
+                              setCastPickerOpen(false);
+                            }}
+                            className="min-h-[1.85rem] px-1 text-[11px] text-[var(--muted)] underline-offset-2 hover:text-[var(--ink)] hover:underline"
+                          >
+                            Solo
+                          </button>
+                        )}
+                      </div>
+                      {castPartners.length > 0 && (
+                        <ul
+                          className="muse-chat-cast-chips mt-1.5"
+                          aria-label="Active cast"
+                        >
+                          {castPartners.map((p) => (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onClick={() => toggleCastMate(p.id)}
+                                className="muse-chat-cast-chip"
+                                title={`Remove ${displayName(p)}`}
+                              >
+                                {mainPhoto(p) ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={mainPhoto(p)!} alt="" />
+                                ) : null}
+                                {displayName(p)}
+                                <span
+                                  aria-hidden
+                                  className="text-[var(--muted)]"
+                                >
+                                  ×
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {castPickerOpen && (
+                        <div
+                          className="muse-chat-cast-picker"
+                          data-testid="muse-cast-picker"
+                        >
+                          <p className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+                            Pick up to {MAX_MUSE_CAST_MATES} more ·{" "}
+                            {MAX_MUSE_CAST_MATES + 1} total
+                          </p>
+                          <ul className="flex flex-col gap-1">
+                            {castPickOptions.map((p) => {
+                              const on = castPartners.some((c) =>
+                                samePartnerId(c.id, p.id),
+                              );
+                              const paired = pairedOptions.some((x) =>
+                                samePartnerId(x.id, p.id),
+                              );
+                              return (
+                                <li key={p.id}>
+                                  <label className="flex min-h-[2.25rem] cursor-pointer items-center gap-2 px-1 py-1 text-sm text-[var(--ink)] hover:bg-[var(--glow)]/5">
+                                    <input
+                                      type="checkbox"
+                                      checked={on}
+                                      onChange={() => toggleCastMate(p.id)}
+                                      className="accent-[var(--accent)]"
+                                    />
+                                    <span className="min-w-0 flex-1 truncate">
+                                      {displayName(p)}
+                                    </span>
+                                    {paired ? (
+                                      <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                        together
+                                      </span>
+                                    ) : null}
+                                  </label>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div
+                    className="muse-chat-toolbar"
+                    role="toolbar"
+                    aria-label="Chat options"
+                  >
                     <button
                       type="button"
                       onClick={() => {
                         setMemoriesOpen((v) => !v);
                         setRibbonsOpen(false);
                       }}
-                      className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
-                        memoriesOpen
-                          ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
-                          : "border-[var(--line)] text-[var(--soft)] hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                      className={`muse-chat-tool ${
+                        memoriesOpen ? "muse-chat-tool--on" : ""
                       }`}
                       title="What she remembers — add lasting facts for chat"
                     >
@@ -1371,10 +1420,8 @@ function ChatPageInner() {
                         setRibbonsOpen((v) => !v);
                         setMemoriesOpen(false);
                       }}
-                      className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
-                        ribbonsOpen
-                          ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
-                          : "border-[var(--line)] text-[var(--soft)] hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                      className={`muse-chat-tool ${
+                        ribbonsOpen ? "muse-chat-tool--on" : ""
                       }`}
                       title="Sex ribbons — complete chat tasks, collect across Muses"
                       data-testid="muse-ribbons-toggle"
@@ -1388,10 +1435,8 @@ function ChatPageInner() {
                     <button
                       type="button"
                       onClick={() => void setTryNewThings(!tryNewActive)}
-                      className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
-                        tryNewActive
-                          ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
-                          : "border-[var(--line)] text-[var(--soft)] hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                      className={`muse-chat-tool ${
+                        tryNewActive ? "muse-chat-tool--on" : ""
                       }`}
                       title={
                         tryNewActive
@@ -1399,27 +1444,27 @@ function ChatPageInner() {
                           : "Stay in established vibe — tap to grant try-new"
                       }
                     >
-                      {tryNewActive ? "Try new · on" : "Try new things"}
+                      {tryNewActive ? "Try new · on" : "Try new"}
                     </button>
-                    <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
-                      POV
+                    <label className="muse-chat-tool muse-chat-tool--pov">
+                      <span>POV</span>
                       <select
                         value={pov}
                         onChange={(e) => setPov(e.target.value as ChatPov)}
-                        className="rounded-sm border border-[var(--line)] bg-[#12182a] px-2 py-1 text-sm text-[var(--ink)]"
+                        className="muse-chat-pov-select"
                       >
-                        <option value="1st">1st person</option>
-                        <option value="3rd">3rd person</option>
+                        <option value="1st">1st</option>
+                        <option value="3rd">3rd</option>
                       </select>
                     </label>
                     <button
                       type="button"
                       onClick={() => void resetChat()}
                       disabled={resetting || messages.length === 0}
-                      className="rounded-sm border border-[var(--danger)]/40 px-3 py-1.5 text-xs font-medium text-[#f0c4b8] transition hover:border-[var(--danger)]/70 hover:bg-[var(--danger)]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="muse-chat-tool muse-chat-tool--danger"
                       title="Clear this Muse’s conversation (memories stay)"
                     >
-                      {resetting ? "Resetting…" : "Reset chat"}
+                      {resetting ? "Resetting…" : "Reset"}
                     </button>
                   </div>
                 </div>
