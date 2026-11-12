@@ -971,6 +971,7 @@ export type StoryContinueOpts = {
   intensity?: number;
   roles?: string;
   extra?: string;
+  length?: SceneLength;
 };
 
 function applyScenePov(text: string, pov: ScenePov): string {
@@ -991,19 +992,83 @@ function applyScenePov(text: string, pov: ScenePov): string {
   return text;
 }
 
+/**
+ * Local continue/steer paragraph budgets — aligned with sceneLengthBudget
+ * paragraph ranges in sceneCraft (short 2–4, medium 4–6, long 6–10).
+ */
+function continueParagraphTarget(length: SceneLength): number {
+  if (length === "short") return 3;
+  if (length === "long") return 8;
+  return 5;
+}
+
+function lengthPadParagraphs(
+  seed: string[],
+  partners: PartnerRecord[],
+  kinks: string[],
+  length: SceneLength,
+  intensity = 7,
+  roles?: string,
+): string[] {
+  const a = partners[0] ? displayName(partners[0]) : "They";
+  const b = partners[1] ? displayName(partners[1]) : null;
+  const target = continueParagraphTarget(length);
+  const paras = seed.map((p) => p.trim()).filter(Boolean);
+  const kinkBeats = kinkDrivenBeats(partners, kinks, intensity, roles);
+  const filler = [
+    ...kinkBeats,
+    kinks.length
+      ? `They keep pulling the night back to ${kinks.slice(0, 4).join(", ")} — not as a checklist, as the acts themselves — lingering on each one long enough that your body starts answering before they finish the sentence.`
+      : `${a} keeps reading your body and answering whatever makes you shake hardest, mapping the next stretch like they already own the outcome.`,
+    b
+      ? `${b} takes a turn while ${a} stays close — hands steadying, mouth at your ear, filthy specifics that make the next thrust land harder and leave you nowhere to hide.`
+      : `${a} changes the angle without asking — slower, then deeper — narrating every inch until holding still feels impossible and your voice breaks on the next breath.`,
+    `Pace drops when you get close, then comes back meaner. Breath, sweat, the wet sound of it — none of it is rushed, and every pause is a threat you want kept.`,
+    b
+      ? `They trade places again. ${a} holds you open; ${b} uses that opening without hurry, talking through what they can feel while you try to stay coherent.`
+      : `${a} edges on purpose, then pulls you back into that heat and refuses the finish a little longer, smiling at how badly you chase it.`,
+    `Talk stays specific: how you look open, how wet you already are, what comes next if you ask nicely — or if you don't — and they make you listen while they deliver.`,
+    `Positions shift. A knee slots higher. Weight settles differently. The scene stretches because they want it to, and because your body is still asking for more.`,
+    `They do not rush the peak. Every few breaths they check you — then take more — until the through-line owns the room and your thighs won't stop shaking.`,
+    `Time thins. Another position. Another round of praise and pressure. Nobody is ready to end this stretch yet, and they say so while they keep going.`,
+  ];
+  // Never truncate acted/seed prose — only pad up to the length target.
+  let i = 0;
+  while (paras.length < target) {
+    paras.push(
+      filler[i % filler.length] ||
+        `They keep going — another shift, another filthy line — building past the last crest instead of settling.`,
+    );
+    i += 1;
+  }
+  if (length === "long") {
+    paras.push(
+      `They settle into a longer rhythm after that — escalation held, dialogue filthy, sensory detail thick enough that the continue stretch feels like its own chapter.`,
+    );
+  }
+  return paras;
+}
+
 /** Continue beat — ArkOfX-style append when user gives no new direction. */
 export function continueStory(
   previous: string,
   partnersOrOpts: PartnerRecord[] | StoryContinueOpts,
   povArg: ScenePov = "you",
   kinksArg: string[] = [],
+  lengthArg: SceneLength = "medium",
 ): string {
   const opts: StoryContinueOpts = Array.isArray(partnersOrOpts)
-    ? { partners: partnersOrOpts, pov: povArg, kinks: kinksArg }
+    ? {
+        partners: partnersOrOpts,
+        pov: povArg,
+        kinks: kinksArg,
+        length: lengthArg,
+      }
     : partnersOrOpts;
   const partners = opts.partners;
   const pov = opts.pov || "you";
   const kinks = opts.kinks || [];
+  const length = opts.length || "medium";
   const a = partners[0] ? displayName(partners[0]) : "They";
   const b = partners[1] ? displayName(partners[1]) : null;
   const kinkHint = kinks.length
@@ -1024,15 +1089,23 @@ export function continueStory(
     : "";
   const variants = b
     ? [
-        `\n\n---\n\n${a} and ${b} refuse to let the pace drop. Mouths and hands trade places, keeping the edge sharp until one of them decides you've earned more.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
-        `\n\n---\n\n${b} takes over while ${a} goes lower — tongue, fingers, filthy praise — until legs shake and breath breaks.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
-        `\n\n---\n\nThey flip the angle. ${a} holds you open; ${b} uses that opening without hurry. Talk stays specific enough to make you drip.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `${a} and ${b} refuse to let the pace drop. Mouths and hands trade places, keeping the edge sharp until one of them decides you've earned more.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `${b} takes over while ${a} goes lower — tongue, fingers, filthy praise — until legs shake and breath breaks.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `They flip the angle. ${a} holds you open; ${b} uses that opening without hurry. Talk stays specific enough to make you drip.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
       ]
     : [
-        `\n\n---\n\n${a} keeps going — slower, then deeper — narrating every inch until holding still feels impossible.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
-        `\n\n---\n\n${a} edges on purpose, then pulls you back into that heat and refuses the finish a little longer.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `${a} keeps going — slower, then deeper — narrating every inch until holding still feels impossible.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
+        `${a} edges on purpose, then pulls you back into that heat and refuses the finish a little longer.${kinkHint}${locHint}${roleHint}${intensityHint}${extraHint}`,
       ];
-  let beat = pickOne(variants);
+  const paras = lengthPadParagraphs(
+    [pickOne(variants)],
+    partners,
+    kinks,
+    length,
+    typeof opts.intensity === "number" ? opts.intensity : 7,
+    opts.roles,
+  );
+  let beat = `\n\n---\n\n${paras.join("\n\n")}`;
   beat = applyScenePov(beat, pov);
   return previous + beat;
 }
@@ -1041,12 +1114,14 @@ export function injectStoryDirection(
   previous: string,
   direction: string,
   partnersOrOpts: PartnerRecord[] | StoryContinueOpts,
+  lengthArg: SceneLength = "medium",
 ): string {
   const opts: StoryContinueOpts = Array.isArray(partnersOrOpts)
-    ? { partners: partnersOrOpts }
+    ? { partners: partnersOrOpts, length: lengthArg }
     : partnersOrOpts;
   const partners = opts.partners;
   const pov = opts.pov || "you";
+  const length = opts.length || lengthArg || "medium";
   const a = partners[0] ? displayName(partners[0]) : "They";
   const b = partners[1] ? displayName(partners[1]) : null;
   const d = direction.toLowerCase();
@@ -1056,40 +1131,59 @@ export function injectStoryDirection(
   const locHint = opts.location
     ? ` Still in the ${opts.location.name.toLowerCase()}.`
     : "";
-  let beat = `\n\n---\n\nYou say what you want: "${direction.trim()}"\n\n`;
+  const seed: string[] = [
+    `You say what you want: "${direction.trim()}"`,
+  ];
   let acted = false;
   if (/edge|deny|don't come|dont come|not yet/.test(d)) {
     acted = true;
-    beat +=
-      "They back off the second you get close. Touch lightens. Mouths hover. You're held right there — shaking — until they decide you can have more.\n\n";
+    seed.push(
+      "They back off the second you get close. Touch lightens. Mouths hover. You're held right there — shaking — until they decide you can have more.",
+    );
   }
   if (/ass|anal|hole|peg|strap/.test(d)) {
     acted = true;
-    beat +=
-      "Attention drops lower. Lube. Pressure at your hole. Slow push until you take it. They hold you open and talk while it happens.\n\n";
+    seed.push(
+      "Attention drops lower. Lube. Pressure at your hole. Slow push until you take it. They hold you open and talk while it happens.",
+    );
   }
   if (/group|another|join|third|watch/.test(d)) {
     acted = true;
-    beat +=
-      "The room gets more crowded. Another body moves in. Hands and mouths multiply. You're being shared.\n\n";
+    seed.push(
+      "The room gets more crowded. Another body moves in. Hands and mouths multiply. You're being shared.",
+    );
   }
   if (/mouth|suck|oral|throat|blow/.test(d)) {
     acted = true;
-    beat +=
-      "A mouth claims you again — wetter, hungrier — while hands keep the rest of you busy so you can't think past the next stroke.\n\n";
+    seed.push(
+      "A mouth claims you again — wetter, hungrier — while hands keep the rest of you busy so you can't think past the next stroke.",
+    );
   }
   if (/bondage|tie|cuff|spank/.test(d)) {
     acted = true;
-    beat +=
-      "Restraint tightens — wrists pinned or cuffed — and the next stretch of the scene is about control as much as pleasure.\n\n";
+    seed.push(
+      "Restraint tightens — wrists pinned or cuffed — and the next stretch of the scene is about control as much as pleasure.",
+    );
   }
   if (!acted) {
-    beat += b
-      ? `${a} and ${b} shift immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.\n\n`
-      : `${a} shifts immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.\n\n`;
+    seed.push(
+      b
+        ? `${a} and ${b} shift immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.`
+        : `${a} shifts immediately to match that. The next stretch is built around your words — pace, acts, talk — held long enough to land.`,
+    );
   }
-  beat +=
-    `They do not snap back to the old rhythm. This is the new line of the story until you steer again.${kinkHint}${locHint}`;
+  seed.push(
+    `They do not snap back to the old rhythm. This is the new line of the story until you steer again.${kinkHint}${locHint}`,
+  );
+  const paras = lengthPadParagraphs(
+    seed,
+    partners,
+    opts.kinks || [],
+    length,
+    typeof opts.intensity === "number" ? opts.intensity : 7,
+    opts.roles,
+  );
+  let beat = `\n\n---\n\n${paras.join("\n\n")}`;
   beat = applyScenePov(beat, pov);
   return previous + beat;
 }

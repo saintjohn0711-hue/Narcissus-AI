@@ -78,6 +78,7 @@ HARD RULES
 
 INITIAL DIRECTION (non-negotiable)
 - The user's scene kinks, location, intensity, length, roles, extra direction, surprises, and POV are the brief. Feature them in the prose.
+- Length (short / medium / long) applies to generate AND to continue/steer — never collapse a medium/long continue into a one-liner or stub.
 - Do NOT default to oral/anal (or any stock act) unless those kinks were selected or clearly implied by roles/extra.
 - If scene kinks are listed, those acts are the main through-line — not a footnote.
 - Weave partner looks, history, dynamics, and kink cards into character voice and action.
@@ -122,19 +123,18 @@ export function sceneUserPrompt(input: SceneGenerateInput): string {
         ? `POV: close third or first from the lead partner's body (${input.partners[0]?.name || "partner"}).`
         : "POV: cinematic third person following the cast.";
 
+  const budget = sceneLengthBudget(input.length);
   const lengthGuide =
-    input.length === "short"
-      ? "Length: SHORT (~350–550 words). One charged beat that still feels complete."
-      : input.length === "long"
-        ? "Length: LONG (~900–1400 words). Multiple position shifts, dialogue, edge/build, sensory density."
-        : "Length: MEDIUM (~550–850 words). Opening heat, escalation, a strong mid beat, clear peak.";
+    input.mode === "generate"
+      ? `Length: ${budget.label}. ${budget.generateGuide}`
+      : `Length: ${budget.label} — this applies to the NEW continue/steer prose you write now (not a tiny snippet). ${budget.continueGuide} Hit the word/paragraph target; do not collapse to a one-liner.`;
 
   const modeBlock =
     input.mode === "generate"
       ? "MODE: Write a brand-new scene from scratch that follows the INITIAL DIRECTION below."
       : input.mode === "continue"
-        ? "MODE: Continue the previous scene with a fresh beat (new acts/tension). Keep honoring the same kink/location/roles brief. Do not restart. Do not summarize. Return ONLY the new append-ready prose beat (no --- separators, do not repeat prior text)."
-        : `MODE: Steer the previous scene. Honor this direction literally and erotically: "${(input.direction || "").trim()}". Continue forward; do not restart. Return ONLY the new append-ready prose beat (no --- separators, do not repeat prior text).`;
+        ? "MODE: Continue the previous scene with a fresh stretch (new acts/tension) at the requested Length. Keep honoring the same kink/location/roles brief. Do not restart. Do not summarize. Return ONLY the new append-ready prose beat (no --- separators, do not repeat prior text)."
+        : `MODE: Steer the previous scene at the requested Length. Honor this direction literally and erotically: "${(input.direction || "").trim()}". Continue forward; do not restart. Write a full-length steered stretch — not a one-sentence acknowledgment. Return ONLY the new append-ready prose beat (no --- separators, do not repeat prior text).`;
 
   return [
     modeBlock,
@@ -159,18 +159,73 @@ export function sceneUserPrompt(input: SceneGenerateInput): string {
       ? `\nPREVIOUS SCENE TEXT:\n${input.previous.trim().slice(-6000)}`
       : null,
     "",
-    "Write the scene now. Lead with the selected kinks and setting — not a default template.",
+    input.mode === "generate"
+      ? "Write the scene now. Lead with the selected kinks and setting — not a default template."
+      : `Write the ${budget.label.toLowerCase()} continue/steer stretch now (~${budget.wordsMin}–${budget.wordsMax} words, ~${budget.paragraphsMin}–${budget.paragraphsMax} paragraphs). Lead with the selected kinks and setting — not a default template or a stub.`,
   ]
     .filter((x) => x !== null)
     .join("\n");
 }
 
+/** Shared short/medium/long targets for generate + continue/steer. */
+export type SceneLengthBudget = {
+  label: "SHORT" | "MEDIUM" | "LONG";
+  wordsMin: number;
+  wordsMax: number;
+  paragraphsMin: number;
+  paragraphsMax: number;
+  generateGuide: string;
+  continueGuide: string;
+  maxTokens: number;
+};
+
+export function sceneLengthBudget(length: SceneLength): SceneLengthBudget {
+  if (length === "short") {
+    return {
+      label: "SHORT",
+      wordsMin: 350,
+      wordsMax: 550,
+      paragraphsMin: 2,
+      paragraphsMax: 4,
+      generateGuide:
+        "One charged beat that still feels complete (~350–550 words, ~2–4 paragraphs).",
+      continueGuide:
+        "One charged continuation (~350–550 words, ~2–4 paragraphs) that advances acts/tension.",
+      maxTokens: 900,
+    };
+  }
+  if (length === "long") {
+    return {
+      label: "LONG",
+      wordsMin: 900,
+      wordsMax: 1400,
+      paragraphsMin: 6,
+      paragraphsMax: 10,
+      generateGuide:
+        "Multiple position shifts, dialogue, edge/build, sensory density (~900–1400 words, ~6–10 paragraphs).",
+      continueGuide:
+        "A long continuation with position shifts, dialogue, and sensory density (~900–1400 words, ~6–10 paragraphs).",
+      maxTokens: 3200,
+    };
+  }
+  return {
+    label: "MEDIUM",
+    wordsMin: 550,
+    wordsMax: 850,
+    paragraphsMin: 4,
+    paragraphsMax: 6,
+    generateGuide:
+      "Opening heat, escalation, a strong mid beat, clear peak (~550–850 words, ~4–6 paragraphs).",
+    continueGuide:
+      "A medium continuation with escalation and a strong mid beat (~550–850 words, ~4–6 paragraphs).",
+    maxTokens: 2000,
+  };
+}
+
 export function maxTokensFor(
   length: SceneLength,
-  mode: SceneGenerateInput["mode"],
+  _mode: SceneGenerateInput["mode"],
 ): number {
-  if (mode !== "generate") {
-    return length === "long" ? 1200 : length === "short" ? 500 : 800;
-  }
-  return length === "long" ? 3200 : length === "short" ? 900 : 2000;
+  // Continue/steer must hit the same short/medium/long word budgets as generate.
+  return sceneLengthBudget(length).maxTokens;
 }
