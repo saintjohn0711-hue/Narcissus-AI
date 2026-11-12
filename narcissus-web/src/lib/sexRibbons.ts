@@ -38,7 +38,7 @@ export const SEX_RIBBON_CATALOG: SexRibbonDef[] = [
     name: "Silk Memory",
     tier: 1,
     blurb: "Saved something lasting with a Muse.",
-    task: "Add a durable memory (Memories panel or “remember …” in chat).",
+    task: "Add a durable memory (Memories page/panel or “remember …” in chat).",
   },
   {
     id: "open-door",

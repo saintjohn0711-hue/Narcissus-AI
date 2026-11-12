@@ -38,6 +38,17 @@ export const MEMORY_KINDS: MuseMemoryKind[] = [
   "mode",
 ];
 
+export const MEMORY_KIND_LABEL: Record<MuseMemoryKind, string> = {
+  fact: "Fact",
+  relationship: "Relationship",
+  kink: "Kink",
+  place: "Place",
+  nickname: "Nickname",
+  scene: "Scene",
+  preference: "Preference",
+  mode: "Mode",
+};
+
 /**
  * Acceptance example (Carrie): relationship + preference memories that must
  * survive chat reset and re-enter the system brief.
