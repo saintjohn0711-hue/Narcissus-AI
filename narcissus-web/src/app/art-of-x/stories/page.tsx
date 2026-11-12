@@ -194,11 +194,21 @@ export default function StoriesPage() {
     };
 
     try {
-      const res = await fetch("/api/art-of-x/generate-scene", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      // Cap wait so a slow/504 LLM path falls back to local craft quickly
+      // instead of hanging on Vercel FUNCTION_INVOCATION_TIMEOUT (~60s).
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 12_000);
+      let res: Response;
+      try {
+        res = await fetch("/api/art-of-x/generate-scene", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timer);
+      }
       if (res.ok) {
         const data = (await res.json()) as {
           text?: string;
@@ -213,7 +223,7 @@ export default function StoriesPage() {
         }
       }
     } catch {
-      // fall through to local craft
+      // Abort / network / non-JSON — fall through to local craft
     }
 
     const brief = {
