@@ -1574,6 +1574,7 @@ body {
 
 .circle-status-dot {
   animation: echo-pulse 2.2s ease-in-out infinite;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .home-hero-art img,
