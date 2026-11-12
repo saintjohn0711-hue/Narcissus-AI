@@ -116,7 +116,10 @@ export type PartnerRecord = {
   voiceGender: MuseVoiceGender;
   /** Delivery preset: sultry/soft/bright (female) or deep/warm/smooth (male). */
   voicePreset: MuseVoicePresetId;
-  /** Optional browser SpeechSynthesisVoice.voiceURI override. */
+  /**
+   * Voice target: `accent:<BCP47>` locale preference (e.g. accent:en-GB),
+   * or a browser SpeechSynthesisVoice.voiceURI override.
+   */
   voiceId: string;
   createdAt: string;
   updatedAt: string;

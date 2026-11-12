@@ -27,13 +27,38 @@ export type MuseVoicePresetId =
   | "warm"
   | "smooth";
 
+/**
+ * Accent / locale preference. Stored on Muse `voiceId` as `accent:<BCP47>`
+ * when not an exact SpeechSynthesisVoice.voiceURI.
+ */
+export type MuseVoiceAccentId =
+  | "auto"
+  | "en-US"
+  | "en-GB"
+  | "en-AU"
+  | "en-IE"
+  | "en-IN"
+  | "en-ZA"
+  | "fr-FR"
+  | "es-ES"
+  | "es-MX"
+  | "it-IT"
+  | "pt-BR"
+  | "de-DE"
+  | "nl-NL";
+
 export type MuseVoiceSettings = {
   gender: MuseVoiceGender;
   /** Named delivery preset (pitch/rate). */
   preset: MuseVoicePresetId;
+  /** Locale accent preference (maps to Web Speech lang). */
+  accent: MuseVoiceAccentId;
   /** Optional SpeechSynthesisVoice.voiceURI — browser-specific. */
   voiceId?: string;
 };
+
+/** Prefix for encoding accent prefs into the Muse `voiceId` column. */
+export const VOICE_ACCENT_PREFIX = "accent:";
 
 export const MUSE_VOICE_PRESETS: Array<{
   id: MuseVoicePresetId;
@@ -101,6 +126,114 @@ export const MUSE_VOICE_PRESETS: Array<{
   },
 ];
 
+export const MUSE_VOICE_ACCENTS: Array<{
+  id: MuseVoiceAccentId;
+  label: string;
+  blurb: string;
+  /** BCP-47 lang tag preferred for SpeechSynthesisVoice.lang matching. */
+  lang: string;
+  group: "english" | "romance" | "other" | "auto";
+}> = [
+  {
+    id: "auto",
+    label: "Auto",
+    blurb: "Best English (or available) system voice for the gender.",
+    lang: "",
+    group: "auto",
+  },
+  {
+    id: "en-US",
+    label: "US",
+    blurb: "American English",
+    lang: "en-US",
+    group: "english",
+  },
+  {
+    id: "en-GB",
+    label: "UK",
+    blurb: "British English",
+    lang: "en-GB",
+    group: "english",
+  },
+  {
+    id: "en-AU",
+    label: "AU",
+    blurb: "Australian English",
+    lang: "en-AU",
+    group: "english",
+  },
+  {
+    id: "en-IE",
+    label: "IE",
+    blurb: "Irish English",
+    lang: "en-IE",
+    group: "english",
+  },
+  {
+    id: "en-IN",
+    label: "IN",
+    blurb: "Indian English",
+    lang: "en-IN",
+    group: "english",
+  },
+  {
+    id: "en-ZA",
+    label: "ZA",
+    blurb: "South African English",
+    lang: "en-ZA",
+    group: "english",
+  },
+  {
+    id: "fr-FR",
+    label: "FR",
+    blurb: "French",
+    lang: "fr-FR",
+    group: "romance",
+  },
+  {
+    id: "es-ES",
+    label: "ES",
+    blurb: "Spanish (Spain)",
+    lang: "es-ES",
+    group: "romance",
+  },
+  {
+    id: "es-MX",
+    label: "MX",
+    blurb: "Spanish (Mexico)",
+    lang: "es-MX",
+    group: "romance",
+  },
+  {
+    id: "it-IT",
+    label: "IT",
+    blurb: "Italian",
+    lang: "it-IT",
+    group: "romance",
+  },
+  {
+    id: "pt-BR",
+    label: "BR",
+    blurb: "Portuguese (Brazil)",
+    lang: "pt-BR",
+    group: "romance",
+  },
+  {
+    id: "de-DE",
+    label: "DE",
+    blurb: "German",
+    lang: "de-DE",
+    group: "other",
+  },
+  {
+    id: "nl-NL",
+    label: "NL",
+    blurb: "Dutch",
+    lang: "nl-NL",
+    group: "other",
+  },
+];
+
 const FEMALE_NAME =
   /\b(female|woman|girl|zira|samantha|victoria|karen|moira|tessa|fiona|veena|susan|hazel|catherine|sarah|aria|jenny|sonia|sara|ava|emma|amy|allison|linda|heather|kathy|julie|melina|serena|nora|joanna|ivy|kimberly|salli|lisa|natalie|olivia|emily|anna)\b/i;
 const MALE_NAME =
@@ -129,6 +262,10 @@ export function isMuseVoicePresetId(v: unknown): v is MuseVoicePresetId {
   return MUSE_VOICE_PRESETS.some((p) => p.id === v);
 }
 
+export function isMuseVoiceAccentId(v: unknown): v is MuseVoiceAccentId {
+  return MUSE_VOICE_ACCENTS.some((a) => a.id === v);
+}
+
 export function normalizeVoiceGender(
   raw: unknown,
   museGender?: MusePresentationGender,
@@ -148,6 +285,46 @@ export function normalizeVoicePreset(
   return "auto";
 }
 
+export function normalizeVoiceAccent(raw: unknown): MuseVoiceAccentId {
+  if (isMuseVoiceAccentId(raw)) return raw;
+  return "auto";
+}
+
+export type ParsedVoiceId =
+  | { kind: "none" }
+  | { kind: "accent"; accent: MuseVoiceAccentId }
+  | { kind: "uri"; uri: string };
+
+/** Decode Muse `voiceId`: accent tag, exact URI, or empty. */
+export function parseVoiceId(raw: unknown): ParsedVoiceId {
+  if (typeof raw !== "string") return { kind: "none" };
+  const trimmed = raw.trim().slice(0, 200);
+  if (!trimmed) return { kind: "none" };
+  if (trimmed.toLowerCase().startsWith(VOICE_ACCENT_PREFIX)) {
+    const tag = trimmed.slice(VOICE_ACCENT_PREFIX.length).trim();
+    const accent = normalizeVoiceAccent(tag);
+    if (accent === "auto") return { kind: "none" };
+    return { kind: "accent", accent };
+  }
+  return { kind: "uri", uri: trimmed };
+}
+
+/** Persist accent preference into Muse `voiceId` (keeps URI if present). */
+export function encodeAccentVoiceId(accent: MuseVoiceAccentId): string {
+  if (accent === "auto") return "";
+  return `${VOICE_ACCENT_PREFIX}${accent}`;
+}
+
+export function accentFromVoiceId(raw: unknown): MuseVoiceAccentId {
+  const parsed = parseVoiceId(raw);
+  return parsed.kind === "accent" ? parsed.accent : "auto";
+}
+
+export function exactVoiceUriFromVoiceId(raw: unknown): string | undefined {
+  const parsed = parseVoiceId(raw);
+  return parsed.kind === "uri" ? parsed.uri : undefined;
+}
+
 export function voiceSettingsFromPartner(partner: {
   gender?: MusePresentationGender;
   voiceGender?: string;
@@ -155,13 +332,12 @@ export function voiceSettingsFromPartner(partner: {
   voiceId?: string;
 }): MuseVoiceSettings {
   const gender = normalizeVoiceGender(partner.voiceGender, partner.gender);
+  const parsed = parseVoiceId(partner.voiceId);
   return {
     gender,
     preset: normalizeVoicePreset(partner.voicePreset, gender),
-    voiceId:
-      typeof partner.voiceId === "string" && partner.voiceId.trim()
-        ? partner.voiceId.trim()
-        : undefined,
+    accent: parsed.kind === "accent" ? parsed.accent : "auto",
+    voiceId: parsed.kind === "uri" ? parsed.uri : undefined,
   };
 }
 
@@ -169,10 +345,18 @@ export function getVoicePreset(id: MuseVoicePresetId) {
   return MUSE_VOICE_PRESETS.find((p) => p.id === id) || MUSE_VOICE_PRESETS[0]!;
 }
 
+export function getVoiceAccent(id: MuseVoiceAccentId) {
+  return MUSE_VOICE_ACCENTS.find((a) => a.id === id) || MUSE_VOICE_ACCENTS[0]!;
+}
+
 export function presetsForGender(gender: MuseVoiceGender) {
   return MUSE_VOICE_PRESETS.filter(
     (p) => p.genders === "both" || p.genders.includes(gender),
   );
+}
+
+export function accentLabel(id: MuseVoiceAccentId): string {
+  return getVoiceAccent(id).label;
 }
 
 export function speechSupported(): boolean {
@@ -200,16 +384,43 @@ export function warmSpeechVoices(): () => void {
   return () => synth.removeEventListener?.("voiceschanged", onChange);
 }
 
+function normalizeLangTag(lang: string): string {
+  return String(lang || "")
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, "-");
+}
+
+function langPrimary(lang: string): string {
+  return normalizeLangTag(lang).split("-")[0] || "";
+}
+
 function scoreVoice(
   voice: SpeechSynthesisVoice,
   gender: MuseVoiceGender,
+  accent: MuseVoiceAccentId,
 ): number {
   let score = 0;
   const blob = `${voice.name} ${voice.voiceURI} ${voice.lang}`;
-  const lang = voice.lang.toLowerCase();
-  if (lang.startsWith("en")) score += 40;
-  else if (lang.startsWith("en-")) score += 35;
-  else score -= 20;
+  const voiceLang = normalizeLangTag(voice.lang);
+  const accentDef = getVoiceAccent(accent);
+  const wantLang = normalizeLangTag(accentDef.lang);
+
+  if (wantLang) {
+    if (voiceLang === wantLang) score += 70;
+    else if (langPrimary(voiceLang) === langPrimary(wantLang)) {
+      // Same language family (e.g. en-AU vs en-GB) — useful fallback
+      score += 28;
+      // Prefer closer regional tags when present in the name/URI
+      const region = wantLang.split("-")[1];
+      if (region && blob.toLowerCase().includes(region)) score += 12;
+    } else {
+      score -= 35;
+    }
+  } else {
+    if (voiceLang.startsWith("en")) score += 40;
+    else score -= 20;
+  }
 
   const femaleHit = FEMALE_NAME.test(blob);
   const maleHit = MALE_NAME.test(blob);
@@ -242,10 +453,11 @@ export function pickSpeechVoice(
     if (exact) return exact;
   }
 
+  const accent = normalizeVoiceAccent(settings.accent);
   let best: SpeechSynthesisVoice | null = null;
   let bestScore = -Infinity;
   for (const v of voices) {
-    const s = scoreVoice(v, settings.gender);
+    const s = scoreVoice(v, settings.gender, accent);
     if (s > bestScore) {
       bestScore = s;
       best = v;
@@ -342,13 +554,14 @@ export function speakMessage(
   stopNarration();
 
   const preset = getVoicePreset(settings.preset);
+  const accent = getVoiceAccent(normalizeVoiceAccent(settings.accent));
   const utter = new SpeechSynthesisUtterance(cleaned);
   const voice = pickSpeechVoice(settings);
   if (voice) utter.voice = voice;
   utter.rate = preset.rate;
   utter.pitch = preset.pitch;
   utter.volume = 1;
-  utter.lang = voice?.lang || "en-US";
+  utter.lang = voice?.lang || accent.lang || "en-US";
 
   activeUtterance = utter;
   activeMessageId = messageId;

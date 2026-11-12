@@ -998,6 +998,56 @@ body {
   flex-shrink: 0;
 }
 
+/* Keep Voice options phone-friendly — scroll inside the panel, don't crush messages */
+.muse-voice-panel-body {
+  max-height: min(42dvh, 18rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 0.15rem;
+}
+
+.muse-voice-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.muse-voice-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  min-width: 2.4rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(229, 195, 178, 0.22);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.muse-voice-chip:hover,
+.muse-voice-chip:focus-visible {
+  border-color: rgba(196, 160, 140, 0.45);
+  color: var(--ink);
+}
+
+.muse-voice-chip--on {
+  border-color: rgba(196, 160, 140, 0.65);
+  background: rgba(196, 160, 140, 0.15);
+  color: var(--accent-strong);
+}
+
+@media (min-width: 640px) {
+  .muse-voice-panel-body {
+    max-height: min(36dvh, 20rem);
+  }
+}
+
 .muse-chat-msg-edit-btn {
   min-height: 2rem;
   min-width: 2.75rem;
