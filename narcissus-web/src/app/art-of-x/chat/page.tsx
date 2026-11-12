@@ -141,6 +141,9 @@ function ChatPageInner() {
   const [memoryDraft, setMemoryDraft] = useState("");
   const [memoryKind, setMemoryKind] = useState<MuseMemoryKind>("relationship");
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  /** Inline edit for the user's own chat bubbles (not the composer). */
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
   const [reactionReply, setReactionReply] = useState<{
     id: string;
     text: string;
@@ -314,6 +317,11 @@ function ChatPageInner() {
         )
       : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
+
+  useEffect(() => {
+    setEditingMessageId(null);
+    setEditDraft("");
+  }, [threadKey]);
   const castLabel = partner
     ? castPartners.length > 0
       ? [displayName(partner), ...castPartners.map((p) => displayName(p))].join(
@@ -418,6 +426,32 @@ function ChatPageInner() {
       return;
     }
     setCastSelection([...cur, id]);
+  }
+
+  function beginEditMessage(m: ChatMessage) {
+    if (m.who !== "You" || sending) return;
+    setEditingMessageId(m.id);
+    setEditDraft(m.text);
+  }
+
+  function cancelEditMessage() {
+    setEditingMessageId(null);
+    setEditDraft("");
+  }
+
+  function saveEditMessage() {
+    if (!editingMessageId || !threadKey) return;
+    const nextText = editDraft.trim();
+    if (!nextText) return;
+    const id = editingMessageId;
+    setChats((prev) => ({
+      ...prev,
+      [threadKey]: (prev[threadKey] || []).map((m) =>
+        m.id === id ? { ...m, text: nextText } : m,
+      ),
+    }));
+    setEditingMessageId(null);
+    setEditDraft("");
   }
 
   async function persistPartnerPatch(
@@ -808,6 +842,8 @@ function ChatPageInner() {
 
     setResetting(true);
     setError(null);
+    setEditingMessageId(null);
+    setEditDraft("");
     try {
       skipPersist.current = true;
       if (castPartners.length > 0) {
@@ -1172,16 +1208,21 @@ function ChatPageInner() {
             >
               {partner && (
                 <div className="muse-chat-drawer-header flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)]">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <h2
-                      className="text-xl text-[var(--ink)]"
+                      className="muse-chat-drawer-header-title text-xl text-[var(--ink)]"
                       style={{ fontFamily: "var(--font-display), serif" }}
+                      title={castLabel}
                     >
-                      {castLabel}
+                      {castPartners.length >= 2 && partner
+                        ? `${displayName(partner)} + ${castPartners.length}`
+                        : castLabel}
                     </h2>
-                    <p className="mt-1 text-xs text-[#c4b7a8]">
+                    <p className="mt-1 truncate text-xs text-[#c4b7a8]" title={castLabel}>
                       {castModeLabel
-                        ? castModeLabel
+                        ? castPartners.length >= 2
+                          ? `${castModeLabel} · ${castLabel}`
+                          : castModeLabel
                         : companionFull
                           ? "Companion · Adults 18+"
                           : partner.dynTags.slice(0, 3).join(" · ") ||
@@ -1189,12 +1230,12 @@ function ChatPageInner() {
                       {modelLabel ? ` · ${modelLabel}` : ""}
                     </p>
                     {castPickOptions.length > 0 && (
-                      <div className="mt-2 space-y-1.5">
+                      <div className="muse-chat-cast-chrome">
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setCastPickerOpen((v) => !v)}
-                            className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                            className="rounded-sm border border-[var(--line)] px-2.5 py-1.5 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
                             aria-expanded={castPickerOpen}
                             data-testid="muse-cast-picker-toggle"
                           >
@@ -1205,8 +1246,11 @@ function ChatPageInner() {
                           {castPartners.length > 0 && (
                             <button
                               type="button"
-                              onClick={() => setCastSelection([])}
-                              className="text-[11px] text-[var(--muted)] underline-offset-2 hover:text-[var(--ink)] hover:underline"
+                              onClick={() => {
+                                setCastSelection([]);
+                                setCastPickerOpen(false);
+                              }}
+                              className="min-h-[1.85rem] px-1 text-[11px] text-[var(--muted)] underline-offset-2 hover:text-[var(--ink)] hover:underline"
                             >
                               Solo
                             </button>
@@ -1214,7 +1258,7 @@ function ChatPageInner() {
                         </div>
                         {castPartners.length > 0 && (
                           <ul
-                            className="flex flex-wrap gap-1.5"
+                            className="muse-chat-cast-chips mt-1.5"
                             aria-label="Active cast"
                           >
                             {castPartners.map((p) => (
@@ -1222,7 +1266,7 @@ function ChatPageInner() {
                                 <button
                                   type="button"
                                   onClick={() => toggleCastMate(p.id)}
-                                  className="inline-flex items-center gap-1.5 border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-1 text-[11px] text-[var(--ink)]"
+                                  className="muse-chat-cast-chip"
                                   title={`Remove ${displayName(p)}`}
                                 >
                                   {mainPhoto(p) ? (
@@ -1230,7 +1274,6 @@ function ChatPageInner() {
                                     <img
                                       src={mainPhoto(p)!}
                                       alt=""
-                                      className="h-4 w-4 object-cover"
                                     />
                                   ) : null}
                                   {displayName(p)}
@@ -1244,7 +1287,7 @@ function ChatPageInner() {
                         )}
                         {castPickerOpen && (
                           <div
-                            className="max-h-40 overflow-y-auto border border-[var(--line)] bg-[#0c101c] p-2"
+                            className="muse-chat-cast-picker"
                             data-testid="muse-cast-picker"
                           >
                             <p className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
@@ -1261,7 +1304,7 @@ function ChatPageInner() {
                                 );
                                 return (
                                   <li key={p.id}>
-                                    <label className="flex cursor-pointer items-center gap-2 px-1 py-1 text-sm text-[var(--ink)] hover:bg-[var(--glow)]/5">
+                                    <label className="flex min-h-[2.25rem] cursor-pointer items-center gap-2 px-1 py-1 text-sm text-[var(--ink)] hover:bg-[var(--glow)]/5">
                                       <input
                                         type="checkbox"
                                         checked={on}
@@ -1650,28 +1693,81 @@ function ChatPageInner() {
                       : "Say something filthy. Her portrait stays with you."}
                   </p>
                 )}
-                {messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`max-w-[90%] rounded-sm px-4 py-3 text-base leading-[1.65] ${
-                      m.who === "You"
-                        ? "ml-auto bg-[var(--accent)]/20 text-[#f7f1e8]"
-                        : "bg-[#12182a] text-[#f7f1e8]"
-                    }`}
-                  >
-                    <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                      {m.who === "Partner" && partner
-                        ? castPartners.length > 0
-                          ? castLabel
-                          : displayName(partner)
-                        : m.who}
-                    </p>
-                    <p className="whitespace-pre-wrap">
-                      {m.text ||
-                        (sending && m.who === "Partner" ? "…" : "")}
-                    </p>
-                  </div>
-                ))}
+                {messages.map((m) => {
+                  const isEditingYou =
+                    m.who === "You" && editingMessageId === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      className={`max-w-[90%] rounded-sm px-4 py-3 text-base leading-[1.65] ${
+                        m.who === "You"
+                          ? "ml-auto bg-[var(--accent)]/20 text-[#f7f1e8]"
+                          : "bg-[#12182a] text-[#f7f1e8]"
+                      }`}
+                      data-testid={
+                        m.who === "You" ? "muse-chat-user-bubble" : undefined
+                      }
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                          {m.who === "Partner" && partner
+                            ? castPartners.length > 0
+                              ? castLabel
+                              : displayName(partner)
+                            : m.who}
+                        </p>
+                        {m.who === "You" && !isEditingYou && (
+                          <button
+                            type="button"
+                            className="muse-chat-msg-edit-btn"
+                            onClick={() => beginEditMessage(m)}
+                            disabled={sending}
+                            data-testid={`muse-chat-edit-${m.id}`}
+                            aria-label="Edit your message"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                      {isEditingYou ? (
+                        <div>
+                          <textarea
+                            className="muse-chat-msg-edit-field"
+                            value={editDraft}
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            aria-label="Edit message"
+                            data-testid="muse-chat-edit-field"
+                            autoFocus
+                          />
+                          <div className="muse-chat-msg-edit-actions">
+                            <button
+                              type="button"
+                              onClick={saveEditMessage}
+                              disabled={!editDraft.trim()}
+                              className="border border-[var(--accent)]/55 bg-[var(--accent)] px-3 text-[var(--on-accent)] disabled:opacity-50"
+                              data-testid="muse-chat-edit-save"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={cancelEditMessage}
+                              className="border border-[var(--line)] text-[var(--soft)] hover:text-[var(--ink)]"
+                              data-testid="muse-chat-edit-cancel"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-wrap">
+                          {m.text ||
+                            (sending && m.who === "Partner" ? "…" : "")}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
                 <div ref={bottomRef} />
               </div>
 
