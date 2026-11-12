@@ -1488,23 +1488,56 @@ body {
   }
 }
 
-/* Muse photo slides fill the stage (Companion art still uses contain/fit) */
+/* Muse photo slides: show the entire photo (no cover crop). Companion art still uses fit/fill. */
 .muse-presence-stage--muse-photo .muse-presence-photo,
 .muse-presence-stage--muse-photo.muse-presence-stage--fit-fit .muse-presence-photo,
 .muse-presence-stage--muse-photo.muse-presence-stage--fit-fill .muse-presence-photo,
 .muse-presence-style-cartoon.muse-presence-stage--muse-photo .muse-presence-photo {
-  object-fit: cover !important;
-  object-position: center 18% !important;
+  object-fit: contain !important;
+  object-position: center center !important;
   inset: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  background: transparent !important;
+  /* Cover breathe scales past the frame and clips contain — keep still */
+  animation: none !important;
+  background: linear-gradient(165deg, #12182a 0%, #080b14 55%, #05070e 100%) !important;
 }
 
-/* Keep faces in the visible stage band left of the opaque chat rail */
+/*
+ * Chat open: fit the full Muse photo inside the *visible* stage band
+ * (phone: above the sheet + slim dock; desktop: left of the opaque rail).
+ * Contain on the full-bleed stage alone still hides under the overlay.
+ */
+@media (max-width: 640px) {
+  .muse-chat-stage--chat-open .muse-presence-stage--muse-photo .muse-presence-viewport,
+  .muse-presence--chat-open .muse-presence-stage--muse-photo .muse-presence-viewport {
+    inset: auto;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* Clear slim Companion dock sitting above the open sheet (~4.5–5rem tall) */
+    bottom: calc(min(54dvh, 500px) + 5.1rem);
+  }
+
+  .muse-chat-stage--chat-open .muse-presence-stage--muse-photo .muse-presence-parallax,
+  .muse-presence--chat-open .muse-presence-stage--muse-photo .muse-presence-parallax {
+    /* Avoid nudge that would clip a contained frame */
+    transform: none !important;
+  }
+}
+
 @media (min-width: 1024px) {
-  .muse-chat-stage--chat-open .muse-presence-stage--muse-photo .muse-presence-photo {
-    object-position: 38% center !important;
+  .muse-chat-stage--chat-open .muse-presence-stage--muse-photo .muse-presence-viewport {
+    inset: auto;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    /* Visible column left of the ~46vw / 42rem chat rail */
+    right: min(42rem, 46vw);
+  }
+
+  .muse-chat-stage--chat-open .muse-presence-stage--muse-photo .muse-presence-parallax {
+    transform: none !important;
   }
 }
 
