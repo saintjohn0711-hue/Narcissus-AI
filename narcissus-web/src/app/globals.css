@@ -630,8 +630,8 @@ body {
     right: 0.5rem;
     width: auto;
     /* Sit just above the opaque chat sheet; keep dock compact so the portrait stays visible */
-    bottom: calc(min(52dvh, 460px) + 0.55rem);
-    max-height: min(22dvh, 180px);
+    bottom: calc(min(66dvh, 580px) + 0.55rem);
+    max-height: min(18dvh, 150px);
     overflow: auto;
   }
 
@@ -679,7 +679,7 @@ body {
   bottom: 0.5rem;
   left: 0.5rem;
   width: auto;
-  max-height: min(56dvh, 500px);
+  max-height: min(64dvh, 560px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -721,7 +721,7 @@ body {
 }
 
 .muse-chat-empty {
-  max-width: 26rem;
+  max-width: 32rem;
   color: #e8dcd0;
 }
 
@@ -736,30 +736,31 @@ body {
     left: auto;
     right: 0.75rem;
     bottom: 0.75rem;
-    width: min(30rem, calc(100vw - 1.5rem));
-    max-height: min(60dvh, 560px);
+    width: min(36rem, calc(100vw - 1.5rem));
+    max-height: min(66dvh, 640px);
   }
 
   .muse-chat-drawer-header {
-    padding: 1.15rem 1.35rem 1.05rem;
+    padding: 1.2rem 1.45rem 1.1rem;
   }
 
   .muse-chat-drawer-messages {
-    padding: 1.25rem 1.35rem;
+    padding: 1.35rem 1.45rem;
   }
 
   .muse-chat-drawer-composer {
-    padding: 1.05rem 1.35rem;
+    padding: 1.1rem 1.45rem;
   }
 }
 
 @media (min-width: 1024px) {
   .muse-chat-drawer {
-    top: 4.25rem;
-    right: 1.1rem;
-    bottom: 1.1rem;
+    top: 4rem;
+    right: 0.9rem;
+    bottom: 0.9rem;
     left: auto;
-    width: min(34rem, 40vw);
+    /* ~42–48% rail / min ~42rem — readability over portrait width */
+    width: min(42rem, 46vw);
     max-height: none;
   }
 
@@ -768,31 +769,31 @@ body {
   }
 
   .muse-chat-drawer-header {
-    padding: 1.25rem 1.5rem 1.1rem;
+    padding: 1.35rem 1.65rem 1.2rem;
   }
 
   .muse-chat-drawer-messages {
-    padding: 1.35rem 1.5rem;
+    padding: 1.45rem 1.65rem;
   }
 
   .muse-chat-drawer-messages--empty {
-    padding-top: 1.9rem;
-    padding-bottom: 1.9rem;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
   }
 
   .muse-chat-drawer-composer {
-    padding: 1.1rem 1.5rem 1.25rem;
+    padding: 1.2rem 1.65rem 1.35rem;
   }
 }
 
-/* Phone: full-width bottom sheet; leave portrait + dock room above */
+/* Phone: taller bottom sheet so many messages read without feeling cramped */
 @media (max-width: 640px) {
   .muse-chat-drawer {
-    left: 0.4rem;
-    right: 0.4rem;
-    bottom: 0.4rem;
+    left: 0.35rem;
+    right: 0.35rem;
+    bottom: 0.35rem;
     width: auto;
-    max-height: min(52dvh, 460px);
+    max-height: min(66dvh, 580px);
   }
 }
 
