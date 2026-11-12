@@ -69,9 +69,8 @@ type MusePresenceProps = {
   /** Companion dock: Muse list for a calm in-dock switcher (replaces top strip). */
   museOptions?: PartnerRecord[];
   onSelectMuse?: (id: number) => void;
-  /** Companion dock: chat drawer open state + toggle (replaces floating button). */
+  /** When true, collapse Look/Customize/Actions so the open chat panel owns the chrome. */
   chatOpen?: boolean;
-  onToggleChat?: () => void;
   /** Persist Muse photos after in-dock likeness upload. */
   onPartnerPhotosChange?: (
     photos: string[],
@@ -108,7 +107,6 @@ export function MusePresence({
   museOptions,
   onSelectMuse,
   chatOpen,
-  onToggleChat,
   onPartnerPhotosChange,
 }: MusePresenceProps) {
   const sceneCast = (() => {
@@ -879,6 +877,11 @@ export function MusePresence({
     setDockSection((cur) => (cur === section ? null : section));
   }
 
+  /** When the chat drawer opens, collapse Look/Customize/Actions so messages win. */
+  useEffect(() => {
+    if (chatOpen) setDockSection(null);
+  }, [chatOpen]);
+
   const chipClass = (selected: boolean, danger = false) =>
     `rounded-sm border px-2.5 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
       selected
@@ -1122,16 +1125,6 @@ export function MusePresence({
                     ),
                   )}
                 </div>
-              )}
-              {onToggleChat && (
-                <button
-                  type="button"
-                  className="muse-companion-chat-toggle"
-                  onClick={onToggleChat}
-                  aria-pressed={Boolean(chatOpen)}
-                >
-                  {chatOpen ? "Hide chat" : "Chat"}
-                </button>
               )}
               <div className="muse-companion-dock-fit" role="group" aria-label="Stage fit">
                 <button
