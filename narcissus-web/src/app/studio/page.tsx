@@ -19,9 +19,14 @@ import {
   ACT_TEMPLATES,
   OUTFIT_TEMPLATES,
   SAY_VOICES,
+  VIDEO_ACT_TEMPLATES,
+  VIDEO_MOTION_TEMPLATES,
+  VIDEO_SPEAK_TEMPLATES,
+  VIDEO_SWAP_TEMPLATES,
   VIDEO_TEMPLATES,
   getPhotoTemplate,
   getSayVoice,
+  getVideoTemplate,
   type PhotoTemplateId,
   type VideoTemplateId,
 } from "@/lib/templates";
@@ -44,26 +49,27 @@ type JobResult = {
   prompt?: string | null;
   speech?: string | null;
   voice?: string | null;
+  speechMuxed?: boolean;
   template?: string | null;
   error?: string;
 };
 
 const MODES: Array<[JobMode, string]> = [
-  ["custom", "Custom photo"],
   ["scene", "Scene photo"],
-  ["faceswap", "Face swap"],
+  ["faceswap", "Face swap still"],
   ["undress", "Clothing removal"],
   ["video", "Photo → video"],
+  ["custom", "Custom photo"],
 ];
 
 export default function StudioPage() {
   const [adultsOk, setAdultsOk] = useState(false);
-  const [mode, setMode] = useState<JobMode>("scene");
-  const [prompt, setPrompt] = useState(defaultPromptFor("scene"));
+  const [mode, setMode] = useState<JobMode>("video");
+  const [prompt, setPrompt] = useState(defaultPromptFor("video"));
   const [speech, setSpeech] = useState("Hey… come closer.");
   const [photoTemplate, setPhotoTemplate] =
     useState<PhotoTemplateId>("blowjob");
-  const [template, setTemplate] = useState<VideoTemplateId>("blowjob");
+  const [template, setTemplate] = useState<VideoTemplateId>("face_swap");
   const [voice, setVoice] = useState(SAY_VOICES[0]!.id);
   const [bodyType, setBodyType] = useState<BodyTypeId>("female");
   const [cockState, setCockState] = useState<CockStateId>("hard");
@@ -81,26 +87,46 @@ export default function StudioPage() {
   const [job, setJob] = useState<JobResult | null>(null);
 
   const activePhotoTemplate = getPhotoTemplate(photoTemplate);
-  const activeTemplate = VIDEO_TEMPLATES.find((t) => t.id === template)!;
+  const activeTemplate = getVideoTemplate(template);
   const activeVoice = getSayVoice(voice);
   const activeBody = BODY_TYPES.find((b) => b.id === bodyType)!;
-  const showCockOptions = mode === "undress" && activeBody.needsCock;
+
+  const needsFace =
+    mode === "faceswap" || (mode === "video" && Boolean(activeTemplate.needsFace));
+  const showBodyOptions =
+    mode === "undress" ||
+    (mode === "scene" && Boolean(activePhotoTemplate.useBodyOptions)) ||
+    (mode === "video" && Boolean(activeTemplate.useBodyOptions));
+  const showCockOptions = showBodyOptions && activeBody.needsCock;
 
   const canSubmit = useMemo(() => {
     if (!adultsOk || !file || busy) return false;
-    if (mode === "faceswap" && !faceFile) return false;
+    if (needsFace && !faceFile) return false;
     if (mode === "custom" && !prompt.trim()) return false;
     if (mode === "video" && activeTemplate.needsSpeech && !speech.trim()) {
       return false;
     }
     return true;
-  }, [adultsOk, file, faceFile, busy, mode, prompt, activeTemplate, speech]);
+  }, [
+    adultsOk,
+    file,
+    faceFile,
+    busy,
+    mode,
+    prompt,
+    activeTemplate,
+    speech,
+    needsFace,
+  ]);
 
   function selectMode(next: JobMode) {
     setMode(next);
     setJob(null);
     setError(null);
     setPrompt(defaultPromptFor(next));
+    if (next === "video" && !VIDEO_TEMPLATES.some((t) => t.id === template)) {
+      setTemplate("natural");
+    }
   }
 
   function onFile(f: File | null) {
@@ -122,7 +148,7 @@ export default function StudioPage() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit || !file) return;
-    if (mode === "faceswap" && !faceFile) return;
+    if (needsFace && !faceFile) return;
     setBusy(true);
     setError(null);
     setJob(null);
@@ -130,11 +156,11 @@ export default function StudioPage() {
       const size = outputSizeForMode(mode === "scene" ? "custom" : mode);
       // Face swap needs a filled frame with a visible face — cover/center beats letterbox.
       const prepared = await preparePhoto(file, {
-        fit: mode === "faceswap" ? "cover" : fit,
+        fit: needsFace ? "cover" : fit,
         width: size.width,
         height: size.height,
-        cropX: mode === "faceswap" ? 0.5 : cropX,
-        cropY: mode === "faceswap" ? 0.35 : cropY,
+        cropX: needsFace ? 0.5 : cropX,
+        cropY: needsFace ? 0.35 : cropY,
         mime: "image/jpeg",
         quality: 0.95,
       });
@@ -145,7 +171,7 @@ export default function StudioPage() {
           type: "image/jpeg",
         }),
       );
-      if (mode === "faceswap" && faceFile) {
+      if (needsFace && faceFile) {
         const facePrepared = await preparePhoto(faceFile, {
           fit: "cover",
           width: 512,
@@ -176,8 +202,11 @@ export default function StudioPage() {
         body.set("template", template);
         if (speech.trim()) body.set("speech", speech.trim());
         if (activeTemplate.needsSpeech) body.set("voice", voice);
+        if (prompt.trim() && activeTemplate.useBodyOptions) {
+          body.set("prompt", prompt.trim());
+        }
       }
-      if (mode === "undress") {
+      if (showBodyOptions) {
         body.set("bodyType", bodyType);
         if (activeBody.needsCock) {
           body.set("cockState", cockState);
@@ -211,6 +240,32 @@ export default function StudioPage() {
     }`;
   }
 
+  function renderVideoGroup(
+    title: string,
+    items: typeof VIDEO_TEMPLATES,
+  ) {
+    if (!items.length) return null;
+    return (
+      <fieldset className="space-y-3">
+        <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+          {title}
+        </legend>
+        <div className="flex flex-wrap gap-3">
+          {items.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTemplate(t.id as VideoTemplateId)}
+              className={templateButtonClass(template === t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+    );
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
       <AppNav />
@@ -225,9 +280,9 @@ export default function StudioPage() {
           Narcissus
         </h1>
         <p className="mt-3 max-w-xl text-base font-light leading-relaxed text-[#c4b7a8]">
-          Keep their face and hair. Scene templates, outfit changes, clothing
-          removal, face swap, and 5s video with voices — Art of X lives in the
-          menu above.
+          Face swap still + video, scene acts, undress with gender/cock options,
+          and 5s clips (natural, sex acts, say-this). Your face stays yours —
+          Muses live in the menu above.
         </p>
       </header>
 
@@ -235,7 +290,7 @@ export default function StudioPage() {
         <section className="space-y-6">
           <div className="space-y-3">
             <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-              {mode === "faceswap" ? "Source photo (body / scene)" : "Source photo"}
+              {needsFace ? "Source photo (body / scene)" : "Source photo"}
             </span>
             <div className="relative flex min-h-72 w-full items-center justify-center overflow-hidden rounded-sm border border-dashed border-[var(--line)] bg-[#12100e]">
               {preview ? (
@@ -251,7 +306,7 @@ export default function StudioPage() {
                 />
               ) : (
                 <span className="px-6 text-center text-sm text-[#c4b7a8]">
-                  {mode === "faceswap"
+                  {needsFace
                     ? "Body or scene that will receive the new face"
                     : "Drop or choose a clear face photo"}
                 </span>
@@ -265,7 +320,7 @@ export default function StudioPage() {
             />
           </div>
 
-          {mode === "faceswap" && (
+          {needsFace && (
             <div className="space-y-3">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
                 Face to swap
@@ -282,6 +337,7 @@ export default function StudioPage() {
                 ) : (
                   <span className="px-6 text-center text-sm text-[#c4b7a8]">
                     Clear frontal face of the person you want on the source
+                    {mode === "video" ? " — then we animate 5s" : ""}
                   </span>
                 )}
               </div>
@@ -405,10 +461,22 @@ export default function StudioPage() {
             </>
           )}
 
-          {mode === "undress" && (
+          {mode === "video" && (
+            <div className="space-y-6">
+              {renderVideoGroup("Motion", VIDEO_MOTION_TEMPLATES)}
+              {renderVideoGroup("Sex acts (5s)", VIDEO_ACT_TEMPLATES)}
+              {renderVideoGroup("Speak", VIDEO_SPEAK_TEMPLATES)}
+              {renderVideoGroup("Face swap video", VIDEO_SWAP_TEMPLATES)}
+              <p className="text-xs text-[#c4b7a8]">{activeTemplate.blurb}</p>
+            </div>
+          )}
+
+          {showBodyOptions && (
             <fieldset className="space-y-3">
               <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                Body under the clothes
+                {mode === "undress"
+                  ? "Body under the clothes"
+                  : "Body / gender in the scene"}
               </legend>
               <div className="flex flex-wrap gap-3">
                 {BODY_TYPES.map((b) => (
@@ -465,27 +533,6 @@ export default function StudioPage() {
             </>
           )}
 
-          {mode === "video" && (
-            <fieldset className="space-y-3">
-              <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                5s video template
-              </legend>
-              <div className="flex flex-wrap gap-3">
-                {VIDEO_TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTemplate(t.id as VideoTemplateId)}
-                    className={templateButtonClass(template === t.id)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-[#c4b7a8]">{activeTemplate.blurb}</p>
-            </fieldset>
-          )}
-
           {mode === "video" && activeTemplate.needsSpeech ? (
             <>
               <fieldset className="space-y-3">
@@ -518,9 +565,8 @@ export default function StudioPage() {
                   className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
                 />
                 <p className="text-xs text-[#c4b7a8]">
-                  Animates your photo for 5s with this line in {activeVoice.label}
-                  ’s voice. Full lip-sync lands next; motion stays locked to the
-                  original face.
+                  Animates your photo for 5s and muxes {activeVoice.label}’s
+                  voice when TTS is available. True lip-sync models land next.
                 </p>
               </label>
             </>
@@ -537,7 +583,8 @@ export default function StudioPage() {
                 className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
               />
             </label>
-          ) : mode === "scene" ? (
+          ) : mode === "scene" ||
+            (mode === "video" && activeTemplate.useBodyOptions) ? (
             <label className="flex flex-col gap-3">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
                 Extra notes (optional)
@@ -563,14 +610,16 @@ export default function StudioPage() {
                 className="prompt-field w-full resize-y rounded-sm border border-[var(--line)] bg-[#1c1814] px-4 py-3 text-base font-medium leading-relaxed text-[#f7f1e8] placeholder:text-[#c4b7a8] focus:border-[var(--accent)] focus:outline-none"
               />
             </label>
-          ) : mode === "faceswap" ? (
+          ) : mode === "faceswap" ||
+            (mode === "video" && activeTemplate.needsFace) ? (
             <p className="text-xs leading-relaxed text-[#c4b7a8]">
-              ReActor swaps the donor face onto the source photo with GFPGAN
-              restore. No prompt needed — both uploads drive the result.
+              {mode === "video"
+                ? "ReActor swaps the donor face onto the source, then SVD animates 5s. No prompt needed — both uploads drive the result."
+                : "ReActor swaps the donor face onto the source photo with GFPGAN restore. No prompt needed — both uploads drive the result."}
             </p>
           ) : null}
 
-          {mode !== "faceswap" && (
+          {mode !== "faceswap" && !(mode === "video" && activeTemplate.needsFace) && (
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
                 {mode === "undress"
@@ -616,7 +665,9 @@ export default function StudioPage() {
           >
             {busy
               ? mode === "video"
-                ? "Rendering 5s video…"
+                ? activeTemplate.needsFace
+                  ? "Swapping + rendering video…"
+                  : "Rendering 5s video…"
                 : mode === "faceswap"
                   ? "Swapping face…"
                   : mode === "undress"
@@ -657,6 +708,7 @@ export default function StudioPage() {
                 <p className="text-[#f7f1e8]">
                   “{job.speech}”
                   {job.voice ? ` · ${getSayVoice(job.voice).label}` : ""}
+                  {job.speechMuxed ? " · audio muxed" : ""}
                 </p>
               )}
               {job.resultUrl &&

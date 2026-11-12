@@ -1244,13 +1244,22 @@ export type VideoBuildOpts = {
   height?: number;
   /** Realism ckpt for templates that img2img a still before SVD. */
   checkpoint?: string;
+  /** Donor face for face_swap video template. */
+  faceImage?: string;
+  /** Optional body/cock anatomy layered into act still prompts. */
+  bodyType?: BodyTypeId;
+  cockState?: CockStateId;
+  cockSize?: CockSizeId;
+  /** Extra still-prompt notes from the Studio textarea. */
+  promptOverride?: string;
 };
 
 /**
- * 5s SVD video. Templates:
+ * 5s SVD video. Templates drive real node differences:
  * - natural / say: animate the upload directly (max likeness)
- * - blowjob: light still edit then animate
- * Speech text is attached for the say template (lip-sync API can hook later).
+ * - act templates: img2img still (prompt + optional anatomy) → SVD
+ * - face_swap: ReActor donor face onto source → SVD
+ * Say speech is muxed post-job when TTS/ffmpeg are available.
  */
 export function buildVideoPrompt(
   imageName: string,
@@ -1266,7 +1275,24 @@ export function buildVideoPrompt(
   const height = opts?.height ?? 320;
   const identity = opts?.identity ?? 0.9;
 
-  // Direct photo → video (best likeness)
+  // Face-swap video: ReActor still → SVD (competitor short-clip path)
+  if (tpl.needsFace) {
+    if (!opts?.faceImage) {
+      throw new Error("Face-swap video needs a donor face image.");
+    }
+    return buildFaceSwapVideoPrompt(imageName, opts.faceImage, {
+      seed,
+      frames,
+      fps,
+      motion,
+      width,
+      height,
+      identity,
+      prefix: `narcissus_${tpl.id}`,
+    });
+  }
+
+  // Direct photo → video (best likeness) — natural / say
   if (tpl.stillDenoise <= 0) {
     return svdFromImage(imageName, {
       seed,
@@ -1279,14 +1305,15 @@ export function buildVideoPrompt(
     });
   }
 
-  // Template that needs a posed still first, then SVD — keep denoise low
+  // Act / outfit template: posed still first, then SVD
   const denoise = Math.max(
     0.18,
     tpl.stillDenoise * (1.3 - Math.min(1, Math.max(0.4, identity))),
   );
+  const stillPrompt = composeVideoStillPrompt(tpl.stillPrompt, opts);
   const still = buildImg2ImgPrompt("custom", imageName, {
     seed,
-    promptOverride: tpl.stillPrompt,
+    promptOverride: stillPrompt,
     denoise,
     identity,
     width,
@@ -1358,6 +1385,158 @@ export function buildVideoPrompt(
       inputs: {
         video: ["16", 0],
         filename_prefix: `narcissus_${tpl.id}`,
+        format: "mp4",
+        codec: "h264",
+      },
+    },
+  };
+}
+
+/** Layer optional body/cock anatomy + user notes onto a video still prompt. */
+function composeVideoStillPrompt(
+  base: string | undefined,
+  opts?: VideoBuildOpts,
+): string {
+  const parts: string[] = [];
+  if (base?.trim()) parts.push(base.trim());
+  if (opts?.bodyType) {
+    const anatomy = anatomyPromptFor(
+      opts.bodyType,
+      opts.cockState,
+      opts.cockSize,
+    );
+    parts.push(anatomy.positive);
+  }
+  if (opts?.promptOverride?.trim()) parts.push(opts.promptOverride.trim());
+  parts.push("exact same face as reference photo, preserve identity");
+  return parts.join(", ");
+}
+
+/**
+ * ReActor face swap on the source still, then SVD animate — single Comfy graph.
+ * Donor face = faceImage; body/scene = targetImage.
+ */
+export function buildFaceSwapVideoPrompt(
+  targetImage: string,
+  faceImage: string,
+  opts: {
+    seed: number;
+    frames: number;
+    fps: number;
+    motion: number;
+    width: number;
+    height: number;
+    identity: number;
+    prefix: string;
+  },
+): Record<string, unknown> {
+  const restoreVisibility = Math.min(
+    1,
+    Math.max(0.5, opts.identity),
+  );
+  return {
+    "1": {
+      class_type: "LoadImage",
+      inputs: { image: targetImage },
+    },
+    "2": {
+      class_type: "LoadImage",
+      inputs: { image: faceImage },
+    },
+    "3": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["1", 0],
+        upscale_method: "lanczos",
+        width: Math.max(opts.width, 768),
+        height: Math.max(opts.height, 768),
+        crop: "center",
+      },
+    },
+    "4": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["2", 0],
+        upscale_method: "lanczos",
+        width: 512,
+        height: 512,
+        crop: "center",
+      },
+    },
+    "5": {
+      class_type: "ReActorFaceSwap",
+      inputs: {
+        enabled: true,
+        input_image: ["3", 0],
+        source_image: ["4", 0],
+        swap_model: "inswapper_128.onnx",
+        facedetection: "retinaface_resnet50",
+        face_restore_model: "GFPGANv1.4.pth",
+        face_restore_visibility: restoreVisibility,
+        codeformer_weight: 0.5,
+        detect_gender_input: "no",
+        detect_gender_source: "no",
+        input_faces_index: "0",
+        source_faces_index: "0",
+        console_log_level: 1,
+      },
+    },
+    "6": {
+      class_type: "ImageOnlyCheckpointLoader",
+      inputs: { ckpt_name: CKPT_SVD },
+    },
+    "7": {
+      class_type: "ImageScale",
+      inputs: {
+        image: ["5", 0],
+        upscale_method: "lanczos",
+        width: opts.width,
+        height: opts.height,
+        crop: "disabled",
+      },
+    },
+    "8": {
+      class_type: "SVD_img2vid_Conditioning",
+      inputs: {
+        clip_vision: ["6", 1],
+        init_image: ["7", 0],
+        vae: ["6", 2],
+        width: opts.width,
+        height: opts.height,
+        video_frames: opts.frames,
+        motion_bucket_id: opts.motion,
+        fps: opts.fps,
+        augmentation_level: 0.0,
+      },
+    },
+    "9": {
+      class_type: "KSampler",
+      inputs: {
+        seed: opts.seed,
+        steps: 20,
+        cfg: 2.5,
+        sampler_name: "euler",
+        scheduler: "karras",
+        denoise: 1.0,
+        model: ["6", 0],
+        positive: ["8", 0],
+        negative: ["8", 1],
+        latent_image: ["8", 2],
+      },
+    },
+    "10": {
+      class_type: "VAEDecode",
+      inputs: { samples: ["9", 0], vae: ["6", 2] },
+    },
+    "11": {
+      class_type: "CreateVideo",
+      inputs: { images: ["10", 0], fps: opts.fps },
+    },
+    "12": {
+      class_type: "SaveVideo",
+      inputs: {
+        video: ["11", 0],
+        filename_prefix: opts.prefix,
         format: "mp4",
         codec: "h264",
       },
