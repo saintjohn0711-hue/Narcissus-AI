@@ -254,6 +254,16 @@ function ChatPageInner() {
     return () => clearTimeout(t);
   }, [ribbonFlash]);
 
+  useEffect(() => {
+    if (!ribbonsOpen) return;
+    const t = requestAnimationFrame(() => {
+      document
+        .querySelector("[data-testid='muse-ribbons-panel']")
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(t);
+  }, [ribbonsOpen]);
+
   const partner = useMemo(
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],

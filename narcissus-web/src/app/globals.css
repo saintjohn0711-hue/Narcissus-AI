@@ -717,6 +717,18 @@ body {
   overflow-y: auto;
 }
 
+@media (max-width: 767px) {
+  /* Give task/collection room on phone when Ribbons or Memories is open */
+  .muse-chat-drawer:has(.muse-ribbons-panel),
+  .muse-chat-drawer:has(.muse-memories-panel) {
+    max-height: min(78dvh, 720px);
+  }
+
+  .muse-ribbons-panel {
+    max-height: min(52dvh, 420px);
+  }
+}
+
 .muse-chat-drawer-messages {
   min-height: 0;
   padding: 1rem 1.1rem;
