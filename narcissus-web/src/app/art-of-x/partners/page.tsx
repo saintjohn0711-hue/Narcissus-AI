@@ -921,10 +921,11 @@ export default function PartnersPage() {
               Chat voice
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Sexy female or male narration for Companion chat (natural OpenAI TTS
+              Sexy female or male narration for Companion chat. Natural OpenAI TTS
               when <code className="text-[var(--soft)]">OPENAI_API_KEY</code> is
-              set; otherwise browser speech). Pick gender, accent (locale), and
-              delivery — each selection plays a short preview.
+              set on Vercel; otherwise this browser’s voice (soft recovery — never
+              blocks chat). Pick gender, accent (locale), and delivery — each
+              selection plays a short preview.
             </p>
             <div className="flex flex-wrap gap-2">
               {VOICE_GENDERS.map((g) => (

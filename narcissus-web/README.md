@@ -31,7 +31,7 @@ Set locally in `.env.local` (or on Vercel for `narcissus-ai`):
 
 Without a Gateway/OpenAI key, describe-looks stays unavailable; Scene builder still uses local craft when the LLM path is down.
 
-**Muse chat voice:** Companion chat narrates Muse replies with **OpenAI TTS** via `POST /api/art-of-x/tts` when `OPENAI_API_KEY` is set (gender / accent / delivery → `gpt-4o-mini-tts` voice + instructions). Preview-on-select uses the same natural engine. Without the key (or offline), the client falls back to browser Web Speech. Studio Say-This still uses local Edge-TTS on Comfy hosts. ElevenLabs is not wired (no project key).
+**Muse chat voice:** Companion chat narrates Muse replies with **OpenAI TTS** via `POST /api/art-of-x/tts` when `OPENAI_API_KEY` is set (gender / accent / delivery → `gpt-4o-mini-tts` voice + instructions). Preview-on-select uses the same natural engine. Without the key (or offline), the client uses browser Web Speech with soft recovery (voices loaded, cancel-race retry, non-blocking hints) — Preview/Play never hard-fails chat. Studio Say-This still uses local Edge-TTS on Comfy hosts. ElevenLabs is not wired (no project key).
 
 ## API
 
