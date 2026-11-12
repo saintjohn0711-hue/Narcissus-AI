@@ -45,8 +45,9 @@ import {
   MUSE_VOICE_ACCENTS,
   presetsForGender,
   saveChatVoicePrefs,
+  narrationSupported,
+  naturalTtsAvailable,
   speakMessage,
-  speechSupported,
   stopNarration,
   voiceSettingsFromPartner,
   warmSpeechVoices,
@@ -183,6 +184,7 @@ function ChatPageInner() {
   );
   const [voicePanelOpen, setVoicePanelOpen] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
+  const [naturalTts, setNaturalTts] = useState(false);
   const voicePreview = useMuseVoicePreview();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const voicePrefsRef = useRef<ChatVoicePrefs>(DEFAULT_CHAT_VOICE_PREFS);
@@ -210,7 +212,8 @@ function ChatPageInner() {
     const prefs = loadChatVoicePrefs();
     setVoicePrefs(prefs);
     voicePrefsRef.current = prefs;
-    setSpeechOk(speechSupported());
+    setSpeechOk(narrationSupported());
+    void naturalTtsAvailable().then(setNaturalTts);
     return warmSpeechVoices();
   }, []);
 
@@ -1135,7 +1138,7 @@ function ChatPageInner() {
           tryNewThings: tryNewActive,
           memories: partner.memories || [],
         });
-        if (voicePrefsRef.current.autoNarrateMuse && speechSupported()) {
+        if (voicePrefsRef.current.autoNarrateMuse && narrationSupported()) {
           speakMessage(
             replyId,
             trimmed,
@@ -1627,9 +1630,11 @@ function ChatPageInner() {
                         Chat voice
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-[#c4b7a8]">
-                        {speechOk
-                          ? "Browser speech — pick accent + delivery (each plays a short test). Tap Play on a bubble."
-                          : "Speech isn’t available in this browser."}
+                        {!speechOk
+                          ? "Speech isn’t available in this browser."
+                          : naturalTts || voicePreview.natural
+                            ? "Natural voice — pick accent + delivery (each plays a short test). Tap Play on a bubble."
+                            : "Browser speech fallback — set OPENAI_API_KEY for natural voice. Pick accent + delivery; tap Play on a bubble."}
                       </p>
                     </div>
                     <button
