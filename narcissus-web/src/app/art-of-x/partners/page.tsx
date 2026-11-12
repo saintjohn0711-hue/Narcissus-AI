@@ -13,15 +13,19 @@ import {
   PERSON_GENDERS,
   PERSON_LABEL,
   arkDemoRoster,
+  displayName,
   emptyPartner,
   fileToPartnerPhoto,
   genderLabel,
   loadMuseOrder,
   mainPhoto,
   normalizeKinks,
+  normalizePairedWith,
+  pairedMusesFor,
   samePartnerId,
   saveMuseOrder,
   sortMuses,
+  toggleMusePairing,
   withMainPhoto,
   type MuseSortMode,
   type PartnerRecord,
@@ -33,6 +37,10 @@ import {
   persistPartners,
   type StoreMode,
 } from "@/lib/artOfXStore";
+import {
+  applyDreamMuseFill,
+  parseDreamMuseLocal,
+} from "@/lib/dreamMuse";
 import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
 
 const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
@@ -51,6 +59,10 @@ export default function PartnersPage() {
   const [ready, setReady] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [dreamDesc, setDreamDesc] = useState("");
+  const [dreamNote, setDreamNote] = useState<string | null>(null);
+  const [dreaming, setDreaming] = useState(false);
+  const [pairingForId, setPairingForId] = useState<number | null>(null);
   /** Skip the persist effect when applying server-returned ids. */
   const syncingFromServer = useRef(false);
   const editorRef = useRef<HTMLFormElement | null>(null);
@@ -165,6 +177,8 @@ export default function PartnersPage() {
     setEditing(emptyPartner("", partners));
     setLooksFromIdx([]);
     setLooksNote(null);
+    setDreamDesc("");
+    setDreamNote(null);
     scrollEditorIntoView();
   }
 
@@ -178,11 +192,81 @@ export default function PartnersPage() {
       mainPhotoIndex: main,
       doneActs: [...(p.doneActs || [])],
       dynTags: [...(p.dynTags || [])],
+      pairedWith: normalizePairedWith(p.pairedWith, p.id),
     });
     setLooksFromIdx(p.photos?.length ? [main] : []);
     setLooksNote(null);
+    setDreamDesc("");
+    setDreamNote(null);
     scrollEditorIntoView();
   }
+
+  async function fillFromDescription() {
+    if (!editing) return;
+    const description = dreamDesc.trim();
+    if (!description) {
+      setDreamNote("Describe your dream Muse first — looks, kinks, vibe.");
+      return;
+    }
+    setDreaming(true);
+    setDreamNote(null);
+    try {
+      const res = await fetch("/api/art-of-x/dream-muse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          fill?: Parameters<typeof applyDreamMuseFill>[1];
+          note?: string;
+          source?: string;
+        };
+        if (data.fill) {
+          setEditing((prev) =>
+            prev ? applyDreamMuseFill(prev, data.fill!) : prev,
+          );
+          setDreamNote(data.note || "Filled from description — tweak chips as you like.");
+          return;
+        }
+      }
+      const local = parseDreamMuseLocal(description);
+      setEditing((prev) =>
+        prev ? applyDreamMuseFill(prev, local.fill) : prev,
+      );
+      setDreamNote(local.note);
+    } catch {
+      const local = parseDreamMuseLocal(description);
+      setEditing((prev) =>
+        prev ? applyDreamMuseFill(prev, local.fill) : prev,
+      );
+      setDreamNote(local.note);
+    } finally {
+      setDreaming(false);
+    }
+  }
+
+  function setPairWith(aId: number, bId: number) {
+    setPartners((prev) => toggleMusePairing(prev, aId, bId));
+    setPairingForId(null);
+  }
+
+  const togetherPairs = useMemo(() => {
+    const pairs: Array<{ a: PartnerRecord; b: PartnerRecord; key: string }> =
+      [];
+    const seen = new Set<string>();
+    for (const p of partners) {
+      for (const other of pairedMusesFor(p, partners)) {
+        const lo = Math.min(Number(p.id), Number(other.id));
+        const hi = Math.max(Number(p.id), Number(other.id));
+        const key = `${lo}-${hi}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pairs.push({ a: p, b: other, key });
+      }
+    }
+    return pairs;
+  }, [partners]);
 
   function persistEditor(e: FormEvent) {
     e.preventDefault();
@@ -555,12 +639,50 @@ export default function PartnersPage() {
                 setEditing(null);
                 setLooksFromIdx([]);
                 setLooksNote(null);
+                setDreamDesc("");
+                setDreamNote(null);
               }}
               className="text-xs text-[#c4b7a8]"
             >
               Cancel
             </button>
           </div>
+
+          <fieldset className="space-y-3 rounded-sm border border-[var(--accent)]/30 bg-[#14111a]/55 p-4">
+            <legend className="px-1 text-sm uppercase tracking-[0.16em] text-[var(--accent-strong)]">
+              Dream from description
+            </legend>
+            <p className="text-xs leading-relaxed text-[#c4b7a8]">
+              Describe your dream Muse — looks, kinks, dynamics, vibe. We&apos;ll
+              auto-pick matching chips on this form (xAI when available, keywords
+              otherwise). Tweak anything after.
+            </p>
+            <textarea
+              value={dreamDesc}
+              onChange={(e) => {
+                setDreamDesc(e.target.value);
+                setDreamNote(null);
+              }}
+              rows={4}
+              placeholder="e.g. Dream: fierce brunette femdom who loves bondage, pegging, dirty talk — rough but playful, free-use energy…"
+              className="prompt-field w-full rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm leading-relaxed"
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void fillFromDescription()}
+                disabled={dreaming || !dreamDesc.trim()}
+                className="rounded-sm border border-[var(--accent)] bg-[var(--accent)]/20 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {dreaming ? "Filling…" : "Fill from description"}
+              </button>
+              {dreamNote && (
+                <p className="text-xs text-[#c4b7a8]" role="status">
+                  {dreamNote}
+                </p>
+              )}
+            </div>
+          </fieldset>
 
           <fieldset className="space-y-3">
             <legend className="text-sm uppercase tracking-[0.16em]">
@@ -869,6 +991,57 @@ export default function PartnersPage() {
         </form>
       )}
 
+      {togetherPairs.length > 0 && (
+        <section
+          className="mb-8 border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-4 sm:p-5"
+          aria-label={`${PERSON_LABEL.plural} who've been together`}
+        >
+          <h2
+            className="text-xl text-[var(--ink)]"
+            style={{ fontFamily: "var(--font-display), serif" }}
+          >
+            Been together
+          </h2>
+          <p className="mt-1 text-xs text-[#c4b7a8]">
+            Muses who&apos;ve played with each other — open a pair in chat for
+            dual cast.
+          </p>
+          <ul className="mt-4 flex flex-col gap-2">
+            {togetherPairs.map(({ a, b, key }) => (
+              <li
+                key={key}
+                className="flex flex-wrap items-center justify-between gap-2 border border-[var(--line)] bg-[#12101a]/55 px-3 py-2.5"
+              >
+                <p className="text-sm text-[var(--ink)]">
+                  <span style={{ fontFamily: "var(--font-display), serif" }}>
+                    {displayName(a)}
+                  </span>
+                  <span className="mx-2 text-[var(--muted)]">×</span>
+                  <span style={{ fontFamily: "var(--font-display), serif" }}>
+                    {displayName(b)}
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-3 text-xs">
+                  <a
+                    href={`/art-of-x/chat?muse=${a.id}&with=${b.id}`}
+                    className="text-[var(--glow-mid)] underline-offset-2 hover:text-[var(--glow)] hover:underline"
+                  >
+                    Chat together
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPairWith(a.id, b.id)}
+                    className="text-[var(--danger)] underline-offset-2 hover:underline"
+                  >
+                    Unpair
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="space-y-5">
         {visible.length === 0 && (
           <p className="text-sm text-[#c4b7a8]">
@@ -879,6 +1052,14 @@ export default function PartnersPage() {
           <PartnerCard
             key={p.id}
             partner={p}
+            roster={partners}
+            pairingOpen={pairingForId != null && samePartnerId(pairingForId, p.id)}
+            onTogglePairing={() =>
+              setPairingForId((cur) =>
+                cur != null && samePartnerId(cur, p.id) ? null : Number(p.id),
+              )
+            }
+            onPairWith={(otherId) => setPairWith(p.id, otherId)}
             onEdit={() => openEdit(p)}
             onRemove={() => remove(p.id)}
             onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}

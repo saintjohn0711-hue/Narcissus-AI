@@ -17,8 +17,11 @@ import {
   emptyPartner,
   genderLabel,
   mainPhoto,
+  musePairThreadKey,
+  pairedMusesFor,
   PERSON_LABEL,
   savePartners,
+  samePartnerId,
   withMainPhoto,
   type ChatMessage,
   type PartnerRecord,
@@ -85,10 +88,12 @@ async function readXaiSseStream(
 function ChatPageInner() {
   const searchParams = useSearchParams();
   const museParam = searchParams.get("muse") || searchParams.get("partner");
+  const withParam = searchParams.get("with");
 
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
   const [activeId, setActiveId] = useState<number | null>(null);
+  const [castId, setCastId] = useState<number | null>(null);
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
   const [pov, setPov] = useState<ChatPov>("1st");
@@ -109,6 +114,7 @@ function ChatPageInner() {
   const streamingChats = useRef(false);
   const chatsRef = useRef<Record<string, ChatMessage[]>>({});
   const pickedFromUrl = useRef(false);
+  const castFromUrl = useRef(false);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -126,6 +132,16 @@ function ChatPageInner() {
         } else if (list[0]) {
           setActiveId(list[0].id);
         }
+        const withId = withParam ? Number(withParam) : NaN;
+        if (
+          Number.isFinite(withId) &&
+          Number.isFinite(fromUrl) &&
+          list.some((p) => p.id === withId) &&
+          withId !== fromUrl
+        ) {
+          setCastId(withId);
+          castFromUrl.current = true;
+        }
       } catch {
         if (!cancelled) {
           setError("Couldn’t load Muses or chats — refresh and try again.");
@@ -137,7 +153,7 @@ function ChatPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [museParam]);
+  }, [museParam, withParam]);
 
   useEffect(() => {
     if (!ready || pickedFromUrl.current || !museParam) return;
@@ -148,6 +164,16 @@ function ChatPageInner() {
       pickedFromUrl.current = true;
     }
   }, [ready, museParam, partners]);
+
+  useEffect(() => {
+    if (!ready || castFromUrl.current || !withParam) return;
+    const id = Number(withParam);
+    if (!Number.isFinite(id) || !activeId || samePartnerId(id, activeId)) return;
+    if (partners.some((p) => p.id === id)) {
+      setCastId(id);
+      castFromUrl.current = true;
+    }
+  }, [ready, withParam, partners, activeId]);
 
   useEffect(() => {
     if (!ready || !activeId) return;
@@ -182,9 +208,29 @@ function ChatPageInner() {
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],
   );
+  const castPartner = useMemo(() => {
+    if (!partner || castId == null) return null;
+    if (samePartnerId(castId, partner.id)) return null;
+    return partners.find((p) => samePartnerId(p.id, castId)) || null;
+  }, [partners, partner, castId]);
+  const pairedOptions = useMemo(
+    () => (partner ? pairedMusesFor(partner, partners) : []),
+    [partner, partners],
+  );
   const companionFull = Boolean(partner) && presenceStyle === "cartoon";
-  const threadKey = activeId != null ? String(activeId) : "";
+  const threadKey =
+    activeId != null
+      ? castPartner
+        ? musePairThreadKey(activeId, castPartner.id)
+        : String(activeId)
+      : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
+  const castLabel =
+    partner && castPartner
+      ? `${displayName(partner)} + ${displayName(castPartner)}`
+      : partner
+        ? displayName(partner)
+        : "";
 
   async function startCompanion() {
     const scratch = {
@@ -242,8 +288,8 @@ function ChatPageInner() {
   }
 
   async function resetChat() {
-    if (!partner || resetting) return;
-    const name = displayName(partner);
+    if (!partner || resetting || !threadKey) return;
+    const name = castLabel || displayName(partner);
     const ok =
       typeof window !== "undefined" &&
       window.confirm(
@@ -255,8 +301,15 @@ function ChatPageInner() {
     setError(null);
     try {
       skipPersist.current = true;
-      const next = await clearChatForPartner(chats, partner.id);
-      setChats(next);
+      if (castPartner) {
+        const next = { ...chats };
+        delete next[threadKey];
+        await persistChats(next);
+        setChats(next);
+      } else {
+        const next = await clearChatForPartner(chats, partner.id);
+        setChats(next);
+      }
     } catch (err) {
       skipPersist.current = false;
       setError(err instanceof Error ? err.message : "Couldn’t reset chat");
@@ -267,10 +320,11 @@ function ChatPageInner() {
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    if (!partner || !text.trim() || sending) return;
+    if (!partner || !text.trim() || sending || !threadKey) return;
 
     const userText = text.trim();
     const now = new Date().toISOString();
+    const key = threadKey;
     const you: ChatMessage = {
       id: `m_${Date.now()}`,
       partnerId: partner.id,
@@ -287,14 +341,10 @@ function ChatPageInner() {
       at: new Date().toISOString(),
     };
 
-    const prior = chats[String(partner.id)] || [];
+    const prior = chats[key] || [];
     setChats((prev) => ({
       ...prev,
-      [String(partner.id)]: [
-        ...(prev[String(partner.id)] || []),
-        you,
-        placeholder,
-      ],
+      [key]: [...(prev[key] || []), you, placeholder],
     }));
     setText("");
     setSending(true);
@@ -307,6 +357,7 @@ function ChatPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           partner: partnerForChatApi(partner),
+          cast: castPartner ? partnerForChatApi(castPartner) : null,
           messages: [...prior, you].map((m) => ({
             who: m.who,
             text: m.text,
@@ -338,9 +389,7 @@ function ChatPageInner() {
         setError(message);
         setChats((prev) => ({
           ...prev,
-          [String(partner.id)]: (prev[String(partner.id)] || []).filter(
-            (m) => m.id !== replyId,
-          ),
+          [key]: (prev[key] || []).filter((m) => m.id !== replyId),
         }));
         return;
       }
@@ -350,14 +399,14 @@ function ChatPageInner() {
       if (contentType.includes("text/event-stream")) {
         finalReply = await readXaiSseStream(res, (delta) => {
           setChats((prev) => {
-            const list = [...(prev[String(partner.id)] || [])];
+            const list = [...(prev[key] || [])];
             const idx = list.findIndex((m) => m.id === replyId);
             if (idx < 0) return prev;
             list[idx] = {
               ...list[idx]!,
               text: (list[idx]!.text || "") + delta,
             };
-            return { ...prev, [String(partner.id)]: list };
+            return { ...prev, [key]: list };
           });
         });
       } else {
@@ -367,11 +416,11 @@ function ChatPageInner() {
         if (!replyText) throw new Error("empty_reply");
         finalReply = replyText;
         setChats((prev) => {
-          const list = [...(prev[String(partner.id)] || [])];
+          const list = [...(prev[key] || [])];
           const idx = list.findIndex((m) => m.id === replyId);
           if (idx < 0) return prev;
           list[idx] = { ...list[idx]!, text: replyText };
-          return { ...prev, [String(partner.id)]: list };
+          return { ...prev, [key]: list };
         });
       }
 
@@ -380,13 +429,10 @@ function ChatPageInner() {
         setError("Muse returned an empty reply — try again.");
         setChats((prev) => ({
           ...prev,
-          [String(partner.id)]: (prev[String(partner.id)] || []).filter(
-            (m) => m.id !== replyId,
-          ),
+          [key]: (prev[key] || []).filter((m) => m.id !== replyId),
         }));
       } else {
         // Ensure ref has final text before finally-persist (React state may lag).
-        const key = String(partner.id);
         const list = [...(chatsRef.current[key] || [])];
         const idx = list.findIndex((m) => m.id === replyId);
         if (idx >= 0) {
@@ -399,9 +445,7 @@ function ChatPageInner() {
       setError(err instanceof Error ? err.message : "Chat failed");
       setChats((prev) => ({
         ...prev,
-        [String(partner.id)]: (prev[String(partner.id)] || []).filter(
-          (m) => m.id !== replyId,
-        ),
+        [key]: (prev[key] || []).filter((m) => m.id !== replyId),
       }));
     } finally {
       streamingChats.current = false;
@@ -489,6 +533,13 @@ function ChatPageInner() {
                   type="button"
                   onClick={() => {
                     setActiveId(p.id);
+                    setCastId((cur) => {
+                      if (cur == null) return null;
+                      const stillPaired = pairedMusesFor(p, partners).some(
+                        (x) => samePartnerId(x.id, cur),
+                      );
+                      return stillPaired ? cur : null;
+                    });
                     setError(null);
                   }}
                   className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm backdrop-blur-sm ${
@@ -539,6 +590,7 @@ function ChatPageInner() {
               >
                 <MusePresence
                   partner={partner}
+                  castPartner={castPartner}
                   variant={companionFull ? "full" : "rail"}
                   onStyleChange={setPresenceStyle}
                   lastPartnerReply={reactionReply}
@@ -548,6 +600,17 @@ function ChatPageInner() {
                     companionFull
                       ? (id) => {
                           setActiveId(id);
+                          setCastId((cur) => {
+                            const next = partners.find((p) =>
+                              samePartnerId(p.id, id),
+                            );
+                            if (!next || cur == null) return null;
+                            const stillPaired = pairedMusesFor(
+                              next,
+                              partners,
+                            ).some((p) => samePartnerId(p.id, cur));
+                            return stillPaired ? cur : null;
+                          });
                           setError(null);
                         }
                       : undefined
@@ -583,15 +646,46 @@ function ChatPageInner() {
                       className="text-xl text-[var(--ink)]"
                       style={{ fontFamily: "var(--font-display), serif" }}
                     >
-                      {displayName(partner)}
+                      {castLabel}
                     </h2>
                     <p className="mt-1 text-xs text-[#c4b7a8]">
-                      {companionFull
-                        ? "Companion · Adults 18+"
-                        : partner.dynTags.slice(0, 3).join(" · ") ||
-                          "No dynamics tagged"}
+                      {castPartner
+                        ? "Dual cast · been together"
+                        : companionFull
+                          ? "Companion · Adults 18+"
+                          : partner.dynTags.slice(0, 3).join(" · ") ||
+                            "No dynamics tagged"}
                       {modelLabel ? ` · ${modelLabel}` : ""}
                     </p>
+                    {(pairedOptions.length > 0 || castPartner) && (
+                      <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+                        With
+                        <select
+                          value={castPartner ? String(castPartner.id) : ""}
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setCastId(v ? Number(v) : null);
+                            setError(null);
+                          }}
+                          className="max-w-[12rem] rounded-sm border border-[var(--line)] bg-[#12182a] px-2 py-1 text-sm text-[var(--ink)]"
+                        >
+                          <option value="">Solo</option>
+                          {pairedOptions.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {displayName(p)}
+                            </option>
+                          ))}
+                          {castPartner &&
+                            !pairedOptions.some((p) =>
+                              samePartnerId(p.id, castPartner.id),
+                            ) && (
+                              <option value={castPartner.id}>
+                                {displayName(castPartner)}
+                              </option>
+                            )}
+                        </select>
+                      </label>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {companionFull && (
@@ -650,7 +744,9 @@ function ChatPageInner() {
               >
                 {messages.length === 0 && (
                   <p className="muse-chat-empty text-sm leading-relaxed text-[#e8dcd0]">
-                    Say something filthy. Her portrait stays with you.
+                    {castPartner
+                      ? `Say something filthy — ${displayName(partner!)} and ${displayName(castPartner)} are both in the scene.`
+                      : "Say something filthy. Her portrait stays with you."}
                   </p>
                 )}
                 {messages.map((m) => (
@@ -664,7 +760,9 @@ function ChatPageInner() {
                   >
                     <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                       {m.who === "Partner" && partner
-                        ? displayName(partner)
+                        ? castPartner
+                          ? castLabel
+                          : displayName(partner)
                         : m.who}
                     </p>
                     <p className="whitespace-pre-wrap">

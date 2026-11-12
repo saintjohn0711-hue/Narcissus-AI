@@ -9,14 +9,23 @@ import {
   type ReactNode,
 } from "react";
 import {
+  displayName,
   genderLabel,
   mainPhoto,
   normalizeKinks,
+  normalizePairedWith,
+  pairedMusesFor,
+  samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
 
 type PartnerCardProps = {
   partner: PartnerRecord;
+  /** Full roster — resolve paired Muse names + pairing picker */
+  roster?: PartnerRecord[];
+  pairingOpen?: boolean;
+  onTogglePairing?: () => void;
+  onPairWith?: (otherId: number) => void;
   onEdit: () => void;
   onRemove: () => void;
   /** Persist featured/main photo when the viewer picks one */
@@ -191,6 +200,10 @@ function PhotoLightbox({
  */
 export function PartnerCard({
   partner: p,
+  roster = [],
+  pairingOpen = false,
+  onTogglePairing,
+  onPairWith,
   onEdit,
   onRemove,
   onSelectPhoto,
@@ -213,11 +226,22 @@ export function PartnerCard({
 
   const hero = photos[activeIndex] || mainPhoto(p);
   const kinkTags = normalizeKinks(p.kinks).map((k) => k.tag);
+  const paired = pairedMusesFor(p, roster);
+  const pairedIds = new Set(
+    normalizePairedWith(p.pairedWith, p.id).map((id) => Number(id)),
+  );
+  const pairCandidates = roster.filter(
+    (other) =>
+      !samePartnerId(other.id, p.id) && !pairedIds.has(Number(other.id)),
+  );
   const metaBits = [
     p.type,
     genderLabel(p.gender),
     photos.length
       ? `${photos.length} photo${photos.length === 1 ? "" : "s"}`
+      : null,
+    paired.length
+      ? `together with ${paired.length}`
       : null,
   ].filter(Boolean) as string[];
 
@@ -229,8 +253,16 @@ export function PartnerCard({
   const hasDynamics = Boolean(p.dynamics?.trim());
   const hasDynBlock = hasDynTags || hasDynamics;
   const hasNotes = Boolean(p.notes?.trim());
+  const hasPaired = paired.length > 0;
   const hasBody =
-    hasLooks || hasHistory || hasActs || hasKinks || hasDynBlock || hasNotes;
+    hasLooks ||
+    hasHistory ||
+    hasActs ||
+    hasKinks ||
+    hasDynBlock ||
+    hasNotes ||
+    hasPaired ||
+    Boolean(onTogglePairing);
   const hasProseAbove = hasLooks || hasDynBlock || hasHistory || hasNotes;
   const initial = (p.name || "?").trim().slice(0, 1).toUpperCase();
 
@@ -402,6 +434,19 @@ export function PartnerCard({
               >
                 Chat
               </Link>
+              {onTogglePairing && (
+                <button
+                  type="button"
+                  onClick={onTogglePairing}
+                  className={`underline-offset-2 hover:underline ${
+                    pairingOpen
+                      ? "text-[var(--accent-strong)]"
+                      : "text-[#c4b7a8]"
+                  }`}
+                >
+                  {pairingOpen ? "Cancel pair" : "Been together"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onEdit}
@@ -422,6 +467,55 @@ export function PartnerCard({
 
         {hasBody ? (
           <div className="flex flex-col gap-5 px-5 py-5 sm:gap-6 sm:px-6 sm:py-6">
+            {(hasPaired || pairingOpen) && (
+              <Section label="Been together">
+                {hasPaired && (
+                  <ul className="flex flex-wrap gap-2">
+                    {paired.map((other) => (
+                      <li key={other.id}>
+                        <Link
+                          href={`/art-of-x/chat?muse=${p.id}&with=${other.id}`}
+                          className="inline-flex items-center gap-1.5 border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2.5 py-1 text-xs text-[var(--accent-strong)] transition hover:border-[var(--accent)]"
+                          title={`Chat with ${displayName(p)} + ${displayName(other)}`}
+                        >
+                          {displayName(other)}
+                          <span className="text-[var(--muted)]">· chat</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {pairingOpen && onPairWith && (
+                  <div className={hasPaired ? "mt-3" : ""}>
+                    <p className="mb-2 text-xs text-[#c4b7a8]">
+                      Mark who they&apos;ve played with — unlocks dual cast in
+                      chat.
+                    </p>
+                    {pairCandidates.length === 0 ? (
+                      <p className="text-xs text-[var(--muted)]">
+                        {roster.length <= 1
+                          ? "Add another Muse first."
+                          : "Already paired with everyone on the list."}
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {pairCandidates.map((other) => (
+                          <button
+                            key={other.id}
+                            type="button"
+                            onClick={() => onPairWith(Number(other.id))}
+                            className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-xs text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
+                          >
+                            + {displayName(other)}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Section>
+            )}
+
             {hasLooks && (
               <Section label="Looks">
                 <p className="text-[15px] leading-[1.65] text-[#f7f1e8]/95%">

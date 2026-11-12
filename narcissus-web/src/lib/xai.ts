@@ -106,11 +106,7 @@ export function extractXaiText(data: unknown): string {
   return typed.choices?.[0]?.message?.content?.trim() || "";
 }
 
-/** Build the in-character system prompt for partner AI chat. */
-export function buildPartnerChatSystemPrompt(
-  partner: PartnerRecord,
-  pov: ChatPov = "1st",
-): string {
+function museIdentityBlock(partner: PartnerRecord, label?: string): string {
   const name = displayName(partner);
   const kinks = normalizeKinks(partner.kinks);
   const kinkLines = kinks.length
@@ -121,19 +117,9 @@ export function buildPartnerChatSystemPrompt(
         )
         .join("\n")
     : "- (none tagged yet — still flirty and curious)";
-
-  const povInstruction =
-    pov === "3rd"
-      ? `Write in vivid third-person narration about ${name} (she/he/they as fits), with dialogue in quotes when they speak. Stay cinematic and intimate — like a sharp erotic narrator, not a screenplay slug.`
-      : `Speak in first person as ${name}. Use "I" / "me". Stay in character the whole time — never break to explain you are an AI.`;
-
+  const head = label ? `${label}: ${name}` : `Name: ${name}`;
   return [
-    `You are ${name}, an adult erotic AI partner in Narcissus / Art of X.`,
-    `Stay fully in character. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
-    `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
-    "",
-    "Identity:",
-    `- Name: ${name}`,
+    head,
     `- Type: ${partner.type}`,
     `- Gender / presentation: ${genderLabel(partner.gender)}`,
     partner.isCouple || partner.gender === "couple"
@@ -152,9 +138,63 @@ export function buildPartnerChatSystemPrompt(
     partner.locations?.trim()
       ? `- Places that matter: ${partner.locations.trim()}`
       : "",
-    "",
     "Kinks:",
     kinkLines,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
+/** Build the in-character system prompt for partner AI chat. */
+export function buildPartnerChatSystemPrompt(
+  partner: PartnerRecord,
+  pov: ChatPov = "1st",
+  cast?: PartnerRecord | null,
+): string {
+  const name = displayName(partner);
+  const second = cast && cast.id !== partner.id ? cast : null;
+  const secondName = second ? displayName(second) : null;
+
+  if (second && secondName) {
+    const povInstruction =
+      pov === "3rd"
+        ? `Write in vivid third-person narration about ${name} and ${secondName} together (she/he/they as fits), with dialogue in quotes when each speaks. Stay cinematic and intimate — like a sharp erotic narrator, not a screenplay slug. Make both Muses active — they interact with each other and with the user.`
+        : `Write as a dual-cast scene: both ${name} and ${secondName} speak in first person in the same reply. Label lines clearly (e.g. "${name}:" / "${secondName}:") so the reader knows who is talking. They play with each other and with the user — banter, touch, rivalry, or teamwork as the chemistry fits. Never collapse into a single voice.`;
+
+    return [
+      `You are dual-casting ${name} and ${secondName}, adult erotic AI Muses in Narcissus / Art of X.`,
+      `They have been together / played together before — treat that shared heat as real history.`,
+      `Stay fully in character for both. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
+      `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
+      "",
+      "Cast A — primary:",
+      museIdentityBlock(partner),
+      "",
+      "Cast B — paired Muse:",
+      museIdentityBlock(second),
+      "",
+      "Voice & POV:",
+      povInstruction,
+      "Keep replies to a natural chat length (a short dual exchange) unless they clearly want a longer scene.",
+      "Use their shared history and kinks without dumping a checklist — weave them in like bodies that already know each other.",
+      "Match their energy: soft when they are soft, dominant when the tags say so, filthy when they go there.",
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+  }
+
+  const povInstruction =
+    pov === "3rd"
+      ? `Write in vivid third-person narration about ${name} (she/he/they as fits), with dialogue in quotes when they speak. Stay cinematic and intimate — like a sharp erotic narrator, not a screenplay slug.`
+      : `Speak in first person as ${name}. Use "I" / "me". Stay in character the whole time — never break to explain you are an AI.`;
+
+  return [
+    `You are ${name}, an adult erotic AI partner in Narcissus / Art of X.`,
+    `Stay fully in character. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
+    `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
+    "",
+    "Identity:",
+    museIdentityBlock(partner),
     "",
     "Voice & POV:",
     povInstruction,

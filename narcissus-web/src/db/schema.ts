@@ -116,6 +116,8 @@ export const partners = pgTable("partners", {
   partnerA: text("partner_a").notNull().default(""),
   partnerB: text("partner_b").notNull().default(""),
   locations: text("locations").notNull().default(""),
+  /** Muse ids this Muse has played with (joint chat cast). */
+  pairedWith: jsonb("paired_with").$type<number[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

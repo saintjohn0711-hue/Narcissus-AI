@@ -72,6 +72,11 @@ export type PartnerRecord = {
   partnerA: string;
   partnerB: string;
   locations: string;
+  /**
+   * Muse ids this Muse has played / had sex with — enables joint chat cast.
+   * Stored bidirectionally when toggled from the Muses list.
+   */
+  pairedWith: number[];
   createdAt: string;
   updatedAt: string;
 };
@@ -683,9 +688,87 @@ export function emptyPartner(
     partnerA: "",
     partnerB: "",
     locations: "",
+    pairedWith: [],
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** Normalize paired Muse ids (positive ints, unique, no self). */
+export function normalizePairedWith(
+  list: unknown,
+  selfId?: number,
+): number[] {
+  if (!Array.isArray(list)) return [];
+  const out: number[] = [];
+  const seen = new Set<number>();
+  const self = selfId != null ? Number(selfId) : NaN;
+  for (const raw of list) {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (Number.isFinite(self) && samePartnerId(n, self)) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+/** Stable chat thread key for a Muse pair (order-independent). */
+export function musePairThreadKey(a: number, b: number): string {
+  const x = Number(a);
+  const y = Number(b);
+  return x <= y ? `pair:${x}-${y}` : `pair:${y}-${x}`;
+}
+
+export function isMusePairThreadKey(key: string): boolean {
+  return /^pair:\d+-\d+$/.test(key);
+}
+
+/** Toggle a bidirectional “been together” link between two Muses. */
+export function toggleMusePairing(
+  list: PartnerRecord[],
+  aId: number,
+  bId: number,
+): PartnerRecord[] {
+  if (samePartnerId(aId, bId)) return list;
+  const a = list.find((p) => samePartnerId(p.id, aId));
+  const b = list.find((p) => samePartnerId(p.id, bId));
+  if (!a || !b) return list;
+  const linked = normalizePairedWith(a.pairedWith, a.id).some((id) =>
+    samePartnerId(id, bId),
+  );
+  const now = new Date().toISOString();
+  return list.map((p) => {
+    if (samePartnerId(p.id, aId)) {
+      const pairedWith = linked
+        ? normalizePairedWith(p.pairedWith, p.id).filter(
+            (id) => !samePartnerId(id, bId),
+          )
+        : normalizePairedWith([...normalizePairedWith(p.pairedWith, p.id), bId], p.id);
+      return { ...p, pairedWith, updatedAt: now };
+    }
+    if (samePartnerId(p.id, bId)) {
+      const pairedWith = linked
+        ? normalizePairedWith(p.pairedWith, p.id).filter(
+            (id) => !samePartnerId(id, aId),
+          )
+        : normalizePairedWith([...normalizePairedWith(p.pairedWith, p.id), aId], p.id);
+      return { ...p, pairedWith, updatedAt: now };
+    }
+    return p;
+  });
+}
+
+/** Resolve paired Muse records for a given Muse (order follows pairedWith). */
+export function pairedMusesFor(
+  partner: PartnerRecord,
+  roster: PartnerRecord[],
+): PartnerRecord[] {
+  const ids = normalizePairedWith(partner.pairedWith, partner.id);
+  return ids
+    .map((id) => roster.find((p) => samePartnerId(p.id, id)))
+    .filter((p): p is PartnerRecord => Boolean(p));
 }
 
 export function mainPhoto(p: PartnerRecord): string | null {
@@ -1364,6 +1447,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     partnerA: "",
     partnerB: "",
     locations: "",
+    pairedWith: [],
     createdAt: now,
     updatedAt: now,
   }));
@@ -1393,11 +1477,16 @@ export function loadPartners(): PartnerRecord[] {
           })(),
           doneActs: Array.isArray(p.doneActs) ? p.doneActs : [],
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
+          pairedWith: normalizePairedWith(
+            (p as PartnerRecord).pairedWith,
+            Number(p.id),
+          ),
         })).map((p) => {
           const id = Number(p.id);
           const base = {
             ...p,
             id: Number.isFinite(id) && id > 0 ? id : nextPartnerId([]),
+            pairedWith: normalizePairedWith(p.pairedWith, Number(p.id)),
           };
           return base.photos.length
             ? {

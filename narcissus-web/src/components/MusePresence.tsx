@@ -53,6 +53,8 @@ import {
 
 type MusePresenceProps = {
   partner: PartnerRecord;
+  /** Optional second Muse for dual-cast presence (been-together chat). */
+  castPartner?: PartnerRecord | null;
   /** Fill the chat hero rail (taller, sticky on desktop). */
   variant?: "rail" | "compact" | "full";
   /** Notify parent when Look changes (for Companion full-stage layout). */
@@ -94,6 +96,7 @@ type WardrobeTab = "features" | "style" | "clothing";
 
 export function MusePresence({
   partner,
+  castPartner = null,
   variant = "rail",
   onStyleChange,
   lastPartnerReply = null,
@@ -956,17 +959,38 @@ export function MusePresence({
         {!isFullCompanion && (
           <div className="muse-presence-nameplate">
             <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--glow)]/90">
-              Living Muse
+              {castPartner ? "Dual cast" : "Living Muse"}
             </p>
             <p
               className="mt-1 text-2xl leading-tight text-[var(--ink)] sm:text-3xl"
               style={{ fontFamily: "var(--font-display), serif" }}
             >
-              {displayName(partner)}
+              {castPartner
+                ? `${displayName(partner)} + ${displayName(castPartner)}`
+                : displayName(partner)}
             </p>
             <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--soft)]">
-              {statusLine}
+              {castPartner ? "Been together · interactive" : statusLine}
             </p>
+            {castPartner && (
+              <div className="mt-3 flex items-center gap-2">
+                {mainPhoto(castPartner) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mainPhoto(castPartner)!}
+                    alt=""
+                    className="h-10 w-10 object-cover ring-1 ring-[var(--accent)]/50"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8] ring-1 ring-[var(--line)]">
+                    {displayName(castPartner).slice(0, 1)}
+                  </span>
+                )}
+                <p className="text-xs text-[#c4b7a8]">
+                  {displayName(castPartner)} in the scene
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1029,10 +1053,31 @@ export function MusePresence({
                 </p>
               )}
               <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                {statusLine}
+                {castPartner
+                  ? `With ${displayName(castPartner)} · dual cast`
+                  : statusLine}
               </p>
             </div>
             <div className="muse-companion-dock-tools">
+              {castPartner && (
+                <div
+                  className="flex items-center gap-1.5"
+                  title={`${displayName(castPartner)} in dual cast`}
+                >
+                  {mainPhoto(castPartner) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={mainPhoto(castPartner)!}
+                      alt=""
+                      className="h-8 w-8 object-cover ring-1 ring-[var(--accent)]/45"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center bg-[#12182a] text-[10px] text-[#c4b7a8] ring-1 ring-[var(--line)]">
+                      {displayName(castPartner).slice(0, 1)}
+                    </span>
+                  )}
+                </div>
+              )}
               {onToggleChat && (
                 <button
                   type="button"
