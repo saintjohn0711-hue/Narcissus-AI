@@ -32,6 +32,7 @@ import {
   type PersonType,
 } from "@/lib/artOfX";
 import {
+  consumePartnersPersistNotice,
   fetchPartners,
   getStoreMode,
   persistPartners,
@@ -59,6 +60,7 @@ export default function PartnersPage() {
   const [ready, setReady] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
   const [dreamDesc, setDreamDesc] = useState("");
   const [dreamNote, setDreamNote] = useState<string | null>(null);
   const [dreaming, setDreaming] = useState(false);
@@ -118,24 +120,44 @@ export default function PartnersPage() {
       .then((saved) => {
         if (cancelled) return;
         setSaveError(null);
+        const notice = consumePartnersPersistNotice();
+        setSaveNote(notice);
         const sameIds =
           saved.length === partners.length &&
           saved.every((p) =>
             partners.some((q) => samePartnerId(q.id, p.id)),
           );
-        if (!sameIds) {
+        const photosChanged = saved.some((p) => {
+          const q = partners.find((row) => samePartnerId(row.id, p.id));
+          if (!q) return true;
+          return (
+            (q.photos?.length || 0) !== (p.photos?.length || 0) ||
+            (q.photos || []).some(
+              (src, i) => (p.photos?.[i]?.length || 0) !== (src?.length || 0),
+            )
+          );
+        });
+        if (!sameIds || photosChanged || notice) {
           syncingFromServer.current = true;
           setPartners(saved);
-          // Keep the open editor pointed at the remapped row
+          // Keep the open editor pointed at the remapped / compacted row
           setEditing((ed) => {
             if (!ed) return ed;
-            if (saved.some((p) => samePartnerId(p.id, ed.id))) return ed;
-            const match = saved.find(
-              (p) =>
-                p.createdAt === ed.createdAt &&
-                p.name.trim().toLowerCase() === ed.name.trim().toLowerCase(),
-            );
-            return match ? { ...ed, id: Number(match.id) } : ed;
+            const match =
+              saved.find((p) => samePartnerId(p.id, ed.id)) ||
+              saved.find(
+                (p) =>
+                  p.createdAt === ed.createdAt &&
+                  p.name.trim().toLowerCase() === ed.name.trim().toLowerCase(),
+              );
+            return match
+              ? {
+                  ...ed,
+                  id: Number(match.id),
+                  photos: [...(match.photos || [])],
+                  mainPhotoIndex: match.mainPhotoIndex ?? 0,
+                }
+              : ed;
           });
           const ids = saved.map((p) => Number(p.id));
           setManualOrder((prev) => {
@@ -150,6 +172,7 @@ export default function PartnersPage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        setSaveNote(null);
         setSaveError(
           err instanceof Error
             ? err.message
@@ -537,6 +560,14 @@ export default function PartnersPage() {
           className="mb-4 rounded-sm border border-[var(--danger)]/40 bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]"
         >
           Save failed: {saveError}
+        </p>
+      )}
+      {saveNote && !saveError && (
+        <p
+          role="status"
+          className="mb-4 rounded-sm border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-3 py-2 text-sm text-[var(--accent-strong)]"
+        >
+          {saveNote}
         </p>
       )}
 

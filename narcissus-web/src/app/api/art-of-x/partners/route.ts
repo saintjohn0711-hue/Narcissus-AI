@@ -35,7 +35,10 @@ function allocatePartnerIds(
   for (const p of list) {
     let id = safePartnerId(p.id);
     if (id == null || taken.has(id)) {
-      while (taken.has(next) || next > PG_INT4_MAX) next += 1;
+      while (taken.has(next) && next <= PG_INT4_MAX) next += 1;
+      if (next > PG_INT4_MAX) {
+        throw new Error("No free Muse ids left in range");
+      }
       id = next;
       next += 1;
     }
@@ -111,23 +114,83 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const list = Array.isArray(body.partners) ? body.partners : [];
+  let list: PartnerRecord[] = Array.isArray(body.partners)
+    ? body.partners.map((p) => ({
+        ...p,
+        photos: Array.isArray(p?.photos) ? [...p.photos] : [],
+      }))
+    : [];
   const db = getDb();
   const userId = auth.userId;
   const now = new Date();
 
-  // Reject oversized photo ledgers before delete-all (avoids wiping Muses on 413).
-  let photoChars = 0;
-  let photoCount = 0;
-  for (const p of list) {
-    const photos = Array.isArray(p?.photos) ? p.photos : [];
-    photoCount += photos.length;
-    for (const src of photos) {
-      if (typeof src === "string") photoChars += src.length;
+  // Soft photo budget before delete-all (avoids wiping Muses on 413).
+  // Prefer trimming non-main extras over hard-failing "add Muse" for heavy ledgers.
+  const PHOTO_CHAR_BUDGET = 3_200_000;
+  const PHOTO_COUNT_BUDGET = 80;
+
+  function measurePhotos(rows: PartnerRecord[]) {
+    let photoChars = 0;
+    let photoCount = 0;
+    for (const p of rows) {
+      const photos = Array.isArray(p?.photos) ? p.photos : [];
+      photoCount += photos.length;
+      for (const src of photos) {
+        if (typeof src === "string") photoChars += src.length;
+      }
+    }
+    return { photoChars, photoCount };
+  }
+
+  let trimmedExtras = 0;
+  let { photoChars, photoCount } = measurePhotos(list);
+  if (photoChars > PHOTO_CHAR_BUDGET || photoCount > PHOTO_COUNT_BUDGET) {
+    // Drop largest non-main photos until under budget.
+    while (photoChars > PHOTO_CHAR_BUDGET || photoCount > PHOTO_COUNT_BUDGET) {
+      let bestPartner = -1;
+      let bestPhoto = -1;
+      let bestLen = -1;
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i]!;
+        const photos = Array.isArray(p.photos) ? p.photos : [];
+        if (photos.length <= 1) continue;
+        const main = Math.min(
+          Math.max(0, p.mainPhotoIndex ?? 0),
+          photos.length - 1,
+        );
+        for (let j = 0; j < photos.length; j++) {
+          if (j === main) continue;
+          const len = typeof photos[j] === "string" ? photos[j]!.length : 0;
+          if (len > bestLen) {
+            bestLen = len;
+            bestPartner = i;
+            bestPhoto = j;
+          }
+        }
+      }
+      if (bestPartner < 0 || bestPhoto < 0) break;
+      const p = list[bestPartner]!;
+      const photos = [...(p.photos || [])];
+      const main = Math.min(
+        Math.max(0, p.mainPhotoIndex ?? 0),
+        photos.length - 1,
+      );
+      photos.splice(bestPhoto, 1);
+      list[bestPartner] = {
+        ...p,
+        photos,
+        mainPhotoIndex: photos.length
+          ? bestPhoto < main
+            ? Math.max(0, main - 1)
+            : Math.min(main, photos.length - 1)
+          : 0,
+      };
+      trimmedExtras += 1;
+      ({ photoChars, photoCount } = measurePhotos(list));
     }
   }
-  // ~3.2M chars ≈ stay under typical ~4.5MB serverless body after JSON overhead.
-  if (photoChars > 3_200_000 || photoCount > 80) {
+
+  if (photoChars > PHOTO_CHAR_BUDGET || photoCount > PHOTO_COUNT_BUDGET) {
     return NextResponse.json(
       {
         error: "payload_too_large",
@@ -147,11 +210,11 @@ export async function PUT(req: NextRequest) {
       .from(schema.partners)
       .where(ne(schema.partners.userId, userId));
     const taken = new Set(otherRows.map((r) => r.id));
-
-    // Replace-all for this user (simple sync model for MVP)
-    await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
-
     const ids = allocatePartnerIds(list, taken);
+
+    // Replace-all for this user (simple sync model for MVP).
+    // neon-http has no interactive transactions — size-guard above runs before delete.
+    await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
 
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
@@ -191,6 +254,12 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
+      trimmedExtras: trimmedExtras || undefined,
+      notice: trimmedExtras
+        ? `Removed ${trimmedExtras} extra Muse photo${
+            trimmedExtras === 1 ? "" : "s"
+          } so the save would fit.`
+        : undefined,
     });
   } catch (err) {
     console.error("partners PUT failed", err);

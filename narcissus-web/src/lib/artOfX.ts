@@ -1538,8 +1538,279 @@ export function loadPartners(): PartnerRecord[] {
   }
 }
 
+/**
+ * Soft budget for base64 Muse photos in one partners ledger.
+ * Keep under the cloud PUT guard (~3.2M) and typical ~5MB localStorage.
+ */
+export const PARTNERS_PHOTO_BUDGET_CHARS = 2_800_000;
+
+export function partnersPhotoStats(list: PartnerRecord[]): {
+  photoCount: number;
+  photoChars: number;
+} {
+  let photoCount = 0;
+  let photoChars = 0;
+  for (const p of list) {
+    const photos = Array.isArray(p?.photos) ? p.photos : [];
+    photoCount += photos.length;
+    for (const src of photos) {
+      if (typeof src === "string") photoChars += src.length;
+    }
+  }
+  return { photoCount, photoChars };
+}
+
+async function shrinkDataUrlPhoto(
+  src: string,
+  maxSide: number,
+  quality: number,
+): Promise<string> {
+  if (typeof window === "undefined") return src;
+  if (typeof src !== "string" || !src.startsWith("data:image/")) return src;
+  // Already tiny — skip decode cost.
+  if (src.length < 40_000) return src;
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("decode failed"));
+      el.src = src;
+    });
+    const scale = Math.min(
+      1,
+      maxSide / Math.max(img.naturalWidth || 1, img.naturalHeight || 1),
+    );
+    const w = Math.max(1, Math.round((img.naturalWidth || 1) * scale));
+    const h = Math.max(1, Math.round((img.naturalHeight || 1) * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return src;
+    ctx.drawImage(img, 0, 0, w, h);
+    const next = canvas.toDataURL("image/jpeg", quality);
+    return next.length < src.length ? next : src;
+  } catch {
+    return src;
+  }
+}
+
+async function mapPartnerPhotos(
+  list: PartnerRecord[],
+  mapPhoto: (src: string, partner: PartnerRecord, index: number) => Promise<string>,
+): Promise<PartnerRecord[]> {
+  const out: PartnerRecord[] = [];
+  for (const p of list) {
+    const photos = Array.isArray(p.photos) ? p.photos : [];
+    const nextPhotos: string[] = [];
+    for (let i = 0; i < photos.length; i++) {
+      nextPhotos.push(await mapPhoto(photos[i]!, p, i));
+    }
+    out.push(
+      nextPhotos === photos
+        ? p
+        : {
+            ...p,
+            photos: nextPhotos,
+            mainPhotoIndex: nextPhotos.length
+              ? Math.min(
+                  Math.max(0, p.mainPhotoIndex ?? 0),
+                  nextPhotos.length - 1,
+                )
+              : 0,
+          },
+    );
+  }
+  return out;
+}
+
+export type CompactPartnersResult = {
+  partners: PartnerRecord[];
+  compacted: boolean;
+  droppedPhotos: number;
+  photoChars: number;
+};
+
+/**
+ * Fit Muse photo ledger under a char budget so localStorage + cloud PUT can
+ * succeed. Re-encodes data-URLs, then drops non-main extras if still over.
+ */
+export async function compactPartnersForStorage(
+  list: PartnerRecord[],
+  maxChars = PARTNERS_PHOTO_BUDGET_CHARS,
+): Promise<CompactPartnersResult> {
+  let partners = list.map((p) => ({
+    ...p,
+    photos: Array.isArray(p.photos) ? [...p.photos] : [],
+  }));
+  let { photoChars } = partnersPhotoStats(partners);
+  if (photoChars <= maxChars) {
+    return { partners: list, compacted: false, droppedPhotos: 0, photoChars };
+  }
+
+  let compacted = false;
+  let droppedPhotos = 0;
+
+  // Pass 1–2: recompress data-URL photos (keep remote/http URLs untouched).
+  for (const [side, quality] of [
+    [720, 0.72],
+    [512, 0.55],
+  ] as const) {
+    partners = await mapPartnerPhotos(partners, (src) =>
+      shrinkDataUrlPhoto(src, side, quality),
+    );
+    compacted = true;
+    photoChars = partnersPhotoStats(partners).photoChars;
+    if (photoChars <= maxChars) {
+      return { partners, compacted, droppedPhotos, photoChars };
+    }
+  }
+
+  // Pass 3: drop non-main photos from heaviest Muses first.
+  while (photoChars > maxChars) {
+    let bestIdx = -1;
+    let bestExtra = -1;
+    for (let i = 0; i < partners.length; i++) {
+      const p = partners[i]!;
+      if (p.photos.length <= 1) continue;
+      const main = Math.min(
+        Math.max(0, p.mainPhotoIndex ?? 0),
+        p.photos.length - 1,
+      );
+      let extraChars = 0;
+      for (let j = 0; j < p.photos.length; j++) {
+        if (j === main) continue;
+        extraChars += p.photos[j]?.length || 0;
+      }
+      if (extraChars > bestExtra) {
+        bestExtra = extraChars;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0) break;
+    const p = partners[bestIdx]!;
+    const main = Math.min(
+      Math.max(0, p.mainPhotoIndex ?? 0),
+      p.photos.length - 1,
+    );
+    // Drop the largest non-main photo.
+    let dropAt = -1;
+    let dropLen = -1;
+    for (let j = 0; j < p.photos.length; j++) {
+      if (j === main) continue;
+      const len = p.photos[j]?.length || 0;
+      if (len > dropLen) {
+        dropLen = len;
+        dropAt = j;
+      }
+    }
+    if (dropAt < 0) break;
+    const photos = p.photos.filter((_, j) => j !== dropAt);
+    const mainPhotoIndex =
+      dropAt < main ? Math.max(0, main - 1) : Math.min(main, photos.length - 1);
+    partners[bestIdx] = {
+      ...p,
+      photos,
+      mainPhotoIndex: photos.length ? mainPhotoIndex : 0,
+    };
+    droppedPhotos += 1;
+    compacted = true;
+    photoChars = partnersPhotoStats(partners).photoChars;
+  }
+
+  // Last resort: shrink remaining mains harder.
+  if (photoChars > maxChars) {
+    partners = await mapPartnerPhotos(partners, (src) =>
+      shrinkDataUrlPhoto(src, 384, 0.45),
+    );
+    compacted = true;
+    photoChars = partnersPhotoStats(partners).photoChars;
+  }
+
+  return { partners, compacted, droppedPhotos, photoChars };
+}
+
 export function savePartners(list: PartnerRecord[]) {
-  localStorage.setItem(STORAGE.partners, JSON.stringify(list));
+  if (typeof window === "undefined") return;
+  const payload = JSON.stringify(list);
+  try {
+    localStorage.setItem(STORAGE.partners, payload);
+    return;
+  } catch (err) {
+    const quota =
+      err instanceof DOMException &&
+      (err.name === "QuotaExceededError" ||
+        err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+        err.code === 22);
+    if (!quota) throw err;
+  }
+  // Sync fallback: drop non-main extras until it fits (no async canvas here).
+  const copy = list.map((p) => ({
+    ...p,
+    photos: Array.isArray(p.photos) ? [...p.photos] : [],
+  }));
+  while (copy.some((p) => p.photos.length > 1)) {
+    let best = -1;
+    let bestLen = -1;
+    for (let i = 0; i < copy.length; i++) {
+      const p = copy[i]!;
+      if (p.photos.length <= 1) continue;
+      const total = p.photos.reduce((n, s) => n + (s?.length || 0), 0);
+      if (total > bestLen) {
+        bestLen = total;
+        best = i;
+      }
+    }
+    if (best < 0) break;
+    const p = copy[best]!;
+    const main = Math.min(
+      Math.max(0, p.mainPhotoIndex ?? 0),
+      p.photos.length - 1,
+    );
+    let dropAt = -1;
+    let dropLen = -1;
+    for (let j = 0; j < p.photos.length; j++) {
+      if (j === main) continue;
+      const len = p.photos[j]?.length || 0;
+      if (len > dropLen) {
+        dropLen = len;
+        dropAt = j;
+      }
+    }
+    if (dropAt < 0) break;
+    const photos = p.photos.filter((_, j) => j !== dropAt);
+    copy[best] = {
+      ...p,
+      photos,
+      mainPhotoIndex: photos.length
+        ? dropAt < main
+          ? Math.max(0, main - 1)
+          : Math.min(main, photos.length - 1)
+        : 0,
+    };
+    try {
+      localStorage.setItem(STORAGE.partners, JSON.stringify(copy));
+      return;
+    } catch {
+      // keep trimming
+    }
+  }
+  // Keep main photo only.
+  const mains = copy.map((p) => {
+    if (!p.photos.length) return p;
+    const main = Math.min(
+      Math.max(0, p.mainPhotoIndex ?? 0),
+      p.photos.length - 1,
+    );
+    return { ...p, photos: [p.photos[main]!], mainPhotoIndex: 0 };
+  });
+  try {
+    localStorage.setItem(STORAGE.partners, JSON.stringify(mains));
+  } catch {
+    throw new Error(
+      "Browser storage is full — remove some Muse photos and try again.",
+    );
+  }
 }
 
 export function loadScenes(): SavedScene[] {
@@ -1578,9 +1849,10 @@ export function saveChats(map: Record<string, ChatMessage[]>) {
  */
 export const PARTNER_PHOTO_LIMITS = {
   /** Per-partner photo file size until accounts exist */
-  perPartner: 24,
-  maxSidePx: 960,
-  jpegQuality: 0.88,
+  perPartner: 12,
+  /** Keep new uploads lean so multi-Muse ledgers fit cloud + localStorage. */
+  maxSidePx: 720,
+  jpegQuality: 0.72,
 } as const;
 
 /** Compress image file to a data URL for local partner photo files. */
