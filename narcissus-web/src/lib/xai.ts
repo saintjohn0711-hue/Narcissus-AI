@@ -12,6 +12,12 @@ import {
   normalizeKinks,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import {
+  formatMemoriesForPrompt,
+  memoriesForPrompt,
+  memoriesPromptBlock,
+  tryNewThingsPromptBlock,
+} from "@/lib/museChatMemory";
 
 export const XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions";
 
@@ -106,7 +112,11 @@ export function extractXaiText(data: unknown): string {
   return typed.choices?.[0]?.message?.content?.trim() || "";
 }
 
-function museIdentityBlock(partner: PartnerRecord, label?: string): string {
+function museIdentityBlock(
+  partner: PartnerRecord,
+  label?: string,
+  opts?: { pairWith?: number | null },
+): string {
   const name = displayName(partner);
   const kinks = normalizeKinks(partner.kinks);
   const kinkLines = kinks.length
@@ -118,6 +128,10 @@ function museIdentityBlock(partner: PartnerRecord, label?: string): string {
         .join("\n")
     : "- (none tagged yet — still flirty and curious)";
   const head = label ? `${label}: ${name}` : `Name: ${name}`;
+  const mems = memoriesForPrompt(partner.memories || [], {
+    pairWith: opts?.pairWith ?? null,
+  });
+  const memBlock = memoriesPromptBlock(formatMemoriesForPrompt(mems));
   return [
     head,
     `- Type: ${partner.type}`,
@@ -140,6 +154,10 @@ function museIdentityBlock(partner: PartnerRecord, label?: string): string {
       : "",
     "Kinks:",
     kinkLines,
+    "",
+    memBlock,
+    "",
+    tryNewThingsPromptBlock(Boolean(partner.tryNewThings)),
   ]
     .filter((line) => line !== "")
     .join("\n");
@@ -154,6 +172,8 @@ export function buildPartnerChatSystemPrompt(
   const name = displayName(partner);
   const second = cast && cast.id !== partner.id ? cast : null;
   const secondName = second ? displayName(second) : null;
+  const tryNewGranted =
+    Boolean(partner.tryNewThings) || Boolean(second?.tryNewThings);
 
   if (second && secondName) {
     const povInstruction =
@@ -168,15 +188,18 @@ export function buildPartnerChatSystemPrompt(
       `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
       "",
       "Cast A — primary:",
-      museIdentityBlock(partner),
+      museIdentityBlock(partner, undefined, { pairWith: second.id }),
       "",
       "Cast B — paired Muse:",
-      museIdentityBlock(second),
+      museIdentityBlock(second, undefined, { pairWith: partner.id }),
+      "",
+      "Shared session gates:",
+      tryNewThingsPromptBlock(tryNewGranted),
       "",
       "Voice & POV:",
       povInstruction,
       "Keep replies to a natural chat length (a short dual exchange) unless they clearly want a longer scene.",
-      "Use their shared history and kinks without dumping a checklist — weave them in like bodies that already know each other.",
+      "Use their shared history, durable memories, and kinks without dumping a checklist — weave them in like bodies that already know each other (e.g. bring up a boyfriend, bi preference, or past scene when it fits).",
       "Match their energy: soft when they are soft, dominant when the tags say so, filthy when they go there.",
     ]
       .filter((line) => line !== "")
@@ -199,7 +222,7 @@ export function buildPartnerChatSystemPrompt(
     "Voice & POV:",
     povInstruction,
     "Keep replies to a natural chat length (a few sentences to a short paragraph) unless they clearly want a longer scene.",
-    "Use their shared history and kinks without dumping a checklist — weave them in like someone who already knows this body.",
+    "Use their shared history, durable memories, and kinks without dumping a checklist — weave them in like someone who already knows this body (relationship facts and preferences especially).",
     "Match their energy: soft when they are soft, dominant when the tags say so, filthy when they go there.",
   ]
     .filter((line) => line !== "")

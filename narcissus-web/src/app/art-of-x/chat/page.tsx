@@ -34,6 +34,16 @@ import {
   persistPartners,
 } from "@/lib/artOfXStore";
 import {
+  detectTryNewThingsConsent,
+  extractExplicitRemember,
+  heuristicExtractMemories,
+  memoriesForPrompt,
+  mergeMemories,
+  normalizeMemories,
+  type MuseMemory,
+  type MuseMemoryKind,
+} from "@/lib/museChatMemory";
+import {
   DEFAULT_MUSE_PRESENCE_STYLE,
   loadPresenceStyle,
   savePresenceStyle,
@@ -45,6 +55,17 @@ import type { ChatPov } from "@/lib/xai";
 function partnerForChatApi(p: PartnerRecord): PartnerRecord {
   return { ...p, photos: [] };
 }
+
+const MEMORY_KIND_LABEL: Record<MuseMemoryKind, string> = {
+  fact: "Fact",
+  relationship: "Relationship",
+  kink: "Kink",
+  place: "Place",
+  nickname: "Nickname",
+  scene: "Scene",
+  preference: "Preference",
+  mode: "Mode",
+};
 
 async function readXaiSseStream(
   res: Response,
@@ -105,11 +126,16 @@ function ChatPageInner() {
     DEFAULT_MUSE_PRESENCE_STYLE,
   );
   const [chatOpen, setChatOpen] = useState(true);
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState("");
+  const [memoryKind, setMemoryKind] = useState<MuseMemoryKind>("relationship");
+  const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [reactionReply, setReactionReply] = useState<{
     id: string;
     text: string;
   } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const partnersRef = useRef<PartnerRecord[]>([]);
   const skipPersist = useRef(false);
   const streamingChats = useRef(false);
   const chatsRef = useRef<Record<string, ChatMessage[]>>({});
@@ -185,6 +211,10 @@ function ChatPageInner() {
   }, [chats]);
 
   useEffect(() => {
+    partnersRef.current = partners;
+  }, [partners]);
+
+  useEffect(() => {
     if (!ready) return;
     if (skipPersist.current) {
       skipPersist.current = false;
@@ -231,6 +261,243 @@ function ChatPageInner() {
       : partner
         ? displayName(partner)
         : "";
+  const visibleMemories = useMemo(() => {
+    if (!partner) return [] as MuseMemory[];
+    return memoriesForPrompt(partner.memories || [], {
+      pairWith: castPartner?.id ?? null,
+    });
+  }, [partner, castPartner]);
+  const tryNewActive = Boolean(
+    partner?.tryNewThings || castPartner?.tryNewThings,
+  );
+
+  async function persistPartnerPatch(
+    patch: (p: PartnerRecord) => PartnerRecord,
+  ) {
+    const list = partnersRef.current;
+    if (!partner) return;
+    const next = list.map((p) => {
+      if (samePartnerId(p.id, partner.id)) return patch(p);
+      if (castPartner && samePartnerId(p.id, castPartner.id)) {
+        // Keep dual-cast tryNewThings in sync when toggling from chat.
+        const primaryNext = patch(partner);
+        if (
+          typeof primaryNext.tryNewThings === "boolean" &&
+          primaryNext.tryNewThings !== Boolean(p.tryNewThings) &&
+          primaryNext.memories === partner.memories
+        ) {
+          return {
+            ...p,
+            tryNewThings: primaryNext.tryNewThings,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      }
+      return p;
+    });
+    setPartners(next);
+    partnersRef.current = next;
+    try {
+      try {
+        savePartners(next);
+      } catch {
+        // local quota
+      }
+      const saved = await persistPartners(next);
+      setPartners(saved);
+      partnersRef.current = saved;
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Saved on this device — cloud sync failed.",
+      );
+    }
+  }
+
+  async function setTryNewThings(enabled: boolean) {
+    if (!partner) return;
+    const now = new Date().toISOString();
+    const list = partnersRef.current.map((p) => {
+      if (samePartnerId(p.id, partner.id)) {
+        return { ...p, tryNewThings: enabled, updatedAt: now };
+      }
+      if (castPartner && samePartnerId(p.id, castPartner.id)) {
+        return { ...p, tryNewThings: enabled, updatedAt: now };
+      }
+      return p;
+    });
+    setPartners(list);
+    partnersRef.current = list;
+    try {
+      try {
+        savePartners(list);
+      } catch {
+        // ignore
+      }
+      const saved = await persistPartners(list);
+      setPartners(saved);
+      partnersRef.current = saved;
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn’t save try-new permission.",
+      );
+    }
+  }
+
+  async function addMemoriesToPartner(
+    incoming: MuseMemory[],
+    targetId?: number,
+  ) {
+    if (!incoming.length) return;
+    const id = targetId ?? partner?.id;
+    if (id == null) return;
+    const now = new Date().toISOString();
+    const list = partnersRef.current.map((p) => {
+      if (!samePartnerId(p.id, id)) return p;
+      return {
+        ...p,
+        memories: mergeMemories(normalizeMemories(p.memories), incoming),
+        updatedAt: now,
+      };
+    });
+    setPartners(list);
+    partnersRef.current = list;
+    try {
+      try {
+        savePartners(list);
+      } catch {
+        // ignore
+      }
+      const saved = await persistPartners(list);
+      setPartners(saved);
+      partnersRef.current = saved;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Couldn’t save memory.",
+      );
+    }
+  }
+
+  async function forgetMemory(memoryId: string) {
+    if (!partner) return;
+    await persistPartnerPatch((p) => ({
+      ...p,
+      memories: normalizeMemories(p.memories).filter((m) => m.id !== memoryId),
+      updatedAt: new Date().toISOString(),
+    }));
+  }
+
+  async function saveManualMemory() {
+    const text = memoryDraft.trim();
+    if (!text || !partner) return;
+    if (editingMemoryId) {
+      await persistPartnerPatch((p) => ({
+        ...p,
+        memories: normalizeMemories(p.memories).map((m) =>
+          m.id === editingMemoryId
+            ? {
+                ...m,
+                text,
+                kind: memoryKind,
+                source: "explicit" as const,
+                at: new Date().toISOString(),
+                pairWith: castPartner?.id ?? m.pairWith ?? null,
+              }
+            : m,
+        ),
+        updatedAt: new Date().toISOString(),
+      }));
+      setEditingMemoryId(null);
+      setMemoryDraft("");
+      setMemoryKind("relationship");
+      return;
+    }
+    const mem: MuseMemory = {
+      id: `mem_${Date.now()}`,
+      text,
+      kind: memoryKind,
+      at: new Date().toISOString(),
+      source: "explicit",
+      pairWith: castPartner?.id ?? null,
+    };
+    setMemoryDraft("");
+    setMemoryKind("relationship");
+    await addMemoriesToPartner([mem]);
+  }
+
+  function beginEditMemory(m: MuseMemory) {
+    setEditingMemoryId(m.id);
+    setMemoryDraft(m.text);
+    setMemoryKind(m.kind);
+    setMemoriesOpen(true);
+  }
+
+  function cancelEditMemory() {
+    setEditingMemoryId(null);
+    setMemoryDraft("");
+    setMemoryKind("relationship");
+  }
+
+  async function harvestMemoriesAfterTurn(
+    userText: string,
+    museReply: string,
+  ) {
+    if (!partner) return;
+    const pairWith = castPartner?.id ?? null;
+
+    const consent = detectTryNewThingsConsent(userText);
+    if (consent != null) {
+      await setTryNewThings(consent);
+    }
+
+    const explicit = extractExplicitRemember(userText);
+    let extracted: MuseMemory[] = heuristicExtractMemories(
+      userText,
+      museReply,
+      { pairWith },
+    );
+    if (explicit) {
+      extracted = mergeMemories(extracted, [
+        {
+          id: `mem_explicit_${Date.now()}`,
+          text: explicit,
+          kind: /boyfriend|girlfriend|husband|wife|partner|fiancé/i.test(
+            explicit,
+          )
+            ? "relationship"
+            : /bisexual|\bbi\b/i.test(explicit)
+              ? "preference"
+              : "fact",
+          at: new Date().toISOString(),
+          source: "explicit",
+          pairWith,
+        },
+      ]);
+    }
+
+    try {
+      const res = await fetch("/api/art-of-x/chat-memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userText, museReply, pairWith }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { memories?: MuseMemory[] };
+        if (Array.isArray(data.memories) && data.memories.length) {
+          extracted = mergeMemories(extracted, normalizeMemories(data.memories));
+        }
+      }
+    } catch {
+      // heuristic already applied
+    }
+
+    if (extracted.length) {
+      await addMemoriesToPartner(extracted);
+    }
+  }
 
   async function startCompanion() {
     const scratch = {
@@ -440,6 +707,7 @@ function ChatPageInner() {
           chatsRef.current = { ...chatsRef.current, [key]: list };
         }
         setReactionReply({ id: replyId, text: trimmed });
+        void harvestMemoriesAfterTurn(userText, trimmed);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Chat failed");
@@ -705,6 +973,37 @@ function ChatPageInner() {
                         </button>
                       </>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setMemoriesOpen((v) => !v)}
+                      className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
+                        memoriesOpen
+                          ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
+                          : "border-[var(--line)] text-[var(--soft)] hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                      }`}
+                      title="What she remembers — add lasting facts for chat"
+                    >
+                      Memories
+                      {visibleMemories.length
+                        ? ` (${visibleMemories.length})`
+                        : ""}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void setTryNewThings(!tryNewActive)}
+                      className={`rounded-sm border px-3 py-1.5 text-xs font-medium transition ${
+                        tryNewActive
+                          ? "border-[var(--accent)]/55 bg-[var(--accent)]/10 text-[var(--ink)]"
+                          : "border-[var(--line)] text-[var(--soft)] hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                      }`}
+                      title={
+                        tryNewActive
+                          ? "Allowed to try new things / shift mode"
+                          : "Stay in established vibe — tap to grant try-new"
+                      }
+                    >
+                      {tryNewActive ? "Try new · on" : "Try new things"}
+                    </button>
                     <label className="flex items-center gap-2 text-xs text-[var(--muted)]">
                       POV
                       <select
@@ -721,11 +1020,130 @@ function ChatPageInner() {
                       onClick={() => void resetChat()}
                       disabled={resetting || messages.length === 0}
                       className="rounded-sm border border-[var(--danger)]/40 px-3 py-1.5 text-xs font-medium text-[#f0c4b8] transition hover:border-[var(--danger)]/70 hover:bg-[var(--danger)]/10 disabled:cursor-not-allowed disabled:opacity-40"
-                      title="Clear this Muse’s conversation"
+                      title="Clear this Muse’s conversation (memories stay)"
                     >
                       {resetting ? "Resetting…" : "Reset chat"}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {partner && memoriesOpen && (
+                <div
+                  className="muse-memories-panel border-b border-[var(--line)] bg-[#0a0e18]/90 px-4 py-3 sm:px-5"
+                  data-testid="muse-memories-panel"
+                >
+                  <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <p
+                      className="text-sm text-[var(--ink)]"
+                      style={{ fontFamily: "var(--font-display), serif" }}
+                    >
+                      What {displayName(partner)} remembers
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Survives reset · loads into chat
+                    </p>
+                  </div>
+                  <p className="mb-3 text-xs leading-relaxed text-[#c4b7a8]">
+                    Add lasting facts for realism — e.g. “Joey is Carrie’s
+                    boyfriend”, “she wants Joey bisexual”. Also auto-saves from
+                    chat or “remember …”.
+                  </p>
+                  <form
+                    className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void saveManualMemory();
+                    }}
+                  >
+                    <label className="min-w-0 flex-1 text-xs text-[var(--muted)]">
+                      Memory
+                      <input
+                        value={memoryDraft}
+                        onChange={(e) => setMemoryDraft(e.target.value)}
+                        placeholder="Joey is her boyfriend"
+                        className="mt-1 w-full rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2 text-sm text-[var(--ink)]"
+                        data-testid="muse-memory-input"
+                      />
+                    </label>
+                    <label className="text-xs text-[var(--muted)] sm:w-36">
+                      Kind
+                      <select
+                        value={memoryKind}
+                        onChange={(e) =>
+                          setMemoryKind(e.target.value as MuseMemoryKind)
+                        }
+                        className="mt-1 w-full rounded-sm border border-[var(--line)] bg-[#12182a] px-2 py-2 text-sm text-[var(--ink)]"
+                      >
+                        {(
+                          Object.keys(MEMORY_KIND_LABEL) as MuseMemoryKind[]
+                        ).map((k) => (
+                          <option key={k} value={k}>
+                            {MEMORY_KIND_LABEL[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex gap-2">
+                      {editingMemoryId && (
+                        <button
+                          type="button"
+                          onClick={cancelEditMemory}
+                          className="rounded-sm border border-[var(--line)] px-3 py-2 text-xs font-medium text-[var(--soft)]"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={!memoryDraft.trim()}
+                        className="rounded-sm bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--on-accent)] disabled:opacity-50"
+                        data-testid="muse-memory-save"
+                      >
+                        {editingMemoryId ? "Update" : "Add memory"}
+                      </button>
+                    </div>
+                  </form>
+                  {visibleMemories.length === 0 ? (
+                    <p className="text-xs text-[var(--muted)]">
+                      Nothing saved yet — add one above.
+                    </p>
+                  ) : (
+                    <ul className="max-h-40 space-y-2 overflow-y-auto">
+                      {visibleMemories.map((m) => (
+                        <li
+                          key={m.id}
+                          className="flex items-start justify-between gap-3 border border-[var(--line)]/70 bg-[#12182a]/55 px-2.5 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
+                              {MEMORY_KIND_LABEL[m.kind] || m.kind}
+                              {m.source === "explicit" ? " · saved" : " · auto"}
+                            </p>
+                            <p className="mt-0.5 text-sm leading-snug text-[#f7f1e8]">
+                              {m.text}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => beginEditMemory(m)}
+                              className="rounded-sm border border-[var(--line)] px-2 py-1 text-[10px] font-medium text-[var(--soft)] hover:text-[var(--ink)]"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void forgetMemory(m.id)}
+                              className="rounded-sm border border-[var(--danger)]/35 px-2 py-1 text-[10px] font-medium text-[#f0c4b8] hover:bg-[var(--danger)]/10"
+                            >
+                              Forget
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 

@@ -3,7 +3,13 @@
  * /cursor/stores/self/docs/arkofx-demo.html (adults only).
  */
 
+import {
+  normalizeMemories,
+  type MuseMemory,
+} from "@/lib/museChatMemory";
+
 export type PersonType = "Real" | "Dream" | "Wanted";
+export type { MuseMemory };
 export type PersonGender =
   | "woman"
   | "man"
@@ -77,6 +83,16 @@ export type PartnerRecord = {
    * Stored bidirectionally when toggled from the Muses list.
    */
   pairedWith: number[];
+  /**
+   * Durable chat memories (facts, nicknames, places, kinks tried…).
+   * Synced with partners localStorage + Neon.
+   */
+  memories: MuseMemory[];
+  /**
+   * When true, Muse may introduce new acts / tones / modes.
+   * When false, stay in the established vibe unless the user asks.
+   */
+  tryNewThings: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -689,6 +705,8 @@ export function emptyPartner(
     partnerB: "",
     locations: "",
     pairedWith: [],
+    memories: [],
+    tryNewThings: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -1448,6 +1466,8 @@ export function arkDemoRoster(): PartnerRecord[] {
     partnerB: "",
     locations: "",
     pairedWith: [],
+    memories: [],
+    tryNewThings: false,
     createdAt: now,
     updatedAt: now,
   }));
@@ -1481,6 +1501,8 @@ export function loadPartners(): PartnerRecord[] {
             (p as PartnerRecord).pairedWith,
             Number(p.id),
           ),
+          memories: normalizeMemories((p as PartnerRecord).memories),
+          tryNewThings: Boolean((p as PartnerRecord).tryNewThings),
         })).map((p) => {
           const id = Number(p.id);
           const base = {
