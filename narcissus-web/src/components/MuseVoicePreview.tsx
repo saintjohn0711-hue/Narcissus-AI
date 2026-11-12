@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import {
   DEFAULT_VOICE_PREVIEW_LINE,
   isVoicePreviewActive,
+  narrationSupported,
+  naturalTtsAvailable,
   previewVoice,
-  speechSupported,
   stopNarration,
   subscribeNarration,
   warmSpeechVoices,
@@ -16,6 +17,8 @@ export type MuseVoicePreviewApi = {
   sample: string;
   setSample: (value: string) => void;
   supported: boolean;
+  /** True when OpenAI TTS is configured server-side. */
+  natural: boolean;
   previewing: boolean;
   preview: (settings: MuseVoiceSettings) => void;
   stop: () => void;
@@ -27,11 +30,13 @@ export function useMuseVoicePreview(
 ): MuseVoicePreviewApi {
   const [sample, setSample] = useState(initialSample);
   const [supported, setSupported] = useState(false);
+  const [natural, setNatural] = useState(false);
   const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
-    setSupported(speechSupported());
+    setSupported(narrationSupported());
     const cool = warmSpeechVoices();
+    void naturalTtsAvailable().then(setNatural);
     const unsub = subscribeNarration(() => {
       setPreviewing(isVoicePreviewActive());
     });
@@ -42,7 +47,7 @@ export function useMuseVoicePreview(
   }, []);
 
   function preview(settings: MuseVoiceSettings) {
-    if (!speechSupported()) return;
+    if (!narrationSupported()) return;
     previewVoice(settings, sample);
   }
 
@@ -50,6 +55,7 @@ export function useMuseVoicePreview(
     sample,
     setSample,
     supported,
+    natural,
     previewing,
     preview,
     stop: stopNarration,
@@ -81,7 +87,7 @@ export function MuseVoicePreviewBar({
         className={`text-xs text-[var(--muted)] ${className}`}
         data-testid="muse-voice-preview-unsupported"
       >
-        Speech isn’t available in this browser — preview needs Web Speech.
+        Speech isn’t available in this browser.
       </p>
     );
   }
@@ -90,6 +96,7 @@ export function MuseVoicePreviewBar({
     <div
       className={`muse-voice-preview ${compact ? "muse-voice-preview--compact" : ""} ${className}`}
       data-testid="muse-voice-preview"
+      data-engine={api.natural ? "openai" : "web-speech"}
     >
       <label className="muse-voice-preview-label" htmlFor="muse-voice-preview-sample">
         Sample line
@@ -129,7 +136,8 @@ export function MuseVoicePreviewBar({
         </button>
       </div>
       <p className="muse-voice-preview-hint">
-        Selecting gender, accent, or delivery plays a short test.
+        Selecting gender, accent, or delivery plays a short{" "}
+        {api.natural ? "natural" : "browser"} voice test.
       </p>
     </div>
   );

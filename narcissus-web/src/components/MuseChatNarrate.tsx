@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import {
   narrationStateFor,
+  narrationSupported,
   pauseNarration,
   resumeNarration,
   speakMessage,
-  speechSupported,
   stopNarration,
   subscribeNarration,
   type MuseVoiceSettings,
@@ -36,7 +36,7 @@ export function MuseChatNarrate({
   const [state, setState] = useState<SpeakState>("idle");
 
   useEffect(() => {
-    setSupported(speechSupported());
+    setSupported(narrationSupported());
     return subscribeNarration(() => {
       setState(narrationStateFor(messageId));
     });

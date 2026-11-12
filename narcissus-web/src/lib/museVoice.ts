@@ -1,10 +1,12 @@
 /**
- * Muse chat voice narration — browser Web Speech API baseline (zero cost).
+ * Muse chat voice narration.
  *
- * Studio already has Edge-TTS (`lib/tts.ts`) for Say-This video mux on Comfy hosts.
- * That toolchain is not available on Vercel serverless, so Companion chat uses
- * SpeechSynthesis here. Upgrade path: OpenAI TTS / ElevenLabs when their keys
- * are intentionally provisioned (not present as chat-TTS secrets today).
+ * Primary: OpenAI TTS via `POST /api/art-of-x/tts` (needs `OPENAI_API_KEY`) —
+ * natural voices with gender / accent / delivery mapped server-side.
+ * Fallback: browser Web Speech API (offline / missing key / network errors).
+ *
+ * Studio Edge-TTS (`lib/tts.ts`) stays Comfy/video-only — not used on Vercel chat.
+ * ElevenLabs is not wired (no project key).
  */
 
 export type MuseVoiceGender = "female" | "male";
@@ -475,12 +477,28 @@ export type SpeakController = {
   getState: () => SpeakState;
 };
 
+export type NarrationEngine = "openai" | "web-speech" | null;
+
 let activeUtterance: SpeechSynthesisUtterance | null = null;
+let activeAudio: HTMLAudioElement | null = null;
+let activeObjectUrl: string | null = null;
 let activeMessageId: string | null = null;
+let activeEngine: NarrationEngine = null;
+/** True while OpenAI audio is fetching / buffering before play. */
+let activeLoading = false;
+let audioPausedByUser = false;
+/** Pause requested while OpenAI audio was still fetching. */
+let pauseWhenReady = false;
+let speakGeneration = 0;
+let naturalTtsCache: boolean | null = null;
 let listeners = new Set<() => void>();
 
 export function getActiveNarrationId(): string | null {
   return activeMessageId;
+}
+
+export function getActiveNarrationEngine(): NarrationEngine {
+  return activeEngine;
 }
 
 export function subscribeNarration(listener: () => void): () => void {
@@ -494,8 +512,58 @@ function notify() {
 
 function clearActive() {
   activeUtterance = null;
+  activeAudio = null;
+  activeObjectUrl = null;
   activeMessageId = null;
+  activeEngine = null;
+  activeLoading = false;
+  audioPausedByUser = false;
+  pauseWhenReady = false;
   notify();
+}
+
+function revokeObjectUrl() {
+  if (activeObjectUrl) {
+    try {
+      URL.revokeObjectURL(activeObjectUrl);
+    } catch {
+      /* ignore */
+    }
+    activeObjectUrl = null;
+  }
+}
+
+/** HTMLAudioElement available (natural TTS playback). */
+export function audioPlaybackSupported(): boolean {
+  return typeof window !== "undefined" && typeof Audio !== "undefined";
+}
+
+/** Play / Pause / Stop chrome — natural TTS and/or Web Speech. */
+export function narrationSupported(): boolean {
+  return audioPlaybackSupported() || speechSupported();
+}
+
+/** Cached probe of `GET /api/art-of-x/tts` (OpenAI key present). */
+export async function naturalTtsAvailable(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (naturalTtsCache !== null) return naturalTtsCache;
+  try {
+    const res = await fetch("/api/art-of-x/tts", { method: "GET" });
+    if (!res.ok) {
+      naturalTtsCache = false;
+      return false;
+    }
+    const data = (await res.json()) as { available?: boolean };
+    naturalTtsCache = Boolean(data.available);
+    return naturalTtsCache;
+  } catch {
+    naturalTtsCache = false;
+    return false;
+  }
+}
+
+export function invalidateNaturalTtsCache() {
+  naturalTtsCache = null;
 }
 
 /** Strip stage directions / markdown noise so TTS reads cleaner. */
@@ -513,12 +581,49 @@ export function textForSpeech(raw: string): string {
 }
 
 export function stopNarration() {
-  if (!speechSupported()) return;
-  window.speechSynthesis.cancel();
+  speakGeneration += 1;
+  if (activeAudio) {
+    try {
+      activeAudio.onended = null;
+      activeAudio.onerror = null;
+      activeAudio.pause();
+      activeAudio.removeAttribute("src");
+      activeAudio.load();
+    } catch {
+      /* ignore */
+    }
+    activeAudio = null;
+  }
+  revokeObjectUrl();
+  if (speechSupported()) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      /* ignore */
+    }
+  }
+  activeUtterance = null;
   clearActive();
 }
 
 export function pauseNarration() {
+  if (activeLoading && !activeAudio) {
+    pauseWhenReady = true;
+    audioPausedByUser = true;
+    notify();
+    return;
+  }
+  if (activeAudio) {
+    try {
+      activeAudio.pause();
+      audioPausedByUser = true;
+      activeLoading = false;
+      notify();
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   if (!speechSupported()) return;
   if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
     window.speechSynthesis.pause();
@@ -527,6 +632,21 @@ export function pauseNarration() {
 }
 
 export function resumeNarration() {
+  pauseWhenReady = false;
+  if (activeAudio) {
+    void activeAudio.play().then(() => {
+      audioPausedByUser = false;
+      notify();
+    }).catch(() => {
+      /* autoplay / race */
+    });
+    return;
+  }
+  if (activeLoading) {
+    audioPausedByUser = false;
+    notify();
+    return;
+  }
   if (!speechSupported()) return;
   if (window.speechSynthesis.paused) {
     window.speechSynthesis.resume();
@@ -536,22 +656,23 @@ export function resumeNarration() {
 
 export function narrationStateFor(messageId: string): SpeakState {
   if (activeMessageId !== messageId) return "idle";
+  if (activeAudio || activeLoading) {
+    if (audioPausedByUser || pauseWhenReady) return "paused";
+    return "playing";
+  }
   if (!speechSupported()) return "idle";
   if (window.speechSynthesis.paused) return "paused";
   if (window.speechSynthesis.speaking || activeUtterance) return "playing";
   return "idle";
 }
 
-export function speakMessage(
+function speakWithWebSpeech(
   messageId: string,
-  text: string,
+  cleaned: string,
   settings: MuseVoiceSettings,
+  generation: number,
 ): SpeakController | null {
   if (!speechSupported()) return null;
-  const cleaned = textForSpeech(text);
-  if (!cleaned) return null;
-
-  stopNarration();
 
   const preset = getVoicePreset(settings.preset);
   const accent = getVoiceAccent(normalizeVoiceAccent(settings.accent));
@@ -565,21 +686,25 @@ export function speakMessage(
 
   activeUtterance = utter;
   activeMessageId = messageId;
+  activeEngine = "web-speech";
+  activeLoading = false;
   notify();
 
   utter.onend = () => {
-    if (activeUtterance === utter) clearActive();
+    if (speakGeneration === generation && activeUtterance === utter) {
+      clearActive();
+    }
   };
   utter.onerror = () => {
-    if (activeUtterance === utter) clearActive();
+    if (speakGeneration === generation && activeUtterance === utter) {
+      clearActive();
+    }
   };
 
-  // Some browsers need a tick after cancel before speak
   window.setTimeout(() => {
-    if (activeUtterance === utter) {
-      window.speechSynthesis.speak(utter);
-      notify();
-    }
+    if (speakGeneration !== generation || activeUtterance !== utter) return;
+    window.speechSynthesis.speak(utter);
+    notify();
   }, 20);
 
   return {
@@ -588,6 +713,147 @@ export function speakMessage(
     resume: resumeNarration,
     getState: () => narrationStateFor(messageId),
   };
+}
+
+async function speakWithOpenAiAudio(
+  messageId: string,
+  cleaned: string,
+  settings: MuseVoiceSettings,
+  generation: number,
+  preview: boolean,
+): Promise<boolean> {
+  if (!audioPlaybackSupported()) return false;
+
+  const res = await fetch("/api/art-of-x/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: cleaned,
+      gender: settings.gender,
+      preset: settings.preset,
+      accent: normalizeVoiceAccent(settings.accent),
+      preview: preview || undefined,
+    }),
+  });
+
+  if (speakGeneration !== generation) return true; // superseded
+
+  if (res.status === 503) {
+    naturalTtsCache = false;
+    return false;
+  }
+  if (!res.ok) {
+    return false;
+  }
+
+  const blob = await res.blob();
+  if (speakGeneration !== generation) return true;
+
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.preload = "auto";
+
+  revokeObjectUrl();
+  activeObjectUrl = url;
+  activeAudio = audio;
+  activeUtterance = null;
+  activeEngine = "openai";
+  activeLoading = false;
+  audioPausedByUser = false;
+  notify();
+
+  audio.onended = () => {
+    if (speakGeneration === generation && activeAudio === audio) {
+      revokeObjectUrl();
+      clearActive();
+    }
+  };
+  audio.onerror = () => {
+    if (speakGeneration === generation && activeAudio === audio) {
+      revokeObjectUrl();
+      clearActive();
+    }
+  };
+
+  if (pauseWhenReady) {
+    audioPausedByUser = true;
+    naturalTtsCache = true;
+    notify();
+    return true;
+  }
+
+  try {
+    await audio.play();
+    naturalTtsCache = true;
+    notify();
+    return true;
+  } catch {
+    revokeObjectUrl();
+    activeAudio = null;
+    return false;
+  }
+}
+
+/**
+ * Narrate `text` for a chat bubble (or preview id).
+ * Tries natural OpenAI TTS first; falls back to Web Speech.
+ */
+export function speakMessage(
+  messageId: string,
+  text: string,
+  settings: MuseVoiceSettings,
+  opts?: { preview?: boolean },
+): SpeakController | null {
+  if (!narrationSupported()) return null;
+  const cleaned = textForSpeech(text);
+  if (!cleaned) return null;
+
+  stopNarration();
+  const generation = speakGeneration;
+  activeMessageId = messageId;
+  activeLoading = audioPlaybackSupported();
+  activeEngine = audioPlaybackSupported() ? "openai" : "web-speech";
+  notify();
+
+  const controller: SpeakController = {
+    stop: stopNarration,
+    pause: pauseNarration,
+    resume: resumeNarration,
+    getState: () => narrationStateFor(messageId),
+  };
+
+  if (!audioPlaybackSupported()) {
+    return speakWithWebSpeech(messageId, cleaned, settings, generation);
+  }
+
+  void (async () => {
+    try {
+      const ok = await speakWithOpenAiAudio(
+        messageId,
+        cleaned,
+        settings,
+        generation,
+        Boolean(opts?.preview),
+      );
+      if (speakGeneration !== generation) return;
+      if (ok) return;
+      // Fall back to Web Speech (missing key / upstream / play error)
+      if (speechSupported()) {
+        speakWithWebSpeech(messageId, cleaned, settings, generation);
+      } else {
+        clearActive();
+      }
+    } catch {
+      if (speakGeneration !== generation) return;
+      if (speechSupported()) {
+        speakWithWebSpeech(messageId, cleaned, settings, generation);
+      } else {
+        clearActive();
+      }
+    }
+  })();
+
+  return controller;
 }
 
 /** Shared id so selection previews cancel each other (and chat narration). */
@@ -607,7 +873,9 @@ export function previewVoice(
 ): SpeakController | null {
   const line =
     textForSpeech(sampleText || "") || DEFAULT_VOICE_PREVIEW_LINE;
-  return speakMessage(VOICE_PREVIEW_MESSAGE_ID, line, settings);
+  return speakMessage(VOICE_PREVIEW_MESSAGE_ID, line, settings, {
+    preview: true,
+  });
 }
 
 export function isVoicePreviewActive(): boolean {

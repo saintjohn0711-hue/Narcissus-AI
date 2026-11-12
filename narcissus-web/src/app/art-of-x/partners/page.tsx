@@ -921,9 +921,10 @@ export default function PartnersPage() {
               Chat voice
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Sexy female or male narration for Companion chat (browser speech —
-              no API key). Pick gender, accent (locale), and delivery — each
-              selection plays a short preview.
+              Sexy female or male narration for Companion chat (natural OpenAI TTS
+              when <code className="text-[var(--soft)]">OPENAI_API_KEY</code> is
+              set; otherwise browser speech). Pick gender, accent (locale), and
+              delivery — each selection plays a short preview.
             </p>
             <div className="flex flex-wrap gap-2">
               {VOICE_GENDERS.map((g) => (
