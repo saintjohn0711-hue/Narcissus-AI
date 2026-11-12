@@ -133,8 +133,8 @@ export function sceneUserPrompt(input: SceneGenerateInput): string {
     input.mode === "generate"
       ? "MODE: Write a brand-new scene from scratch that follows the INITIAL DIRECTION below."
       : input.mode === "continue"
-        ? "MODE: Continue the previous scene with a fresh beat (new acts/tension). Keep honoring the same kink/location/roles brief. Do not restart. Do not summarize. Append-ready prose only (no ---)."
-        : `MODE: Steer the previous scene. Honor this direction literally and erotically: "${(input.direction || "").trim()}". Continue forward; do not restart.`;
+        ? "MODE: Continue the previous scene with a fresh beat (new acts/tension). Keep honoring the same kink/location/roles brief. Do not restart. Do not summarize. Return ONLY the new append-ready prose beat (no --- separators, do not repeat prior text)."
+        : `MODE: Steer the previous scene. Honor this direction literally and erotically: "${(input.direction || "").trim()}". Continue forward; do not restart. Return ONLY the new append-ready prose beat (no --- separators, do not repeat prior text).`;
 
   return [
     modeBlock,

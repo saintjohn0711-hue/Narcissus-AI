@@ -43,18 +43,27 @@ export default function StoriesPage() {
   const [busy, setBusy] = useState(false);
   const [source, setSource] = useState<GenSource>(null);
   const [modelLabel, setModelLabel] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [p, s] = await Promise.all([fetchPartners(), fetchScenes()]);
-      if (cancelled) return;
-      setPartners(p);
-      setScenes(s);
-      setReady(true);
-    })().catch(() => {
-      if (!cancelled) setReady(true);
-    });
+      try {
+        const [p, s] = await Promise.all([fetchPartners(), fetchScenes()]);
+        if (cancelled) return;
+        setPartners(p);
+        setScenes(s);
+        setLoadError(null);
+      } catch {
+        if (!cancelled) {
+          setLoadError(
+            "Couldn’t load Muses or saved scenes — refresh and try again.",
+          );
+        }
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -143,6 +152,15 @@ export default function StoriesPage() {
       // fall through to local craft
     }
 
+    const brief = {
+      partners: cast,
+      pov,
+      kinks,
+      location: loc,
+      intensity,
+      roles,
+      extra,
+    };
     if (opts.mode === "generate") {
       return { text: localGenerate(), source: "local" };
     }
@@ -151,13 +169,13 @@ export default function StoriesPage() {
         text: injectStoryDirection(
           opts.previous || "",
           opts.direction,
-          cast,
+          brief,
         ),
         source: "local",
       };
     }
     return {
-      text: continueStory(opts.previous || "", cast, pov, kinks),
+      text: continueStory(opts.previous || "", brief),
       source: "local",
     };
   }
@@ -195,12 +213,41 @@ export default function StoriesPage() {
         previous: draft,
         direction: direction.trim(),
       });
-      setDraft(result.text);
+      // LLM returns append-only beat; local helpers already include previous.
+      // If the model ignored instructions and rewrote the whole scene, keep its text.
+      const prior = draft.trim();
+      const incoming = result.text.trim();
+      const nextText =
+        result.source === "llm"
+          ? prior &&
+            incoming.length > prior.length * 0.6 &&
+            incoming.startsWith(prior.slice(0, Math.min(120, prior.length)))
+            ? incoming
+            : prior
+              ? `${prior}\n\n${incoming}`.trim()
+              : incoming
+          : result.text;
+      setDraft(nextText);
       setSource(result.source);
       setModelLabel(result.model || "");
       if (mode === "steer") setDirection("");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function loadScene(s: SavedScene) {
+    setDraft(s.text);
+    if (Array.isArray(s.partnerIds) && s.partnerIds.length) {
+      setSelectedIds(s.partnerIds.filter((id) => partners.some((p) => p.id === id)).slice(0, 3));
+    }
+    if (s.locationId && DEFAULT_LOCS.some((l) => l.id === s.locationId)) {
+      setLocId(s.locationId);
+    }
+    if (Array.isArray(s.kinks)) setKinks([...s.kinks]);
+    if (typeof s.intensity === "number") setIntensity(s.intensity);
+    if (s.length === "short" || s.length === "medium" || s.length === "long") {
+      setLength(s.length);
     }
   }
 
@@ -262,10 +309,63 @@ export default function StoriesPage() {
         </p>
       </header>
 
-      {partners.length === 0 ? (
-        <p className="text-sm text-[#c4b7a8]">
-          Add Muses first (or load Ark demo people) before building a scene.
+      {loadError && (
+        <p className="mb-4 text-sm text-[#f0c4b8]" role="alert">
+          {loadError}
         </p>
+      )}
+
+      {partners.length === 0 ? (
+        <div className="space-y-6">
+          <p className="text-sm text-[#c4b7a8]">
+            {loadError
+              ? "Muses didn’t load — check the message above, then refresh."
+              : "Add Muses first (or load Ark demo people) before building a scene."}
+          </p>
+          {scenes.length > 0 && (
+            <div className="space-y-3 border-t border-[var(--line)] pt-4">
+              <h3 className="text-sm uppercase tracking-[0.16em] text-[var(--ink)]">
+                Saved scenes
+              </h3>
+              {scenes.map((s) => (
+                <div
+                  key={s.id}
+                  className="border border-[var(--line)] p-3 text-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[var(--ink)]">{s.title}</p>
+                      <p className="text-xs text-[var(--muted)]">{s.when}</p>
+                    </div>
+                    <div className="flex gap-2 text-xs">
+                      <button
+                        type="button"
+                        className="text-[var(--accent-strong)]"
+                        onClick={() => loadScene(s)}
+                      >
+                        Load
+                      </button>
+                      <button
+                        type="button"
+                        className="text-[var(--danger)]"
+                        onClick={() =>
+                          setScenes((prev) =>
+                            prev.filter((x) => x.id !== s.id),
+                          )
+                        }
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-xs text-[#c4b7a8]">
+                    {s.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
           <section className="space-y-6">
@@ -509,7 +609,7 @@ export default function StoriesPage() {
                       <button
                         type="button"
                         className="text-[var(--accent-strong)]"
-                        onClick={() => setDraft(s.text)}
+                        onClick={() => loadScene(s)}
                       >
                         Load
                       </button>

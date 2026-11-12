@@ -480,6 +480,29 @@ body {
   color: #f0c4b8;
 }
 
+.muse-companion-dock-status {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--soft);
+}
+
+.muse-companion-photo-add {
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, #080b14);
+  color: var(--soft);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+.muse-companion-photo-add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .muse-companion-likeness {
   margin: 0.15rem 0 0;
   line-height: 1.35;
