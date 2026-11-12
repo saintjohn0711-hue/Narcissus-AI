@@ -10,6 +10,7 @@ import {
   displayName,
   genderLabel,
   normalizeKinks,
+  samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
@@ -115,7 +116,7 @@ export function extractXaiText(data: unknown): string {
 function museIdentityBlock(
   partner: PartnerRecord,
   label?: string,
-  opts?: { pairWith?: number | null },
+  opts?: { pairWith?: number | null; castIds?: number[] },
 ): string {
   const name = displayName(partner);
   const kinks = normalizeKinks(partner.kinks);
@@ -130,6 +131,7 @@ function museIdentityBlock(
   const head = label ? `${label}: ${name}` : `Name: ${name}`;
   const mems = memoriesForPrompt(partner.memories || [], {
     pairWith: opts?.pairWith ?? null,
+    castIds: opts?.castIds,
   });
   const memBlock = memoriesPromptBlock(formatMemoriesForPrompt(mems));
   return [
@@ -163,42 +165,87 @@ function museIdentityBlock(
     .join("\n");
 }
 
+function normalizeCastList(
+  partner: PartnerRecord,
+  cast?: PartnerRecord | PartnerRecord[] | null,
+): PartnerRecord[] {
+  const raw = Array.isArray(cast) ? cast : cast ? [cast] : [];
+  const out: PartnerRecord[] = [];
+  const seen = new Set<number>();
+  for (const c of raw) {
+    if (!c || typeof c !== "object" || !c.name) continue;
+    const id = Number(c.id);
+    if (!Number.isFinite(id) || samePartnerId(id, partner.id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(c);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 /** Build the in-character system prompt for partner AI chat. */
 export function buildPartnerChatSystemPrompt(
   partner: PartnerRecord,
   pov: ChatPov = "1st",
-  cast?: PartnerRecord | null,
+  cast?: PartnerRecord | PartnerRecord[] | null,
 ): string {
   const name = displayName(partner);
-  const second = cast && cast.id !== partner.id ? cast : null;
-  const secondName = second ? displayName(second) : null;
+  const castList = normalizeCastList(partner, cast);
+  const castIds = castList.map((c) => Number(c.id));
+  const castNames = castList.map((c) => displayName(c));
   const tryNewGranted =
-    Boolean(partner.tryNewThings) || Boolean(second?.tryNewThings);
+    Boolean(partner.tryNewThings) ||
+    castList.some((c) => Boolean(c.tryNewThings));
 
-  if (second && secondName) {
+  if (castList.length > 0) {
+    const castLabel = [name, ...castNames].join(", ");
+    const modeLabel =
+      castList.length === 1 ? "dual-casting" : "group-casting";
+    const nameList =
+      castNames.length === 1
+        ? `${name} and ${castNames[0]}`
+        : castNames.length === 2
+          ? `${name}, ${castNames[0]}, and ${castNames[1]}`
+          : `${name}, ${castNames.slice(0, -1).join(", ")}, and ${castNames[castNames.length - 1]}`;
     const povInstruction =
       pov === "3rd"
-        ? `Write in vivid third-person narration about ${name} and ${secondName} together (she/he/they as fits), with dialogue in quotes when each speaks. Stay cinematic and intimate — like a sharp erotic narrator, not a screenplay slug. Make both Muses active — they interact with each other and with the user.`
-        : `Write as a dual-cast scene: both ${name} and ${secondName} speak in first person in the same reply. Label lines clearly (e.g. "${name}:" / "${secondName}:") so the reader knows who is talking. They play with each other and with the user — banter, touch, rivalry, or teamwork as the chemistry fits. Never collapse into a single voice.`;
+        ? `Write in vivid third-person narration about ${nameList} together (she/he/they as fits), with dialogue in quotes when each speaks. Stay cinematic and intimate — like a sharp erotic narrator, not a screenplay slug. Make every Muse active — they interact with each other and with the user.`
+        : `Write as a ${castList.length === 1 ? "dual-cast" : "group-cast"} scene: ${nameList} each speak in first person in the same reply. Label lines clearly (e.g. "${name}:" / "${castNames[0]}:") so the reader knows who is talking. They play with each other and with the user — banter, touch, rivalry, or teamwork as the chemistry fits. Never collapse into a single voice. Give each Muse a beat when the scene calls for it.`;
+
+    const castBlocks = castList.map((c, i) => {
+      const letter = String.fromCharCode(66 + i); // B, C, D…
+      const others = [partner.id, ...castIds.filter((id) => id !== Number(c.id))];
+      return [
+        `Cast ${letter} — ${displayName(c)}:`,
+        museIdentityBlock(c, undefined, {
+          pairWith: partner.id,
+          castIds: others,
+        }),
+      ].join("\n");
+    });
 
     return [
-      `You are dual-casting ${name} and ${secondName}, adult erotic AI Muses in Narcissus / Art of X.`,
+      `You are ${modeLabel} ${castLabel}, adult erotic AI Muses in Narcissus / Art of X.`,
       `They have been together / played together before — treat that shared heat as real history.`,
-      `Stay fully in character for both. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
+      `Stay fully in character for each Muse. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
       `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
       "",
       "Cast A — primary:",
-      museIdentityBlock(partner, undefined, { pairWith: second.id }),
+      museIdentityBlock(partner, undefined, {
+        pairWith: castIds[0] ?? null,
+        castIds,
+      }),
       "",
-      "Cast B — paired Muse:",
-      museIdentityBlock(second, undefined, { pairWith: partner.id }),
-      "",
+      ...castBlocks.flatMap((block) => [block, ""]),
       "Shared session gates:",
       tryNewThingsPromptBlock(tryNewGranted),
       "",
       "Voice & POV:",
       povInstruction,
-      "Keep replies to a natural chat length (a short dual exchange) unless they clearly want a longer scene.",
+      castList.length === 1
+        ? "Keep replies to a natural chat length (a short dual exchange) unless they clearly want a longer scene."
+        : "Keep replies to a natural chat length (a short group exchange — not a novel) unless they clearly want a longer scene.",
       "Use their shared history, durable memories, and kinks without dumping a checklist — weave them in like bodies that already know each other (e.g. bring up a boyfriend, bi preference, or past scene when it fits).",
       "Match their energy: soft when they are soft, dominant when the tags say so, filthy when they go there.",
     ]

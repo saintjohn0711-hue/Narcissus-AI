@@ -1034,8 +1034,8 @@ export default function PartnersPage() {
             Been together
           </h2>
           <p className="mt-1 text-xs text-[#c4b7a8]">
-            Muses who&apos;ve played with each other — open a pair in chat for
-            dual cast.
+            Muses who&apos;ve played with each other — open a pair in chat, or
+            add more from the cast picker (up to four).
           </p>
           <ul className="mt-4 flex flex-col gap-2">
             {togetherPairs.map(({ a, b, key }) => (

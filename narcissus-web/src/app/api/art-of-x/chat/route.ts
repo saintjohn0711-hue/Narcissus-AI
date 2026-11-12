@@ -17,14 +17,39 @@ export const maxDuration = 60;
 
 type ChatBody = {
   partner?: PartnerRecord;
-  /** Optional second Muse for dual-cast / paired play */
-  cast?: PartnerRecord | null;
+  /** Optional second Muse for dual-cast (legacy) or first mate */
+  cast?: PartnerRecord | PartnerRecord[] | null;
+  /** Extra Muses for group cast (2–4 total with partner); merged with cast */
+  casts?: PartnerRecord[] | null;
   messages?: Array<{ who: "You" | "Partner"; text: string }>;
   /** Latest user turn; appended if not already last in messages */
   message?: string;
   pov?: ChatPov;
   stream?: boolean;
 };
+
+function normalizeCastBody(
+  partner: PartnerRecord,
+  cast: ChatBody["cast"],
+  casts: ChatBody["casts"],
+): PartnerRecord[] {
+  const raw: PartnerRecord[] = [];
+  if (Array.isArray(cast)) raw.push(...cast);
+  else if (cast) raw.push(cast);
+  if (Array.isArray(casts)) raw.push(...casts);
+  const out: PartnerRecord[] = [];
+  const seen = new Set<number>();
+  for (const c of raw) {
+    if (!c || typeof c !== "object" || !c.name) continue;
+    const id = Number(c.id);
+    if (!Number.isFinite(id) || id === Number(partner.id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(c);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
 
 function parsePov(raw: unknown): ChatPov {
   return raw === "3rd" ? "3rd" : "1st";
@@ -64,18 +89,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "message_required" }, { status: 400 });
   }
 
-  const cast =
-    body.cast &&
-    typeof body.cast === "object" &&
-    body.cast.name &&
-    Number(body.cast.id) !== Number(partner.id)
-      ? body.cast
-      : null;
+  const castList = normalizeCastBody(partner, body.cast, body.casts);
 
   const messages: XaiChatMessage[] = [
     {
       role: "system",
-      content: buildPartnerChatSystemPrompt(partner, pov, cast),
+      content: buildPartnerChatSystemPrompt(partner, pov, castList),
     },
     ...partnerThreadToXaiMessages(thread),
   ];

@@ -742,6 +742,10 @@ export function normalizePairedWith(
   return out;
 }
 
+/** Primary + up to 3 mates = 4 Muses in one chat. */
+export const MAX_MUSE_CAST = 4;
+export const MAX_MUSE_CAST_MATES = MAX_MUSE_CAST - 1;
+
 /** Stable chat thread key for a Muse pair (order-independent). */
 export function musePairThreadKey(a: number, b: number): string {
   const x = Number(a);
@@ -749,8 +753,105 @@ export function musePairThreadKey(a: number, b: number): string {
   return x <= y ? `pair:${x}-${y}` : `pair:${y}-${x}`;
 }
 
+/**
+ * Thread key for solo / dual / group cast.
+ * Dual (exactly one mate) keeps `pair:lo-hi` for existing chats.
+ * Three+ Muses use `group:sorted-ids`.
+ */
+export function museCastThreadKey(
+  primaryId: number,
+  mateIds: number[],
+): string {
+  const primary = Number(primaryId);
+  const mates = normalizeCastMateIds(mateIds, primary);
+  if (mates.length === 0) return String(primary);
+  if (mates.length === 1) return musePairThreadKey(primary, mates[0]!);
+  const all = [primary, ...mates].sort((a, b) => a - b);
+  return `group:${all.join("-")}`;
+}
+
 export function isMusePairThreadKey(key: string): boolean {
   return /^pair:\d+-\d+$/.test(key);
+}
+
+export function isMuseGroupThreadKey(key: string): boolean {
+  return /^group:\d+(?:-\d+)+$/.test(key);
+}
+
+export function isMuseCastThreadKey(key: string): boolean {
+  return isMusePairThreadKey(key) || isMuseGroupThreadKey(key);
+}
+
+/** Normalize cast mate ids (positive ints, unique, no primary, capped). */
+export function normalizeCastMateIds(
+  list: unknown,
+  primaryId?: number,
+  maxMates: number = MAX_MUSE_CAST_MATES,
+): number[] {
+  if (!Array.isArray(list) && typeof list !== "string") {
+    if (list == null || list === "") return [];
+    const n = Number(list);
+    if (!Number.isFinite(n) || n <= 0) return [];
+    const primary = primaryId != null ? Number(primaryId) : NaN;
+    if (Number.isFinite(primary) && samePartnerId(n, primary)) return [];
+    return [n];
+  }
+  const raw = Array.isArray(list)
+    ? list
+    : String(list)
+        .split(/[,+\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+  const out: number[] = [];
+  const seen = new Set<number>();
+  const primary = primaryId != null ? Number(primaryId) : NaN;
+  for (const item of raw) {
+    const n = Number(item);
+    if (!Number.isFinite(n) || n <= 0) continue;
+    if (Number.isFinite(primary) && samePartnerId(n, primary)) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+    if (out.length >= maxMates) break;
+  }
+  return out;
+}
+
+/** Parse `?with=` — single id or comma/plus-separated list. */
+export function parseCastWithParam(
+  withParam: string | null | undefined,
+  primaryId?: number,
+): number[] {
+  if (withParam == null || !String(withParam).trim()) return [];
+  return normalizeCastMateIds(String(withParam), primaryId);
+}
+
+/** Serialize cast mates for `?with=`. */
+export function formatCastWithParam(mateIds: number[]): string {
+  return normalizeCastMateIds(mateIds).join(",");
+}
+
+/** Ensure every pair among ids is marked been-together (bidirectional). */
+export function ensureMuseGroupPairings(
+  list: PartnerRecord[],
+  ids: number[],
+): PartnerRecord[] {
+  const uniq = normalizeCastMateIds(ids, undefined, MAX_MUSE_CAST);
+  if (uniq.length < 2) return list;
+  let next = list;
+  for (let i = 0; i < uniq.length; i++) {
+    for (let j = i + 1; j < uniq.length; j++) {
+      const aId = uniq[i]!;
+      const bId = uniq[j]!;
+      const a = next.find((p) => samePartnerId(p.id, aId));
+      if (!a) continue;
+      const already = normalizePairedWith(a.pairedWith, a.id).some((id) =>
+        samePartnerId(id, bId),
+      );
+      if (!already) next = toggleMusePairing(next, aId, bId);
+    }
+  }
+  return next;
 }
 
 /** Toggle a bidirectional “been together” link between two Muses. */

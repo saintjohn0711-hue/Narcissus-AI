@@ -15,10 +15,15 @@ import { MusePresence } from "@/components/MusePresence";
 import {
   displayName,
   emptyPartner,
+  ensureMuseGroupPairings,
+  formatCastWithParam,
   genderLabel,
   mainPhoto,
-  musePairThreadKey,
+  MAX_MUSE_CAST_MATES,
+  museCastThreadKey,
+  normalizeCastMateIds,
   pairedMusesFor,
+  parseCastWithParam,
   PERSON_LABEL,
   savePartners,
   samePartnerId,
@@ -116,7 +121,9 @@ function ChatPageInner() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [chats, setChats] = useState<Record<string, ChatMessage[]>>({});
   const [activeId, setActiveId] = useState<number | null>(null);
-  const [castId, setCastId] = useState<number | null>(null);
+  /** Additional Muses in the scene (max 3; primary + mates ≤ 4). */
+  const [castIds, setCastIds] = useState<number[]>([]);
+  const [castPickerOpen, setCastPickerOpen] = useState(false);
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
   const [pov, setPov] = useState<ChatPov>("1st");
@@ -146,6 +153,7 @@ function ChatPageInner() {
   const pickedFromUrl = useRef(false);
   const castFromUrl = useRef(false);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const urlSyncSkip = useRef(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,14 +170,12 @@ function ChatPageInner() {
         } else if (list[0]) {
           setActiveId(list[0].id);
         }
-        const withId = withParam ? Number(withParam) : NaN;
-        if (
-          Number.isFinite(withId) &&
-          Number.isFinite(fromUrl) &&
-          list.some((p) => p.id === withId) &&
-          withId !== fromUrl
-        ) {
-          setCastId(withId);
+        const primary = Number.isFinite(fromUrl) ? fromUrl : undefined;
+        const fromWith = parseCastWithParam(withParam, primary).filter((id) =>
+          list.some((p) => samePartnerId(p.id, id)),
+        );
+        if (fromWith.length > 0) {
+          setCastIds(fromWith);
           castFromUrl.current = true;
         }
       } catch {
@@ -196,14 +202,32 @@ function ChatPageInner() {
   }, [ready, museParam, partners]);
 
   useEffect(() => {
-    if (!ready || castFromUrl.current || !withParam) return;
-    const id = Number(withParam);
-    if (!Number.isFinite(id) || !activeId || samePartnerId(id, activeId)) return;
-    if (partners.some((p) => p.id === id)) {
-      setCastId(id);
+    if (!ready || castFromUrl.current || !withParam || activeId == null) return;
+    const ids = parseCastWithParam(withParam, activeId).filter((id) =>
+      partners.some((p) => samePartnerId(p.id, id)),
+    );
+    if (ids.length > 0) {
+      setCastIds(ids);
       castFromUrl.current = true;
     }
   }, [ready, withParam, partners, activeId]);
+
+  /** Keep `?muse=&with=` shareable as cast changes. */
+  useEffect(() => {
+    if (!ready || activeId == null || typeof window === "undefined") return;
+    if (urlSyncSkip.current) {
+      urlSyncSkip.current = false;
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    params.set("muse", String(activeId));
+    const withValue = formatCastWithParam(castIds);
+    if (withValue) params.set("with", withValue);
+    else params.delete("with");
+    const next = `${window.location.pathname}?${params.toString()}`;
+    const cur = `${window.location.pathname}${window.location.search}`;
+    if (next !== cur) window.history.replaceState(null, "", next);
+  }, [ready, activeId, castIds]);
 
   useEffect(() => {
     if (!ready || !activeId) return;
@@ -258,37 +282,60 @@ function ChatPageInner() {
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],
   );
-  const castPartner = useMemo(() => {
-    if (!partner || castId == null) return null;
-    if (samePartnerId(castId, partner.id)) return null;
-    return partners.find((p) => samePartnerId(p.id, castId)) || null;
-  }, [partners, partner, castId]);
+  const castPartners = useMemo(() => {
+    if (!partner) return [] as PartnerRecord[];
+    const ids = normalizeCastMateIds(castIds, partner.id);
+    return ids
+      .map((id) => partners.find((p) => samePartnerId(p.id, id)))
+      .filter((p): p is PartnerRecord => Boolean(p));
+  }, [partners, partner, castIds]);
+  /** First mate — dual-cast / legacy call sites. */
+  const castPartner = castPartners[0] || null;
   const pairedOptions = useMemo(
     () => (partner ? pairedMusesFor(partner, partners) : []),
     [partner, partners],
   );
+  const castPickOptions = useMemo(() => {
+    if (!partner) return [] as PartnerRecord[];
+    const paired = pairedOptions;
+    const pairedSet = new Set(paired.map((p) => Number(p.id)));
+    const rest = partners.filter(
+      (p) =>
+        !samePartnerId(p.id, partner.id) && !pairedSet.has(Number(p.id)),
+    );
+    return [...paired, ...rest];
+  }, [partner, partners, pairedOptions]);
   const companionFull = Boolean(partner) && presenceStyle === "cartoon";
   const threadKey =
     activeId != null
-      ? castPartner
-        ? musePairThreadKey(activeId, castPartner.id)
-        : String(activeId)
+      ? museCastThreadKey(
+          activeId,
+          castPartners.map((p) => Number(p.id)),
+        )
       : "";
   const messages = threadKey ? chats[threadKey] || [] : [];
-  const castLabel =
-    partner && castPartner
-      ? `${displayName(partner)} + ${displayName(castPartner)}`
-      : partner
-        ? displayName(partner)
-        : "";
+  const castLabel = partner
+    ? castPartners.length > 0
+      ? [displayName(partner), ...castPartners.map((p) => displayName(p))].join(
+          " + ",
+        )
+      : displayName(partner)
+    : "";
+  const castModeLabel =
+    castPartners.length >= 2
+      ? `Group cast · ${castPartners.length + 1} Muses`
+      : castPartners.length === 1
+        ? "Dual cast · been together"
+        : null;
   const visibleMemories = useMemo(() => {
     if (!partner) return [] as MuseMemory[];
     return memoriesForPrompt(partner.memories || [], {
       pairWith: castPartner?.id ?? null,
+      castIds: castPartners.map((p) => Number(p.id)),
     });
-  }, [partner, castPartner]);
+  }, [partner, castPartner, castPartners]);
   const tryNewActive = Boolean(
-    partner?.tryNewThings || castPartner?.tryNewThings,
+    partner?.tryNewThings || castPartners.some((p) => p.tryNewThings),
   );
   const museRibbons = useMemo(
     () => normalizeSexRibbons(partner?.sexRibbons),
@@ -302,40 +349,88 @@ function ChatPageInner() {
     return {
       memories: partner?.memories || [],
       tryNewThings: tryNewActive,
-      dualCast: Boolean(castPartner),
+      dualCast: castPartners.length > 0,
       messageCount: messages.length,
       recentText,
     };
-  }, [partner?.memories, tryNewActive, castPartner, messages]);
+  }, [partner?.memories, tryNewActive, castPartners, messages]);
   const collection = useMemo(
     () => globalRibbonCollection(partners),
     [partners],
   );
+
+  function syncCastTryNew(
+    list: PartnerRecord[],
+    primaryNext: PartnerRecord,
+  ): PartnerRecord[] {
+    if (typeof primaryNext.tryNewThings !== "boolean") return list;
+    if (primaryNext.memories !== partner?.memories) return list;
+    const castSet = new Set(castPartners.map((c) => Number(c.id)));
+    if (castSet.size === 0) return list;
+    return list.map((p) => {
+      if (!castSet.has(Number(p.id))) return p;
+      if (Boolean(p.tryNewThings) === primaryNext.tryNewThings) return p;
+      return {
+        ...p,
+        tryNewThings: primaryNext.tryNewThings,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
+  async function persistCastPairings(nextCastIds: number[]) {
+    if (!partner || nextCastIds.length === 0) return;
+    const groupIds = [Number(partner.id), ...nextCastIds];
+    const linked = ensureMuseGroupPairings(partnersRef.current, groupIds);
+    if (linked === partnersRef.current) return;
+    setPartners(linked);
+    partnersRef.current = linked;
+    try {
+      try {
+        savePartners(linked);
+      } catch {
+        // local quota
+      }
+      const saved = await persistPartners(linked);
+      setPartners(saved);
+      partnersRef.current = saved;
+    } catch {
+      // pairings still local
+    }
+  }
+
+  function setCastSelection(nextIds: number[]) {
+    const normalized = normalizeCastMateIds(nextIds, activeId ?? undefined);
+    setCastIds(normalized);
+    setError(null);
+    if (normalized.length > 0) void persistCastPairings(normalized);
+  }
+
+  function toggleCastMate(id: number) {
+    const cur = normalizeCastMateIds(castIds, activeId ?? undefined);
+    const has = cur.some((x) => samePartnerId(x, id));
+    if (has) {
+      setCastSelection(cur.filter((x) => !samePartnerId(x, id)));
+      return;
+    }
+    if (cur.length >= MAX_MUSE_CAST_MATES) {
+      setError(`Group cast max is ${MAX_MUSE_CAST_MATES + 1} Muses.`);
+      return;
+    }
+    setCastSelection([...cur, id]);
+  }
 
   async function persistPartnerPatch(
     patch: (p: PartnerRecord) => PartnerRecord,
   ) {
     const list = partnersRef.current;
     if (!partner) return;
-    const next = list.map((p) => {
-      if (samePartnerId(p.id, partner.id)) return patch(p);
-      if (castPartner && samePartnerId(p.id, castPartner.id)) {
-        // Keep dual-cast tryNewThings in sync when toggling from chat.
-        const primaryNext = patch(partner);
-        if (
-          typeof primaryNext.tryNewThings === "boolean" &&
-          primaryNext.tryNewThings !== Boolean(p.tryNewThings) &&
-          primaryNext.memories === partner.memories
-        ) {
-          return {
-            ...p,
-            tryNewThings: primaryNext.tryNewThings,
-            updatedAt: new Date().toISOString(),
-          };
-        }
-      }
-      return p;
-    });
+    const primaryNext = patch(partner);
+    let next = list.map((p) =>
+      samePartnerId(p.id, partner.id) ? primaryNext : p,
+    );
+    // Keep cast tryNewThings in sync when toggling from chat.
+    next = syncCastTryNew(next, primaryNext);
     setPartners(next);
     partnersRef.current = next;
     try {
@@ -359,6 +454,7 @@ function ChatPageInner() {
   async function setTryNewThings(enabled: boolean) {
     if (!partner) return;
     const now = new Date().toISOString();
+    const castSet = new Set(castPartners.map((c) => Number(c.id)));
     const list = partnersRef.current.map((p) => {
       if (samePartnerId(p.id, partner.id)) {
         let next = { ...p, tryNewThings: enabled, updatedAt: now };
@@ -366,7 +462,7 @@ function ChatPageInner() {
           const awarded = autoAwardFromContext(next.sexRibbons, {
             memories: next.memories,
             tryNewThings: true,
-            dualCast: Boolean(castPartner),
+            dualCast: castPartners.length > 0,
             messageCount: messages.length,
             recentText: messages.map((m) => m.text).join("\n"),
           });
@@ -379,7 +475,7 @@ function ChatPageInner() {
         }
         return next;
       }
-      if (castPartner && samePartnerId(p.id, castPartner.id)) {
+      if (castSet.has(Number(p.id))) {
         return { ...p, tryNewThings: enabled, updatedAt: now };
       }
       return p;
@@ -428,8 +524,10 @@ function ChatPageInner() {
     if (!p) return;
     const ctx = {
       memories: p.memories || [],
-      tryNewThings: Boolean(p.tryNewThings || castPartner?.tryNewThings),
-      dualCast: Boolean(castPartner),
+      tryNewThings: Boolean(
+        p.tryNewThings || castPartners.some((c) => c.tryNewThings),
+      ),
+      dualCast: castPartners.length > 0,
       messageCount: messages.length,
       recentText: messages.map((m) => m.text).join("\n"),
       ...ctxOverride,
@@ -473,8 +571,10 @@ function ChatPageInner() {
       const memories = mergeMemories(normalizeMemories(p.memories), incoming);
       const { awards, granted } = autoAwardFromContext(p.sexRibbons, {
         memories,
-        tryNewThings: Boolean(p.tryNewThings || castPartner?.tryNewThings),
-        dualCast: Boolean(castPartner),
+        tryNewThings: Boolean(
+          p.tryNewThings || castPartners.some((c) => c.tryNewThings),
+        ),
+        dualCast: castPartners.length > 0,
         messageCount: messages.length,
         recentText: messages.map((m) => m.text).join("\n"),
       });
@@ -535,8 +635,10 @@ function ChatPageInner() {
         );
         const { awards, granted } = autoAwardFromContext(p.sexRibbons, {
           memories,
-          tryNewThings: Boolean(p.tryNewThings || castPartner?.tryNewThings),
-          dualCast: Boolean(castPartner),
+          tryNewThings: Boolean(
+            p.tryNewThings || castPartners.some((c) => c.tryNewThings),
+          ),
+          dualCast: castPartners.length > 0,
           messageCount: messages.length,
           recentText: messages.map((m) => m.text).join("\n"),
         });
@@ -708,7 +810,7 @@ function ChatPageInner() {
     setError(null);
     try {
       skipPersist.current = true;
-      if (castPartner) {
+      if (castPartners.length > 0) {
         const next = { ...chats };
         delete next[threadKey];
         await persistChats(next);
@@ -764,7 +866,10 @@ function ChatPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           partner: partnerForChatApi(partner),
-          cast: castPartner ? partnerForChatApi(castPartner) : null,
+          cast:
+            castPartners.length > 0
+              ? castPartners.map((c) => partnerForChatApi(c))
+              : null,
           messages: [...prior, you].map((m) => ({
             who: m.who,
             text: m.text,
@@ -853,7 +958,7 @@ function ChatPageInner() {
           .map((m) => ("text" in m ? m.text : ""))
           .join("\n");
         void syncRibbonsFromContext(partner.id, {
-          dualCast: Boolean(castPartner),
+          dualCast: castPartners.length > 0,
           messageCount: nextCount,
           recentText: recentBlob,
           tryNewThings: tryNewActive,
@@ -952,12 +1057,15 @@ function ChatPageInner() {
                   type="button"
                   onClick={() => {
                     setActiveId(p.id);
-                    setCastId((cur) => {
-                      if (cur == null) return null;
-                      const stillPaired = pairedMusesFor(p, partners).some(
-                        (x) => samePartnerId(x.id, cur),
+                    setCastIds((cur) => {
+                      if (cur.length === 0) return [];
+                      const paired = new Set(
+                        pairedMusesFor(p, partners).map((x) => Number(x.id)),
                       );
-                      return stillPaired ? cur : null;
+                      return normalizeCastMateIds(
+                        cur.filter((id) => paired.has(Number(id))),
+                        p.id,
+                      );
                     });
                     setError(null);
                   }}
@@ -1009,7 +1117,7 @@ function ChatPageInner() {
               >
                 <MusePresence
                   partner={partner}
-                  castPartner={castPartner}
+                  castPartners={castPartners}
                   variant={companionFull ? "full" : "rail"}
                   onStyleChange={setPresenceStyle}
                   lastPartnerReply={reactionReply}
@@ -1019,16 +1127,20 @@ function ChatPageInner() {
                     companionFull
                       ? (id) => {
                           setActiveId(id);
-                          setCastId((cur) => {
+                          setCastIds((cur) => {
                             const next = partners.find((p) =>
                               samePartnerId(p.id, id),
                             );
-                            if (!next || cur == null) return null;
-                            const stillPaired = pairedMusesFor(
-                              next,
-                              partners,
-                            ).some((p) => samePartnerId(p.id, cur));
-                            return stillPaired ? cur : null;
+                            if (!next || cur.length === 0) return [];
+                            const paired = new Set(
+                              pairedMusesFor(next, partners).map((p) =>
+                                Number(p.id),
+                              ),
+                            );
+                            return normalizeCastMateIds(
+                              cur.filter((cid) => paired.has(Number(cid))),
+                              id,
+                            );
                           });
                           setError(null);
                         }
@@ -1068,42 +1180,110 @@ function ChatPageInner() {
                       {castLabel}
                     </h2>
                     <p className="mt-1 text-xs text-[#c4b7a8]">
-                      {castPartner
-                        ? "Dual cast · been together"
+                      {castModeLabel
+                        ? castModeLabel
                         : companionFull
                           ? "Companion · Adults 18+"
                           : partner.dynTags.slice(0, 3).join(" · ") ||
                             "No dynamics tagged"}
                       {modelLabel ? ` · ${modelLabel}` : ""}
                     </p>
-                    {(pairedOptions.length > 0 || castPartner) && (
-                      <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-                        With
-                        <select
-                          value={castPartner ? String(castPartner.id) : ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setCastId(v ? Number(v) : null);
-                            setError(null);
-                          }}
-                          className="max-w-[12rem] rounded-sm border border-[var(--line)] bg-[#12182a] px-2 py-1 text-sm text-[var(--ink)]"
-                        >
-                          <option value="">Solo</option>
-                          {pairedOptions.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {displayName(p)}
-                            </option>
-                          ))}
-                          {castPartner &&
-                            !pairedOptions.some((p) =>
-                              samePartnerId(p.id, castPartner.id),
-                            ) && (
-                              <option value={castPartner.id}>
-                                {displayName(castPartner)}
-                              </option>
-                            )}
-                        </select>
-                      </label>
+                    {castPickOptions.length > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCastPickerOpen((v) => !v)}
+                            className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-xs font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                            aria-expanded={castPickerOpen}
+                            data-testid="muse-cast-picker-toggle"
+                          >
+                            {castPartners.length === 0
+                              ? "Add Muses to cast"
+                              : `Cast · ${castPartners.length + 1} of ${MAX_MUSE_CAST_MATES + 1}`}
+                          </button>
+                          {castPartners.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setCastSelection([])}
+                              className="text-[11px] text-[var(--muted)] underline-offset-2 hover:text-[var(--ink)] hover:underline"
+                            >
+                              Solo
+                            </button>
+                          )}
+                        </div>
+                        {castPartners.length > 0 && (
+                          <ul
+                            className="flex flex-wrap gap-1.5"
+                            aria-label="Active cast"
+                          >
+                            {castPartners.map((p) => (
+                              <li key={p.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleCastMate(p.id)}
+                                  className="inline-flex items-center gap-1.5 border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2 py-1 text-[11px] text-[var(--ink)]"
+                                  title={`Remove ${displayName(p)}`}
+                                >
+                                  {mainPhoto(p) ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={mainPhoto(p)!}
+                                      alt=""
+                                      className="h-4 w-4 object-cover"
+                                    />
+                                  ) : null}
+                                  {displayName(p)}
+                                  <span aria-hidden className="text-[var(--muted)]">
+                                    ×
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {castPickerOpen && (
+                          <div
+                            className="max-h-40 overflow-y-auto border border-[var(--line)] bg-[#0c101c] p-2"
+                            data-testid="muse-cast-picker"
+                          >
+                            <p className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+                              Pick up to {MAX_MUSE_CAST_MATES} more ·{" "}
+                              {MAX_MUSE_CAST_MATES + 1} total
+                            </p>
+                            <ul className="flex flex-col gap-1">
+                              {castPickOptions.map((p) => {
+                                const on = castPartners.some((c) =>
+                                  samePartnerId(c.id, p.id),
+                                );
+                                const paired = pairedOptions.some((x) =>
+                                  samePartnerId(x.id, p.id),
+                                );
+                                return (
+                                  <li key={p.id}>
+                                    <label className="flex cursor-pointer items-center gap-2 px-1 py-1 text-sm text-[var(--ink)] hover:bg-[var(--glow)]/5">
+                                      <input
+                                        type="checkbox"
+                                        checked={on}
+                                        onChange={() => toggleCastMate(p.id)}
+                                        className="accent-[var(--accent)]"
+                                      />
+                                      <span className="min-w-0 flex-1 truncate">
+                                        {displayName(p)}
+                                      </span>
+                                      {paired ? (
+                                        <span className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--muted)]">
+                                          together
+                                        </span>
+                                      ) : null}
+                                    </label>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1465,8 +1645,8 @@ function ChatPageInner() {
               >
                 {messages.length === 0 && (
                   <p className="muse-chat-empty text-[0.9375rem] leading-[1.65] text-[#e8dcd0]">
-                    {castPartner
-                      ? `Say something filthy — ${displayName(partner!)} and ${displayName(castPartner)} are both in the scene.`
+                    {castPartners.length > 0
+                      ? `Say something filthy — ${castLabel} ${castPartners.length === 1 ? "are both" : "are all"} in the scene.`
                       : "Say something filthy. Her portrait stays with you."}
                   </p>
                 )}
@@ -1481,7 +1661,7 @@ function ChatPageInner() {
                   >
                     <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                       {m.who === "Partner" && partner
-                        ? castPartner
+                        ? castPartners.length > 0
                           ? castLabel
                           : displayName(partner)
                         : m.who}
