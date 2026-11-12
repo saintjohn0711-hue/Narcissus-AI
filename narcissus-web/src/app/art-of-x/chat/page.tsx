@@ -1465,7 +1465,7 @@ function ChatPageInner() {
                 }`}
               >
                 {messages.length === 0 && (
-                  <p className="muse-chat-empty text-sm leading-relaxed text-[#e8dcd0]">
+                  <p className="muse-chat-empty text-[0.9375rem] leading-[1.65] text-[#e8dcd0]">
                     {castPartner
                       ? `Say something filthy — ${displayName(partner!)} and ${displayName(castPartner)} are both in the scene.`
                       : "Say something filthy. Her portrait stays with you."}
@@ -1474,7 +1474,7 @@ function ChatPageInner() {
                 {messages.map((m) => (
                   <div
                     key={m.id}
-                    className={`max-w-[85%] rounded-sm px-3 py-2 text-sm leading-relaxed ${
+                    className={`max-w-[90%] rounded-sm px-4 py-3 text-base leading-[1.65] ${
                       m.who === "You"
                         ? "ml-auto bg-[var(--accent)]/20 text-[#f7f1e8]"
                         : "bg-[#12182a] text-[#f7f1e8]"
@@ -1505,12 +1505,12 @@ function ChatPageInner() {
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Message…"
                   disabled={sending || !partner}
-                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2.5 text-sm disabled:opacity-60"
+                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-4 py-3.5 text-base disabled:opacity-60"
                 />
                 <button
                   type="submit"
                   disabled={sending || !partner || !text.trim()}
-                  className="rounded-sm bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
+                  className="rounded-sm bg-[var(--accent)] px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--on-accent)] disabled:opacity-50"
                 >
                   {sending ? "…" : "Send"}
                 </button>
