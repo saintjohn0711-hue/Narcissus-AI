@@ -1170,7 +1170,7 @@ function ChatPageInner() {
                 {messages.map((m) => (
                   <div
                     key={m.id}
-                    className={`max-w-[85%] rounded-sm px-3 py-2 text-sm leading-relaxed ${
+                    className={`max-w-[88%] rounded-sm px-3.5 py-2.5 text-[0.9375rem] leading-relaxed ${
                       m.who === "You"
                         ? "ml-auto bg-[var(--accent)]/20 text-[#f7f1e8]"
                         : "bg-[#12182a] text-[#f7f1e8]"
@@ -1201,12 +1201,12 @@ function ChatPageInner() {
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Message…"
                   disabled={sending || !partner}
-                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2.5 text-sm disabled:opacity-60"
+                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-3.5 py-3 text-[0.9375rem] disabled:opacity-60"
                 />
                 <button
                   type="submit"
                   disabled={sending || !partner || !text.trim()}
-                  className="rounded-sm bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
+                  className="rounded-sm bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-[var(--on-accent)] disabled:opacity-50"
                 >
                   {sending ? "…" : "Send"}
                 </button>
