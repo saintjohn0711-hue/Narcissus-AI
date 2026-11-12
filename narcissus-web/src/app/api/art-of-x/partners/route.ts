@@ -7,6 +7,7 @@ import {
   normalizePairedWith,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import { normalizeMemories } from "@/lib/museChatMemory";
 
 export const runtime = "nodejs";
 
@@ -66,6 +67,8 @@ function rowToPartner(
     partnerB: row.partnerB,
     locations: row.locations,
     pairedWith: normalizePairedWith(row.pairedWith, row.id),
+    memories: normalizeMemories(row.memories),
+    tryNewThings: Boolean(row.tryNewThings),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -171,6 +174,8 @@ export async function PUT(req: NextRequest) {
         partnerB: p.partnerB || "",
         locations: p.locations || "",
         pairedWith: normalizePairedWith(p.pairedWith, ids[i]),
+        memories: normalizeMemories(p.memories),
+        tryNewThings: Boolean(p.tryNewThings),
         createdAt: p.createdAt ? new Date(p.createdAt) : now,
         updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
       });

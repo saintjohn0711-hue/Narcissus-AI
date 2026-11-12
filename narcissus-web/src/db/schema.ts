@@ -118,6 +118,22 @@ export const partners = pgTable("partners", {
   locations: text("locations").notNull().default(""),
   /** Muse ids this Muse has played with (joint chat cast). */
   pairedWith: jsonb("paired_with").$type<number[]>().notNull().default([]),
+  /** Durable chat memories — facts, nicknames, places, kinks tried, etc. */
+  memories: jsonb("memories")
+    .$type<
+      Array<{
+        id: string;
+        text: string;
+        kind: string;
+        at: string;
+        source: string;
+        pairWith?: number | null;
+      }>
+    >()
+    .notNull()
+    .default([]),
+  /** When true, Muse may introduce new acts / tones / modes. */
+  tryNewThings: boolean("try_new_things").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
