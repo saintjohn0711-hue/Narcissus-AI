@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveChatLlm } from "@/lib/llmConfig";
 
 export const runtime = "nodejs";
 
@@ -8,28 +9,12 @@ type Body = {
   name?: string;
 };
 
-function visionConfig(): { url: string; key: string; model: string } | null {
-  const key =
-    process.env.AI_GATEWAY_API_KEY?.trim() ||
-    process.env.OPENAI_API_KEY?.trim() ||
-    process.env.LOOKS_VISION_API_KEY?.trim() ||
-    "";
-  if (!key) return null;
-  const url =
-    process.env.LOOKS_VISION_URL?.trim() ||
-    (process.env.AI_GATEWAY_API_KEY
-      ? "https://ai-gateway.vercel.sh/v1/chat/completions"
-      : "https://api.openai.com/v1/chat/completions");
-  const model =
-    process.env.LOOKS_VISION_MODEL?.trim() ||
-    (process.env.AI_GATEWAY_API_KEY
-      ? "openai/gpt-4o-mini"
-      : "gpt-4o-mini");
-  return { url, key, model };
-}
-
 export async function POST(req: NextRequest) {
-  const cfg = visionConfig();
+  const cfg = resolveChatLlm({
+    modelEnv: process.env.LOOKS_VISION_MODEL,
+    gatewayDefault: "openai/gpt-4o-mini",
+    openaiDefault: "gpt-4o-mini",
+  });
   if (!cfg) {
     return NextResponse.json(
       {
