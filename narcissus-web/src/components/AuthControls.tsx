@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { resetStoreMode } from "@/lib/artOfXStore";
 
-export function AuthControls() {
+type AuthControlsProps = {
+  /** Override root layout classes (e.g. drawer stack without ml-auto). */
+  className?: string;
+};
+
+export function AuthControls({ className }: AuthControlsProps) {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+  const rootClass =
+    className ?? "ml-auto flex items-center gap-2 text-sm sm:gap-3";
 
   async function signOut() {
     await authClient.signOut();
@@ -17,13 +24,15 @@ export function AuthControls() {
 
   if (isPending) {
     return (
-      <span className="ml-auto text-xs text-[var(--muted)]">Account…</span>
+      <span className={`${rootClass} text-xs text-[var(--muted)]`}>
+        Account…
+      </span>
     );
   }
 
   if (session?.user) {
     return (
-      <div className="ml-auto flex items-center gap-3 text-sm">
+      <div className={rootClass}>
         <Link
           href="/account"
           className="max-w-[10rem] truncate text-[var(--muted)] transition hover:text-[var(--ink)]"
@@ -43,7 +52,7 @@ export function AuthControls() {
   }
 
   return (
-    <div className="ml-auto flex items-center gap-2 text-sm">
+    <div className={rootClass}>
       <Link
         href="/sign-in"
         className="rounded-sm border border-[var(--accent)]/50 bg-[var(--accent)] px-3 py-1.5 font-semibold text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
