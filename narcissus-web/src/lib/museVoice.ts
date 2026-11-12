@@ -590,6 +590,30 @@ export function speakMessage(
   };
 }
 
+/** Shared id so selection previews cancel each other (and chat narration). */
+export const VOICE_PREVIEW_MESSAGE_ID = "__muse-voice-preview__";
+
+/** Short default line for gender / accent / delivery previews. */
+export const DEFAULT_VOICE_PREVIEW_LINE =
+  "Hey… it's me. How do I sound like this?";
+
+/**
+ * Speak a short sample with the selected Muse voice settings.
+ * Stops any previous preview or bubble narration first.
+ */
+export function previewVoice(
+  settings: MuseVoiceSettings,
+  sampleText?: string,
+): SpeakController | null {
+  const line =
+    textForSpeech(sampleText || "") || DEFAULT_VOICE_PREVIEW_LINE;
+  return speakMessage(VOICE_PREVIEW_MESSAGE_ID, line, settings);
+}
+
+export function isVoicePreviewActive(): boolean {
+  return activeMessageId === VOICE_PREVIEW_MESSAGE_ID;
+}
+
 /** Chat-level prefs (device only). */
 export const CHAT_VOICE_PREFS_KEY = "narcissus.artOfX.chatVoicePrefs.v1";
 
