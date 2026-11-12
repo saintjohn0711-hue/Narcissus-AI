@@ -8,6 +8,7 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import { normalizeMemories } from "@/lib/museChatMemory";
+import { normalizeSexRibbons } from "@/lib/sexRibbons";
 
 export const runtime = "nodejs";
 
@@ -69,6 +70,7 @@ function rowToPartner(
     pairedWith: normalizePairedWith(row.pairedWith, row.id),
     memories: normalizeMemories(row.memories),
     tryNewThings: Boolean(row.tryNewThings),
+    sexRibbons: normalizeSexRibbons(row.sexRibbons),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -176,6 +178,7 @@ export async function PUT(req: NextRequest) {
         pairedWith: normalizePairedWith(p.pairedWith, ids[i]),
         memories: normalizeMemories(p.memories),
         tryNewThings: Boolean(p.tryNewThings),
+        sexRibbons: normalizeSexRibbons(p.sexRibbons),
         createdAt: p.createdAt ? new Date(p.createdAt) : now,
         updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
       });

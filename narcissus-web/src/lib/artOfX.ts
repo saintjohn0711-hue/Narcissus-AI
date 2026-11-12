@@ -7,6 +7,10 @@ import {
   normalizeMemories,
   type MuseMemory,
 } from "@/lib/museChatMemory";
+import {
+  normalizeSexRibbons,
+  type SexRibbonAward,
+} from "@/lib/sexRibbons";
 
 export type PersonType = "Real" | "Dream" | "Wanted";
 export type { MuseMemory };
@@ -93,6 +97,11 @@ export type PartnerRecord = {
    * When false, stay in the established vibe unless the user asks.
    */
   tryNewThings: boolean;
+  /**
+   * Sex ribbons earned with this Muse (chat tasks / claims).
+   * Synced with partners localStorage + Neon.
+   */
+  sexRibbons: SexRibbonAward[];
   createdAt: string;
   updatedAt: string;
 };
@@ -707,6 +716,7 @@ export function emptyPartner(
     pairedWith: [],
     memories: [],
     tryNewThings: false,
+    sexRibbons: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -1468,6 +1478,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     pairedWith: [],
     memories: [],
     tryNewThings: false,
+    sexRibbons: [],
     createdAt: now,
     updatedAt: now,
   }));
@@ -1503,6 +1514,7 @@ export function loadPartners(): PartnerRecord[] {
           ),
           memories: normalizeMemories((p as PartnerRecord).memories),
           tryNewThings: Boolean((p as PartnerRecord).tryNewThings),
+          sexRibbons: normalizeSexRibbons((p as PartnerRecord).sexRibbons),
         })).map((p) => {
           const id = Number(p.id);
           const base = {
