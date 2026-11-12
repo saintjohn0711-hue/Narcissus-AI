@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, ne } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
-import { PG_INT4_MAX, type PartnerRecord } from "@/lib/artOfX";
+import {
+  PG_INT4_MAX,
+  normalizePairedWith,
+  type PartnerRecord,
+} from "@/lib/artOfX";
 
 export const runtime = "nodejs";
 
@@ -61,6 +65,7 @@ function rowToPartner(
     partnerA: row.partnerA,
     partnerB: row.partnerB,
     locations: row.locations,
+    pairedWith: normalizePairedWith(row.pairedWith, row.id),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -165,6 +170,7 @@ export async function PUT(req: NextRequest) {
         partnerA: p.partnerA || "",
         partnerB: p.partnerB || "",
         locations: p.locations || "",
+        pairedWith: normalizePairedWith(p.pairedWith, ids[i]),
         createdAt: p.createdAt ? new Date(p.createdAt) : now,
         updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
       });

@@ -17,6 +17,8 @@ export const maxDuration = 60;
 
 type ChatBody = {
   partner?: PartnerRecord;
+  /** Optional second Muse for dual-cast / paired play */
+  cast?: PartnerRecord | null;
   messages?: Array<{ who: "You" | "Partner"; text: string }>;
   /** Latest user turn; appended if not already last in messages */
   message?: string;
@@ -62,8 +64,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "message_required" }, { status: 400 });
   }
 
+  const cast =
+    body.cast &&
+    typeof body.cast === "object" &&
+    body.cast.name &&
+    Number(body.cast.id) !== Number(partner.id)
+      ? body.cast
+      : null;
+
   const messages: XaiChatMessage[] = [
-    { role: "system", content: buildPartnerChatSystemPrompt(partner, pov) },
+    {
+      role: "system",
+      content: buildPartnerChatSystemPrompt(partner, pov, cast),
+    },
     ...partnerThreadToXaiMessages(thread),
   ];
 
