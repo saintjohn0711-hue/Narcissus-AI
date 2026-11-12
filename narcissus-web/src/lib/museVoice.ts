@@ -865,6 +865,23 @@ async function speakWithWebSpeech(
         primeSpeechEngine();
         window.speechSynthesis.speak(utter);
         notify();
+        // Some engines never fire onstart — treat speaking/pending as OK,
+        // otherwise soft-fail for retry after a short watchdog.
+        window.setTimeout(() => {
+          if (settled || speakGeneration !== generation) return;
+          try {
+            if (
+              window.speechSynthesis.speaking ||
+              window.speechSynthesis.pending
+            ) {
+              finish(true);
+              return;
+            }
+          } catch {
+            /* fall through */
+          }
+          finish(false);
+        }, 900);
       } catch {
         finish(false);
       }
