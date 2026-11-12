@@ -43,8 +43,15 @@ import {
   parseDreamMuseLocal,
 } from "@/lib/dreamMuse";
 import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
+import {
+  defaultVoiceGender,
+  presetsForGender,
+  type MuseVoiceGender,
+  type MuseVoicePresetId,
+} from "@/lib/museVoice";
 
 const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
+const VOICE_GENDERS: MuseVoiceGender[] = ["female", "male"];
 
 export default function PartnersPage() {
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
@@ -871,13 +878,21 @@ export default function PartnersPage() {
                   <button
                     key={g}
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      const nextVoice = defaultVoiceGender(g);
+                      const keepVoice =
+                        editing.voiceGender ===
+                        defaultVoiceGender(editing.gender);
                       setEditing({
                         ...editing,
                         gender: g,
                         isCouple: g === "couple",
-                      })
-                    }
+                        voiceGender: keepVoice
+                          ? nextVoice
+                          : editing.voiceGender,
+                        voicePreset: keepVoice ? "auto" : editing.voicePreset,
+                      });
+                    }}
                     className={`rounded-sm border px-3 py-1.5 text-sm ${
                       editing.gender === g
                         ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
@@ -890,6 +905,63 @@ export default function PartnersPage() {
               </div>
             </fieldset>
           </div>
+
+          <fieldset className="space-y-3" data-testid="muse-voice-settings">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Chat voice
+            </legend>
+            <p className="text-xs text-[var(--muted)]">
+              Sexy female or male narration for Companion chat (browser speech —
+              no API key). Pick gender + a delivery preset.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {VOICE_GENDERS.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() =>
+                    setEditing({
+                      ...editing,
+                      voiceGender: g,
+                      voicePreset: "auto",
+                      voiceId: "",
+                    })
+                  }
+                  className={`rounded-sm border px-3 py-1.5 text-sm capitalize ${
+                    editing.voiceGender === g
+                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                      : "border-[var(--line)] text-[#c4b7a8]"
+                  }`}
+                  data-testid={`muse-voice-gender-${g}`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {presetsForGender(editing.voiceGender || "female").map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  title={p.blurb}
+                  onClick={() =>
+                    setEditing({
+                      ...editing,
+                      voicePreset: p.id as MuseVoicePresetId,
+                    })
+                  }
+                  className={`rounded-sm border px-3 py-1.5 text-sm ${
+                    editing.voicePreset === p.id
+                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                      : "border-[var(--line)] text-[#c4b7a8]"
+                  }`}
+                  data-testid={`muse-voice-preset-${p.id}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           <div className="grid gap-2 text-sm">
             <div className="flex flex-wrap items-end justify-between gap-2">
