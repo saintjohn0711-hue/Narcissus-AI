@@ -721,6 +721,7 @@ body {
   /* Give task/collection room on phone when Ribbons or Memories is open */
   .muse-chat-drawer:has(.muse-ribbons-panel),
   .muse-chat-drawer:has(.muse-memories-panel) {
+    height: min(78dvh, 720px);
     max-height: min(78dvh, 720px);
   }
 
@@ -805,13 +806,14 @@ body {
   }
 }
 
-/* Phone: taller bottom sheet so many messages read without feeling cramped */
+/* Phone: force tall bottom sheet (~66dvh) so chat reads without feeling cramped */
 @media (max-width: 640px) {
   .muse-chat-drawer {
     left: 0.35rem;
     right: 0.35rem;
     bottom: 0.35rem;
     width: auto;
+    height: min(66dvh, 580px);
     max-height: min(66dvh, 580px);
   }
 }
