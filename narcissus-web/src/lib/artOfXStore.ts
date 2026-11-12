@@ -6,10 +6,13 @@
  */
 
 import {
+  PARTNERS_PHOTO_BUDGET_CHARS,
   STORAGE,
+  compactPartnersForStorage,
   loadChats as loadChatsLocal,
   loadPartners as loadPartnersLocal,
   loadScenes as loadScenesLocal,
+  partnersPhotoStats,
   saveChats as saveChatsLocal,
   savePartners as savePartnersLocal,
   saveScenes as saveScenesLocal,
@@ -17,6 +20,19 @@ import {
   type PartnerRecord,
   type SavedScene,
 } from "@/lib/artOfX";
+
+/** Cleared by consumePartnersPersistNotice() after a successful persist. */
+let lastPartnersPersistNotice: string | null = null;
+
+export function consumePartnersPersistNotice(): string | null {
+  const n = lastPartnersPersistNotice;
+  lastPartnersPersistNotice = null;
+  return n;
+}
+
+function setPartnersPersistNotice(message: string | null) {
+  lastPartnersPersistNotice = message;
+}
 
 export type StoreMode = "database" | "local";
 
@@ -90,13 +106,32 @@ export async function fetchPartners(): Promise<PartnerRecord[]> {
   return data.partners || [];
 }
 
-export async function persistPartners(
+async function preparePartnersForPersist(
   partners: PartnerRecord[],
+  maxChars = PARTNERS_PHOTO_BUDGET_CHARS,
 ): Promise<PartnerRecord[]> {
-  if ((await getStoreMode()) === "local") {
-    savePartnersLocal(partners);
+  const { photoChars } = partnersPhotoStats(partners);
+  if (photoChars <= maxChars) {
+    setPartnersPersistNotice(null);
     return partners;
   }
+  const result = await compactPartnersForStorage(partners, maxChars);
+  if (!result.compacted) return partners;
+  const parts = [
+    "Muse photos were resized to fit save limits",
+    result.droppedPhotos
+      ? `(removed ${result.droppedPhotos} extra photo${
+          result.droppedPhotos === 1 ? "" : "s"
+        })`
+      : null,
+  ].filter(Boolean);
+  setPartnersPersistNotice(parts.join(" "));
+  return result.partners;
+}
+
+async function putPartnersCloud(
+  partners: PartnerRecord[],
+): Promise<PartnerRecord[]> {
   const res = await fetch("/api/art-of-x/partners", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -110,16 +145,73 @@ export async function persistPartners(
   }
   if (!res.ok) {
     let detail = "";
+    let errorCode = "";
     try {
-      const data = (await res.json()) as { message?: string; error?: string };
+      const data = (await res.json()) as {
+        message?: string;
+        error?: string;
+      };
       detail = data.message || data.error || "";
+      errorCode = data.error || "";
     } catch {
       // ignore
     }
-    throw new Error(detail || `Failed to save partners (${res.status})`);
+    const err = new Error(detail || `Failed to save partners (${res.status})`);
+    (err as Error & { status?: number; code?: string }).status = res.status;
+    (err as Error & { status?: number; code?: string }).code = errorCode;
+    throw err;
   }
-  const data = (await res.json()) as { partners?: PartnerRecord[] };
+  const data = (await res.json()) as {
+    partners?: PartnerRecord[];
+    notice?: string;
+    trimmedExtras?: number;
+  };
+  if (data.notice) {
+    setPartnersPersistNotice(data.notice);
+  } else if (data.trimmedExtras && data.trimmedExtras > 0) {
+    setPartnersPersistNotice(
+      `Removed ${data.trimmedExtras} extra Muse photo${
+        data.trimmedExtras === 1 ? "" : "s"
+      } so the save would fit.`,
+    );
+  }
   return Array.isArray(data.partners) ? data.partners : partners;
+}
+
+export async function persistPartners(
+  partners: PartnerRecord[],
+): Promise<PartnerRecord[]> {
+  const prepared = await preparePartnersForPersist(partners);
+  if ((await getStoreMode()) === "local") {
+    savePartnersLocal(prepared);
+    return prepared;
+  }
+  try {
+    return await putPartnersCloud(prepared);
+  } catch (err) {
+    const status = (err as Error & { status?: number }).status;
+    const code = (err as Error & { code?: string }).code;
+    const tooLarge =
+      status === 413 ||
+      code === "payload_too_large" ||
+      /too many or too-large|payload/i.test(
+        err instanceof Error ? err.message : "",
+      );
+    if (!tooLarge) throw err;
+    // Cloud still rejected — compact harder and retry once.
+    const tighter = await compactPartnersForStorage(
+      prepared,
+      Math.floor(PARTNERS_PHOTO_BUDGET_CHARS * 0.7),
+    );
+    if (tighter.compacted) {
+      setPartnersPersistNotice(
+        tighter.droppedPhotos
+          ? `Muse photos were heavily resized (removed ${tighter.droppedPhotos} extras) so your account could save.`
+          : "Muse photos were heavily resized so your account could save.",
+      );
+    }
+    return await putPartnersCloud(tighter.partners);
+  }
 }
 
 export async function fetchScenes(): Promise<SavedScene[]> {
