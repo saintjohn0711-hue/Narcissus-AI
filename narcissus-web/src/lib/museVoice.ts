@@ -1004,14 +1004,9 @@ export function speakMessage(
     audioPlaybackSupported() && naturalTtsCache !== false;
   activeLoading = tryNatural;
   activeEngine = tryNatural ? "openai" : "web-speech";
-  if (!tryNatural && naturalTtsCache === false) {
-    setVoiceHint(
-      "Using this browser’s voice — add OPENAI_API_KEY on Vercel for natural Muse TTS.",
-      7000,
-    );
-  } else {
-    setVoiceHint(null);
-  }
+  // Missing-key path is explained by static Voice UI copy — only clear
+  // leftover soft hints here (hard failures set a hint later).
+  setVoiceHint(null);
   notify();
 
   const controller: SpeakController = {
@@ -1062,12 +1057,6 @@ export function speakMessage(
         return;
       }
       // Missing key / upstream / play error → soft Web Speech recovery
-      if (naturalTtsCache === false) {
-        setVoiceHint(
-          "Using this browser’s voice — add OPENAI_API_KEY on Vercel for natural Muse TTS.",
-          7000,
-        );
-      }
       await runWebSpeech();
     } catch {
       if (speakGeneration !== generation) return;
