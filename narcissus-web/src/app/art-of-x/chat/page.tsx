@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { MuseChatNarrate } from "@/components/MuseChatNarrate";
 import { MusePresence } from "@/components/MusePresence";
 import {
   displayName,
@@ -31,6 +32,20 @@ import {
   type ChatMessage,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import {
+  DEFAULT_CHAT_VOICE_PREFS,
+  loadChatVoicePrefs,
+  presetsForGender,
+  saveChatVoicePrefs,
+  speakMessage,
+  speechSupported,
+  stopNarration,
+  voiceSettingsFromPartner,
+  warmSpeechVoices,
+  type ChatVoicePrefs,
+  type MuseVoiceGender,
+  type MuseVoicePresetId,
+} from "@/lib/museVoice";
 import {
   clearChatForPartner,
   fetchChats,
@@ -71,6 +86,8 @@ import type { ChatPov } from "@/lib/xai";
 
 /** Persist Companion drawer open/closed across visits (optional preference). */
 const COMPANION_CHAT_OPEN_KEY = "narcissus.artOfX.companionChatOpen";
+
+const VOICE_GENDERS: MuseVoiceGender[] = ["female", "male"];
 
 /** Chat prompt only needs text fields — strip heavy data-URLs. */
 function partnerForChatApi(p: PartnerRecord): PartnerRecord {
@@ -152,7 +169,13 @@ function ChatPageInner() {
     id: string;
     text: string;
   } | null>(null);
+  const [voicePrefs, setVoicePrefs] = useState<ChatVoicePrefs>(
+    DEFAULT_CHAT_VOICE_PREFS,
+  );
+  const [voicePanelOpen, setVoicePanelOpen] = useState(false);
+  const [speechOk, setSpeechOk] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const voicePrefsRef = useRef<ChatVoicePrefs>(DEFAULT_CHAT_VOICE_PREFS);
   const partnersRef = useRef<PartnerRecord[]>([]);
   const skipPersist = useRef(false);
   const streamingChats = useRef(false);
@@ -171,6 +194,23 @@ function ChatPageInner() {
       /* private mode / blocked storage */
     }
     setChatPrefReady(true);
+  }, []);
+
+  useEffect(() => {
+    const prefs = loadChatVoicePrefs();
+    setVoicePrefs(prefs);
+    voicePrefsRef.current = prefs;
+    setSpeechOk(speechSupported());
+    return warmSpeechVoices();
+  }, []);
+
+  useEffect(() => {
+    voicePrefsRef.current = voicePrefs;
+    saveChatVoicePrefs(voicePrefs);
+  }, [voicePrefs]);
+
+  useEffect(() => {
+    return () => stopNarration();
   }, []);
 
   useEffect(() => {
@@ -565,6 +605,50 @@ function ChatPageInner() {
         err instanceof Error
           ? err.message
           : "Couldn’t save try-new permission.",
+      );
+    }
+  }
+
+  async function setMuseVoice(patch: {
+    voiceGender?: MuseVoiceGender;
+    voicePreset?: MuseVoicePresetId;
+    voiceId?: string;
+  }) {
+    if (!partner) return;
+    const now = new Date().toISOString();
+    const nextGender = patch.voiceGender ?? partner.voiceGender;
+    const list = partnersRef.current.map((p) =>
+      samePartnerId(p.id, partner.id)
+        ? {
+            ...p,
+            voiceGender: nextGender,
+            voicePreset:
+              patch.voicePreset ??
+              (patch.voiceGender ? "auto" : p.voicePreset),
+            voiceId:
+              patch.voiceId !== undefined
+                ? patch.voiceId
+                : patch.voiceGender
+                  ? ""
+                  : p.voiceId,
+            updatedAt: now,
+          }
+        : p,
+    );
+    setPartners(list);
+    partnersRef.current = list;
+    try {
+      try {
+        savePartners(list);
+      } catch {
+        // ignore
+      }
+      const saved = await persistPartners(list);
+      setPartners(saved);
+      partnersRef.current = saved;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Couldn’t save Muse voice.",
       );
     }
   }
@@ -1035,6 +1119,13 @@ function ChatPageInner() {
           tryNewThings: tryNewActive,
           memories: partner.memories || [],
         });
+        if (voicePrefsRef.current.autoNarrateMuse && speechSupported()) {
+          speakMessage(
+            replyId,
+            trimmed,
+            voiceSettingsFromPartner(partner),
+          );
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Chat failed");
@@ -1446,6 +1537,22 @@ function ChatPageInner() {
                     >
                       {tryNewActive ? "Try new · on" : "Try new"}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVoicePanelOpen((v) => !v);
+                        setMemoriesOpen(false);
+                        setRibbonsOpen(false);
+                      }}
+                      className={`muse-chat-tool ${
+                        voicePanelOpen ? "muse-chat-tool--on" : ""
+                      }`}
+                      title="Muse voice — gender, preset, auto-play"
+                      data-testid="muse-voice-toggle"
+                    >
+                      Voice
+                      {partner.voiceGender === "male" ? " · ♂" : " · ♀"}
+                    </button>
                     <label className="muse-chat-tool muse-chat-tool--pov">
                       <span>POV</span>
                       <select
@@ -1465,6 +1572,116 @@ function ChatPageInner() {
                       title="Clear this Muse’s conversation (memories stay)"
                     >
                       {resetting ? "Resetting…" : "Reset"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {partner && voicePanelOpen && (
+                <div
+                  className="muse-voice-panel border-b border-[var(--line)] bg-[#0a0e18]/95 px-4 py-3 sm:px-5"
+                  data-testid="muse-voice-panel"
+                >
+                  <p
+                    className="mb-1 text-sm text-[var(--ink)]"
+                    style={{ fontFamily: "var(--font-display), serif" }}
+                  >
+                    Chat voice
+                  </p>
+                  <p className="mb-3 text-xs leading-relaxed text-[#c4b7a8]">
+                    {speechOk
+                      ? "Browser speech narrates Muse replies — tap Play on a bubble. No API key."
+                      : "Speech isn’t available in this browser."}
+                  </p>
+                  <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Muse gender
+                  </p>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {VOICE_GENDERS.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => void setMuseVoice({ voiceGender: g })}
+                        className={`rounded-sm border px-2.5 py-1.5 text-xs capitalize ${
+                          partner.voiceGender === g
+                            ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                            : "border-[var(--line)] text-[var(--soft)]"
+                        }`}
+                        data-testid={`chat-voice-gender-${g}`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                    Preset
+                  </p>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {presetsForGender(partner.voiceGender || "female").map(
+                      (p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          title={p.blurb}
+                          onClick={() =>
+                            void setMuseVoice({
+                              voicePreset: p.id as MuseVoicePresetId,
+                            })
+                          }
+                          className={`rounded-sm border px-2.5 py-1.5 text-xs ${
+                            partner.voicePreset === p.id
+                              ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                              : "border-[var(--line)] text-[var(--soft)]"
+                          }`}
+                          data-testid={`chat-voice-preset-${p.id}`}
+                        >
+                          {p.label}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVoicePrefs((prev) => ({
+                          ...prev,
+                          autoNarrateMuse: !prev.autoNarrateMuse,
+                        }))
+                      }
+                      className={`muse-chat-tool ${
+                        voicePrefs.autoNarrateMuse ? "muse-chat-tool--on" : ""
+                      }`}
+                      data-testid="chat-voice-auto"
+                    >
+                      {voicePrefs.autoNarrateMuse
+                        ? "Auto-play · on"
+                        : "Auto-play Muse"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVoicePrefs((prev) => ({
+                          ...prev,
+                          narrateUser: !prev.narrateUser,
+                        }))
+                      }
+                      className={`muse-chat-tool ${
+                        voicePrefs.narrateUser ? "muse-chat-tool--on" : ""
+                      }`}
+                      data-testid="chat-voice-user"
+                    >
+                      {voicePrefs.narrateUser
+                        ? "Your lines · on"
+                        : "Your lines · off"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => stopNarration()}
+                      className="muse-chat-tool"
+                      data-testid="chat-voice-stop-all"
+                    >
+                      Stop
                     </button>
                   </div>
                 </div>
@@ -1741,6 +1958,10 @@ function ChatPageInner() {
                 {messages.map((m) => {
                   const isEditingYou =
                     m.who === "You" && editingMessageId === m.id;
+                  const showNarrate =
+                    Boolean(m.text?.trim()) &&
+                    !(sending && m.who === "Partner" && !m.text) &&
+                    (m.who === "Partner" || voicePrefs.narrateUser);
                   return (
                     <div
                       key={m.id}
@@ -1750,7 +1971,9 @@ function ChatPageInner() {
                           : "bg-[#12182a] text-[#f7f1e8]"
                       }`}
                       data-testid={
-                        m.who === "You" ? "muse-chat-user-bubble" : undefined
+                        m.who === "You"
+                          ? "muse-chat-user-bubble"
+                          : "muse-chat-muse-bubble"
                       }
                     >
                       <div className="mb-1 flex items-center justify-between gap-2">
@@ -1761,18 +1984,27 @@ function ChatPageInner() {
                               : displayName(partner)
                             : m.who}
                         </p>
-                        {m.who === "You" && !isEditingYou && (
-                          <button
-                            type="button"
-                            className="muse-chat-msg-edit-btn"
-                            onClick={() => beginEditMessage(m)}
-                            disabled={sending}
-                            data-testid={`muse-chat-edit-${m.id}`}
-                            aria-label="Edit your message"
-                          >
-                            Edit
-                          </button>
-                        )}
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {showNarrate && partner && (
+                            <MuseChatNarrate
+                              messageId={m.id}
+                              text={m.text}
+                              settings={voiceSettingsFromPartner(partner)}
+                            />
+                          )}
+                          {m.who === "You" && !isEditingYou && (
+                            <button
+                              type="button"
+                              className="muse-chat-msg-edit-btn"
+                              onClick={() => beginEditMessage(m)}
+                              disabled={sending}
+                              data-testid={`muse-chat-edit-${m.id}`}
+                              aria-label="Edit your message"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {isEditingYou ? (
                         <div>

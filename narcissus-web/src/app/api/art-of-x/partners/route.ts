@@ -8,6 +8,10 @@ import {
   type PartnerRecord,
 } from "@/lib/artOfX";
 import { normalizeMemories } from "@/lib/museChatMemory";
+import {
+  normalizeVoiceGender,
+  normalizeVoicePreset,
+} from "@/lib/museVoice";
 import { normalizeSexRibbons } from "@/lib/sexRibbons";
 
 export const runtime = "nodejs";
@@ -74,6 +78,12 @@ function rowToPartner(
     memories: normalizeMemories(row.memories),
     tryNewThings: Boolean(row.tryNewThings),
     sexRibbons: normalizeSexRibbons(row.sexRibbons),
+    voiceGender: normalizeVoiceGender(row.voiceGender, row.gender),
+    voicePreset: normalizeVoicePreset(
+      row.voicePreset,
+      normalizeVoiceGender(row.voiceGender, row.gender),
+    ),
+    voiceId: typeof row.voiceId === "string" ? row.voiceId : "",
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -242,6 +252,13 @@ export async function PUT(req: NextRequest) {
         memories: normalizeMemories(p.memories),
         tryNewThings: Boolean(p.tryNewThings),
         sexRibbons: normalizeSexRibbons(p.sexRibbons),
+        voiceGender: normalizeVoiceGender(p.voiceGender, p.gender),
+        voicePreset: normalizeVoicePreset(
+          p.voicePreset,
+          normalizeVoiceGender(p.voiceGender, p.gender),
+        ),
+        voiceId:
+          typeof p.voiceId === "string" ? p.voiceId.trim().slice(0, 200) : "",
         createdAt: p.createdAt ? new Date(p.createdAt) : now,
         updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
       });

@@ -147,6 +147,12 @@ export const partners = pgTable("partners", {
     >()
     .notNull()
     .default([]),
+  /** Chat TTS / Web Speech gender preference. */
+  voiceGender: text("voice_gender").notNull().default("female"),
+  /** Named delivery preset (auto / sultry / deep / …). */
+  voicePreset: text("voice_preset").notNull().default("auto"),
+  /** Optional browser voiceURI override. */
+  voiceId: text("voice_id").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

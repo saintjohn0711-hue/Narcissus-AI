@@ -8,6 +8,13 @@ import {
   type MuseMemory,
 } from "@/lib/museChatMemory";
 import {
+  defaultVoiceGender,
+  normalizeVoiceGender,
+  normalizeVoicePreset,
+  type MuseVoiceGender,
+  type MuseVoicePresetId,
+} from "@/lib/museVoice";
+import {
   normalizeSexRibbons,
   type SexRibbonAward,
 } from "@/lib/sexRibbons";
@@ -102,6 +109,15 @@ export type PartnerRecord = {
    * Synced with partners localStorage + Neon.
    */
   sexRibbons: SexRibbonAward[];
+  /**
+   * Chat narration voice gender (Web Speech / future TTS).
+   * Defaults from Muse presentation gender when unset.
+   */
+  voiceGender: MuseVoiceGender;
+  /** Delivery preset: sultry/soft/bright (female) or deep/warm/smooth (male). */
+  voicePreset: MuseVoicePresetId;
+  /** Optional browser SpeechSynthesisVoice.voiceURI override. */
+  voiceId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -717,6 +733,9 @@ export function emptyPartner(
     memories: [],
     tryNewThings: false,
     sexRibbons: [],
+    voiceGender: defaultVoiceGender("woman"),
+    voicePreset: "auto",
+    voiceId: "",
     createdAt: now,
     updatedAt: now,
   };
@@ -1580,6 +1599,9 @@ export function arkDemoRoster(): PartnerRecord[] {
     memories: [],
     tryNewThings: false,
     sexRibbons: [],
+    voiceGender: defaultVoiceGender(s.gender),
+    voicePreset: "auto",
+    voiceId: "",
     createdAt: now,
     updatedAt: now,
   }));
@@ -1616,6 +1638,27 @@ export function loadPartners(): PartnerRecord[] {
           memories: normalizeMemories((p as PartnerRecord).memories),
           tryNewThings: Boolean((p as PartnerRecord).tryNewThings),
           sexRibbons: normalizeSexRibbons((p as PartnerRecord).sexRibbons),
+          voiceGender: normalizeVoiceGender(
+            (p as PartnerRecord).voiceGender,
+            (() => {
+              const raw = String(p.gender || "");
+              if (PERSON_GENDERS.includes(raw as PersonGender)) {
+                return raw as PersonGender;
+              }
+              return "woman";
+            })(),
+          ),
+          voicePreset: normalizeVoicePreset(
+            (p as PartnerRecord).voicePreset,
+            normalizeVoiceGender(
+              (p as PartnerRecord).voiceGender,
+              String(p.gender || "woman"),
+            ),
+          ),
+          voiceId:
+            typeof (p as PartnerRecord).voiceId === "string"
+              ? (p as PartnerRecord).voiceId.trim().slice(0, 200)
+              : "",
         })).map((p) => {
           const id = Number(p.id);
           const base = {

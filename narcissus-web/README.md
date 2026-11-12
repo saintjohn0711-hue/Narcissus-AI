@@ -30,6 +30,8 @@ Set locally in `.env.local` (or on Vercel for `narcissus-ai`):
 
 Without a Gateway/OpenAI key, describe-looks stays unavailable; Scene builder still uses local craft when the LLM path is down.
 
+**Muse chat voice:** Companion chat narrates Muse replies with the browser Web Speech API (per-Muse female/male + preset). No TTS secret required. Studio Say-This still uses local Edge-TTS on Comfy hosts. OpenAI/ElevenLabs chat TTS is an optional upgrade when those keys are intentionally provisioned.
+
 ## API
 
 `POST /api/jobs` (multipart):
