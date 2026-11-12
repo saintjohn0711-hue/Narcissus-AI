@@ -427,6 +427,106 @@ export const DEFAULT_LOCS: SceneLocation[] = [
     name: "Party / House",
     desc: "Music through walls. They might hear you.",
   },
+  {
+    id: "kitchen",
+    name: "Kitchen counter",
+    desc: "Cold stone, half-cleared dishes. Home but not the bed.",
+  },
+  {
+    id: "penthouse",
+    name: "Penthouse suite",
+    desc: "Floor-to-ceiling glass, city glow. Soft carpets, hard edges.",
+  },
+  {
+    id: "rooftop",
+    name: "Rooftop terrace",
+    desc: "Night air, skyline. Someone could look up.",
+  },
+  {
+    id: "balcony",
+    name: "City balcony",
+    desc: "Rail against your back. Traffic below, curtains half-drawn.",
+  },
+  {
+    id: "pool",
+    name: "Pool / Hot tub",
+    desc: "Warm water, wet skin, chlorine and steam.",
+  },
+  {
+    id: "sauna",
+    name: "Sauna / Spa",
+    desc: "Heat, cedar, towels that keep slipping.",
+  },
+  {
+    id: "beach",
+    name: "Beach at night",
+    desc: "Salt air, dark water, sand that sticks to skin.",
+  },
+  {
+    id: "forest",
+    name: "Forest clearing",
+    desc: "Trees close in. Quiet except for breath.",
+  },
+  {
+    id: "camping",
+    name: "Tent / Camping",
+    desc: "Thin walls, sleeping bags unzipped. Outside feels near.",
+  },
+  {
+    id: "yacht",
+    name: "Yacht cabin",
+    desc: "Gentle rock of the hull. Ocean nowhere and everywhere.",
+  },
+  {
+    id: "jet",
+    name: "Private jet",
+    desc: "Narrow aisle, leather seats, clouds outside the window.",
+  },
+  {
+    id: "limo",
+    name: "Limo backseat",
+    desc: "Partition up. Soft leather, city lights sliding past.",
+  },
+  {
+    id: "train",
+    name: "Train sleeper",
+    desc: "Rhythmic sway, thin door. Corridor footsteps possible.",
+  },
+  {
+    id: "elevator",
+    name: "Elevator",
+    desc: "Mirrored walls, floors ticking by. Could stop any second.",
+  },
+  {
+    id: "fitting",
+    name: "Fitting room",
+    desc: "Thin curtain, harsh light. Shoppers just outside.",
+  },
+  {
+    id: "office",
+    name: "Office after hours",
+    desc: "Desk lamp only. Cubicles empty, building locked.",
+  },
+  {
+    id: "club-vip",
+    name: "Club VIP room",
+    desc: "Bass through the wall. Bottle service, velvet, locked door.",
+  },
+  {
+    id: "dancefloor",
+    name: "Dark dance floor",
+    desc: "Bodies packed close. Hands can wander without a name.",
+  },
+  {
+    id: "library",
+    name: "Quiet library",
+    desc: "Stacks and silence. Whisper only — or try not to.",
+  },
+  {
+    id: "greenhouse",
+    name: "Greenhouse",
+    desc: "Humid glass, leaves brushing skin. Soft dirt underfoot.",
+  },
 ];
 
 export const SURPRISES = [
