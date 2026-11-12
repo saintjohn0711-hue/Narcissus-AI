@@ -14,6 +14,10 @@ import { AppNav } from "@/components/AppNav";
 import { MuseChatNarrate } from "@/components/MuseChatNarrate";
 import { MusePresence } from "@/components/MusePresence";
 import {
+  MuseVoicePreviewBar,
+  useMuseVoicePreview,
+} from "@/components/MuseVoicePreview";
+import {
   displayName,
   emptyPartner,
   ensureMuseGroupPairings,
@@ -179,6 +183,7 @@ function ChatPageInner() {
   );
   const [voicePanelOpen, setVoicePanelOpen] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
+  const voicePreview = useMuseVoicePreview();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const voicePrefsRef = useRef<ChatVoicePrefs>(DEFAULT_CHAT_VOICE_PREFS);
   const partnersRef = useRef<PartnerRecord[]>([]);
@@ -237,6 +242,7 @@ function ChatPageInner() {
     setMemoriesOpen(false);
     setRibbonsOpen(false);
     setVoicePanelOpen(false);
+    voicePreview.stop();
   }
 
   useEffect(() => {
@@ -1507,6 +1513,7 @@ function ChatPageInner() {
                         setMemoriesOpen((v) => !v);
                         setRibbonsOpen(false);
                         setVoicePanelOpen(false);
+                        voicePreview.stop();
                       }}
                       className={`muse-chat-tool ${
                         memoriesOpen ? "muse-chat-tool--on" : ""
@@ -1524,6 +1531,7 @@ function ChatPageInner() {
                         setRibbonsOpen((v) => !v);
                         setMemoriesOpen(false);
                         setVoicePanelOpen(false);
+                        voicePreview.stop();
                       }}
                       className={`muse-chat-tool ${
                         ribbonsOpen ? "muse-chat-tool--on" : ""
@@ -1554,7 +1562,10 @@ function ChatPageInner() {
                     <button
                       type="button"
                       onClick={() => {
-                        setVoicePanelOpen((v) => !v);
+                        setVoicePanelOpen((v) => {
+                          if (v) voicePreview.stop();
+                          return !v;
+                        });
                         setMemoriesOpen(false);
                         setRibbonsOpen(false);
                       }}
@@ -1617,13 +1628,16 @@ function ChatPageInner() {
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-[#c4b7a8]">
                         {speechOk
-                          ? "Browser speech — Pick accent + delivery. Tap Play on a bubble."
+                          ? "Browser speech — pick accent + delivery (each plays a short test). Tap Play on a bubble."
                           : "Speech isn’t available in this browser."}
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setVoicePanelOpen(false)}
+                      onClick={() => {
+                        voicePreview.stop();
+                        setVoicePanelOpen(false);
+                      }}
                       className="muse-chat-tool shrink-0"
                       data-testid="muse-voice-close"
                       aria-label="Close voice menu"
@@ -1641,7 +1655,19 @@ function ChatPageInner() {
                         <button
                           key={g}
                           type="button"
-                          onClick={() => void setMuseVoice({ voiceGender: g })}
+                          onClick={() => {
+                            void setMuseVoice({ voiceGender: g });
+                            voicePreview.preview(
+                              voiceSettingsFromPartner({
+                                ...partner,
+                                voiceGender: g,
+                                voicePreset: "auto",
+                                voiceId: encodeAccentVoiceId(
+                                  accentFromVoiceId(partner.voiceId),
+                                ),
+                              }),
+                            );
+                          }}
                           className={`rounded-sm border px-2.5 py-1.5 text-xs capitalize ${
                             partner.voiceGender === g
                               ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
@@ -1670,11 +1696,19 @@ function ChatPageInner() {
                             key={a.id}
                             type="button"
                             title={a.blurb}
-                            onClick={() =>
+                            onClick={() => {
                               void setMuseVoice({
                                 voiceAccent: a.id as MuseVoiceAccentId,
-                              })
-                            }
+                              });
+                              voicePreview.preview(
+                                voiceSettingsFromPartner({
+                                  ...partner,
+                                  voiceId: encodeAccentVoiceId(
+                                    a.id as MuseVoiceAccentId,
+                                  ),
+                                }),
+                              );
+                            }}
                             className={`muse-voice-chip ${
                               selected ? "muse-voice-chip--on" : ""
                             }`}
@@ -1696,11 +1730,17 @@ function ChatPageInner() {
                             key={p.id}
                             type="button"
                             title={p.blurb}
-                            onClick={() =>
+                            onClick={() => {
                               void setMuseVoice({
                                 voicePreset: p.id as MuseVoicePresetId,
-                              })
-                            }
+                              });
+                              voicePreview.preview(
+                                voiceSettingsFromPartner({
+                                  ...partner,
+                                  voicePreset: p.id as MuseVoicePresetId,
+                                }),
+                              );
+                            }}
                             className={`rounded-sm border px-2.5 py-1.5 text-xs ${
                               partner.voicePreset === p.id
                                 ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
@@ -1713,6 +1753,13 @@ function ChatPageInner() {
                         ),
                       )}
                     </div>
+
+                    <MuseVoicePreviewBar
+                      api={voicePreview}
+                      settings={voiceSettingsFromPartner(partner)}
+                      compact
+                      className="mb-3"
+                    />
 
                     <div className="flex flex-wrap gap-2">
                       <button

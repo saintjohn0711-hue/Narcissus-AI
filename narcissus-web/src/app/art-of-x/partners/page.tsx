@@ -44,11 +44,16 @@ import {
 } from "@/lib/dreamMuse";
 import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
 import {
+  MuseVoicePreviewBar,
+  useMuseVoicePreview,
+} from "@/components/MuseVoicePreview";
+import {
   accentFromVoiceId,
   defaultVoiceGender,
   encodeAccentVoiceId,
   MUSE_VOICE_ACCENTS,
   presetsForGender,
+  voiceSettingsFromPartner,
   type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
@@ -63,6 +68,7 @@ export default function PartnersPage() {
   const [sortMode, setSortMode] = useState<MuseSortMode>("manual");
   const [manualOrder, setManualOrder] = useState<number[]>([]);
   const [editing, setEditing] = useState<PartnerRecord | null>(null);
+  const voicePreview = useMuseVoicePreview();
   /** Photo indexes chosen as sources for “Pull looks” */
   const [looksFromIdx, setLooksFromIdx] = useState<number[]>([]);
   const [pullingLooks, setPullingLooks] = useState(false);
@@ -916,24 +922,27 @@ export default function PartnersPage() {
             </legend>
             <p className="text-xs text-[var(--muted)]">
               Sexy female or male narration for Companion chat (browser speech —
-              no API key). Pick gender, accent (locale), and delivery.
+              no API key). Pick gender, accent (locale), and delivery — each
+              selection plays a short preview.
             </p>
             <div className="flex flex-wrap gap-2">
               {VOICE_GENDERS.map((g) => (
                 <button
                   key={g}
                   type="button"
-                  onClick={() =>
-                    setEditing({
+                  onClick={() => {
+                    const next = {
                       ...editing,
                       voiceGender: g,
-                      voicePreset: "auto",
+                      voicePreset: "auto" as MuseVoicePresetId,
                       // Keep accent locale across gender flips
                       voiceId: encodeAccentVoiceId(
                         accentFromVoiceId(editing.voiceId),
                       ),
-                    })
-                  }
+                    };
+                    setEditing(next);
+                    voicePreview.preview(voiceSettingsFromPartner(next));
+                  }}
                   className={`rounded-sm border px-3 py-1.5 text-sm capitalize ${
                     editing.voiceGender === g
                       ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
@@ -958,14 +967,16 @@ export default function PartnersPage() {
                       key={a.id}
                       type="button"
                       title={a.blurb}
-                      onClick={() =>
-                        setEditing({
+                      onClick={() => {
+                        const next = {
                           ...editing,
                           voiceId: encodeAccentVoiceId(
                             a.id as MuseVoiceAccentId,
                           ),
-                        })
-                      }
+                        };
+                        setEditing(next);
+                        voicePreview.preview(voiceSettingsFromPartner(next));
+                      }}
                       className={`muse-voice-chip ${
                         selected ? "muse-voice-chip--on" : ""
                       }`}
@@ -987,12 +998,14 @@ export default function PartnersPage() {
                     key={p.id}
                     type="button"
                     title={p.blurb}
-                    onClick={() =>
-                      setEditing({
+                    onClick={() => {
+                      const next = {
                         ...editing,
                         voicePreset: p.id as MuseVoicePresetId,
-                      })
-                    }
+                      };
+                      setEditing(next);
+                      voicePreview.preview(voiceSettingsFromPartner(next));
+                    }}
                     className={`rounded-sm border px-3 py-1.5 text-sm ${
                       editing.voicePreset === p.id
                         ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
@@ -1005,6 +1018,10 @@ export default function PartnersPage() {
                 ))}
               </div>
             </div>
+            <MuseVoicePreviewBar
+              api={voicePreview}
+              settings={voiceSettingsFromPartner(editing)}
+            />
           </fieldset>
 
           <div className="grid gap-2 text-sm">
