@@ -12,6 +12,7 @@ import {
   fileToPartnerPhoto,
   mainPhoto,
   PARTNER_PHOTO_LIMITS,
+  samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
 import {
@@ -53,8 +54,10 @@ import {
 
 type MusePresenceProps = {
   partner: PartnerRecord;
-  /** Optional second Muse for dual-cast presence (been-together chat). */
+  /** Optional second Muse for dual-cast presence (legacy). */
   castPartner?: PartnerRecord | null;
+  /** Extra Muses in the scene (dual or group cast, max 3). */
+  castPartners?: PartnerRecord[] | null;
   /** Fill the chat hero rail (taller, sticky on desktop). */
   variant?: "rail" | "compact" | "full";
   /** Notify parent when Look changes (for Companion full-stage layout). */
@@ -97,6 +100,7 @@ type WardrobeTab = "features" | "style" | "clothing";
 export function MusePresence({
   partner,
   castPartner = null,
+  castPartners = null,
   variant = "rail",
   onStyleChange,
   lastPartnerReply = null,
@@ -107,6 +111,37 @@ export function MusePresence({
   onToggleChat,
   onPartnerPhotosChange,
 }: MusePresenceProps) {
+  const sceneCast = (() => {
+    const raw =
+      castPartners && castPartners.length > 0
+        ? castPartners
+        : castPartner
+          ? [castPartner]
+          : [];
+    const out: PartnerRecord[] = [];
+    const seen = new Set<number>();
+    for (const c of raw) {
+      if (!c || samePartnerId(c.id, partner.id)) continue;
+      const id = Number(c.id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(c);
+      if (out.length >= 3) break;
+    }
+    return out;
+  })();
+  const hasCast = sceneCast.length > 0;
+  const castTitle = hasCast
+    ? [displayName(partner), ...sceneCast.map((c) => displayName(c))].join(
+        " + ",
+      )
+    : displayName(partner);
+  const castKicker =
+    sceneCast.length >= 2
+      ? `Group cast · ${sceneCast.length + 1}`
+      : sceneCast.length === 1
+        ? "Dual cast"
+        : "Living Muse";
   const photo = mainPhoto(partner);
   const photos = partner.photos || [];
   const [style, setStyle] = useState<MusePresenceStyle>(
@@ -959,36 +994,38 @@ export function MusePresence({
         {!isFullCompanion && (
           <div className="muse-presence-nameplate">
             <p className="text-[10px] uppercase tracking-[0.28em] text-[var(--glow)]/90">
-              {castPartner ? "Dual cast" : "Living Muse"}
+              {castKicker}
             </p>
             <p
               className="mt-1 text-2xl leading-tight text-[var(--ink)] sm:text-3xl"
               style={{ fontFamily: "var(--font-display), serif" }}
             >
-              {castPartner
-                ? `${displayName(partner)} + ${displayName(castPartner)}`
-                : displayName(partner)}
+              {castTitle}
             </p>
             <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-[var(--soft)]">
-              {castPartner ? "Been together · interactive" : statusLine}
+              {hasCast ? "Been together · interactive" : statusLine}
             </p>
-            {castPartner && (
-              <div className="mt-3 flex items-center gap-2">
-                {mainPhoto(castPartner) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={mainPhoto(castPartner)!}
-                    alt=""
-                    className="h-10 w-10 object-cover ring-1 ring-[var(--accent)]/50"
-                  />
-                ) : (
-                  <span className="flex h-10 w-10 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8] ring-1 ring-[var(--line)]">
-                    {displayName(castPartner).slice(0, 1)}
-                  </span>
-                )}
-                <p className="text-xs text-[#c4b7a8]">
-                  {displayName(castPartner)} in the scene
-                </p>
+            {hasCast && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {sceneCast.map((c) => (
+                  <div key={c.id} className="flex items-center gap-2">
+                    {mainPhoto(c) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={mainPhoto(c)!}
+                        alt=""
+                        className="h-10 w-10 object-cover ring-1 ring-[var(--accent)]/50"
+                      />
+                    ) : (
+                      <span className="flex h-10 w-10 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8] ring-1 ring-[var(--line)]">
+                        {displayName(c).slice(0, 1)}
+                      </span>
+                    )}
+                    <p className="text-xs text-[#c4b7a8]">
+                      {displayName(c)}
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1053,28 +1090,36 @@ export function MusePresence({
                 </p>
               )}
               <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                {castPartner
-                  ? `With ${displayName(castPartner)} · dual cast`
+                {hasCast
+                  ? sceneCast.length === 1
+                    ? `With ${displayName(sceneCast[0]!)} · dual cast`
+                    : `With ${sceneCast.map((c) => displayName(c)).join(", ")} · group`
                   : statusLine}
               </p>
             </div>
             <div className="muse-companion-dock-tools">
-              {castPartner && (
+              {hasCast && (
                 <div
-                  className="flex items-center gap-1.5"
-                  title={`${displayName(castPartner)} in dual cast`}
+                  className="flex items-center gap-1"
+                  title={castTitle}
                 >
-                  {mainPhoto(castPartner) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={mainPhoto(castPartner)!}
-                      alt=""
-                      className="h-8 w-8 object-cover ring-1 ring-[var(--accent)]/45"
-                    />
-                  ) : (
-                    <span className="flex h-8 w-8 items-center justify-center bg-[#12182a] text-[10px] text-[#c4b7a8] ring-1 ring-[var(--line)]">
-                      {displayName(castPartner).slice(0, 1)}
-                    </span>
+                  {sceneCast.map((c) =>
+                    mainPhoto(c) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={c.id}
+                        src={mainPhoto(c)!}
+                        alt=""
+                        className="h-8 w-8 object-cover ring-1 ring-[var(--accent)]/45"
+                      />
+                    ) : (
+                      <span
+                        key={c.id}
+                        className="flex h-8 w-8 items-center justify-center bg-[#12182a] text-[10px] text-[#c4b7a8] ring-1 ring-[var(--line)]"
+                      >
+                        {displayName(c).slice(0, 1)}
+                      </span>
+                    ),
                   )}
                 </div>
               )}

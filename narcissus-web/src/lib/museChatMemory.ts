@@ -21,8 +21,9 @@ export type MuseMemory = {
   at: string;
   source: "auto" | "explicit";
   /**
-   * When set, this memory is for dual-cast with that Muse id.
-   * Solo chat skips pair-only memories; dual cast includes matching ones.
+   * When set, this memory is for cast play with that Muse id.
+   * Solo chat skips pair-only memories; dual/group cast includes matching ones
+   * (any mate in the active cast).
    */
   pairWith?: number | null;
 };
@@ -135,13 +136,22 @@ export function mergeMemories(
 
 export function memoriesForPrompt(
   memories: MuseMemory[],
-  opts?: { pairWith?: number | null },
+  opts?: { pairWith?: number | null; castIds?: number[] },
 ): MuseMemory[] {
-  const pair = opts?.pairWith != null ? Number(opts.pairWith) : null;
+  const castSet = new Set<number>();
+  if (Array.isArray(opts?.castIds)) {
+    for (const raw of opts.castIds) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) castSet.add(n);
+    }
+  }
+  if (opts?.pairWith != null && Number.isFinite(Number(opts.pairWith))) {
+    castSet.add(Number(opts.pairWith));
+  }
   return normalizeMemories(memories).filter((m) => {
     if (m.pairWith == null) return true;
-    if (pair == null) return false;
-    return Number(m.pairWith) === pair;
+    if (castSet.size === 0) return false;
+    return castSet.has(Number(m.pairWith));
   });
 }
 
