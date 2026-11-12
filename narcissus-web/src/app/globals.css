@@ -708,6 +708,127 @@ body {
   flex-shrink: 0;
   padding: 1.05rem 1.2rem 0.95rem;
   background: #0a0e18;
+  /* Keep overflow visible so the cast picker can overlay the message list */
+  overflow: visible;
+}
+
+.muse-chat-drawer-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Cast controls stay compact; picker overlays instead of crushing messages */
+.muse-chat-cast-chrome {
+  position: relative;
+  margin-top: 0.45rem;
+}
+
+.muse-chat-cast-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.1rem;
+}
+
+.muse-chat-cast-chips::-webkit-scrollbar {
+  height: 3px;
+}
+
+.muse-chat-cast-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(196, 160, 140, 0.4);
+  background: rgba(196, 160, 140, 0.1);
+  padding: 0.28rem 0.55rem;
+  font-size: 11px;
+  color: var(--ink);
+  min-height: 1.85rem;
+}
+
+.muse-chat-cast-chip img {
+  height: 0.9rem;
+  width: 0.9rem;
+  object-fit: cover;
+}
+
+.muse-chat-cast-picker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 40;
+  max-height: min(36dvh, 14rem);
+  overflow-y: auto;
+  border: 1px solid rgba(229, 195, 178, 0.22);
+  background: #0c101c;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 0.5rem;
+}
+
+.muse-chat-drawer-messages {
+  min-height: 0;
+  /* Keep a readable message column even when cast chrome / panels are open */
+  flex: 1 1 auto;
+  padding: 1.1rem 1.2rem;
+}
+
+.muse-chat-drawer--open .muse-chat-drawer-messages,
+.muse-chat-drawer .muse-chat-drawer-messages {
+  min-height: min(28dvh, 12rem);
+}
+
+.muse-chat-msg-edit-btn {
+  min-height: 2rem;
+  min-width: 2.75rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid rgba(229, 195, 178, 0.28);
+  background: transparent;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 2px;
+}
+
+.muse-chat-msg-edit-btn:hover,
+.muse-chat-msg-edit-btn:focus-visible {
+  border-color: rgba(196, 160, 140, 0.55);
+  color: var(--ink);
+}
+
+.muse-chat-msg-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.muse-chat-msg-edit-actions button {
+  min-height: 2.25rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 2px;
+}
+
+.muse-chat-msg-edit-field {
+  width: 100%;
+  min-height: 4.5rem;
+  resize: vertical;
+  border: 1px solid rgba(229, 195, 178, 0.28);
+  background: #12182a;
+  color: #f7f1e8;
+  padding: 0.65rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.55;
+  border-radius: 2px;
 }
 
 /* Sex ribbons panel — compact so portrait / messages keep room */
@@ -728,11 +849,11 @@ body {
   .muse-ribbons-panel {
     max-height: min(52dvh, 420px);
   }
-}
 
-.muse-chat-drawer-messages {
-  min-height: 0;
-  padding: 1.1rem 1.2rem;
+  .muse-chat-drawer--open .muse-chat-drawer-messages,
+  .muse-chat-drawer .muse-chat-drawer-messages {
+    min-height: min(32dvh, 14rem);
+  }
 }
 
 .muse-chat-drawer-messages--empty {
