@@ -1227,10 +1227,12 @@ export function MusePresence({
         <div className="muse-companion-dock">
           <div className="muse-companion-dock-head">
             <div className="min-w-0 flex-1">
-              <p className="muse-companion-dock-kicker">Companion</p>
+              {!chatOpen && (
+                <p className="muse-companion-dock-kicker">Stage</p>
+              )}
               {museOptions && museOptions.length > 0 && onSelectMuse ? (
                 <label className="mt-0.5 block min-w-0">
-                  <span className="sr-only">Muse</span>
+                  <span className="sr-only">Switch Muse</span>
                   <select
                     className="muse-companion-muse-select"
                     value={partner.id}
@@ -1252,13 +1254,15 @@ export function MusePresence({
                   {displayName(partner)}
                 </p>
               )}
-              <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
-                {hasCast
-                  ? sceneCast.length === 1
-                    ? `With ${displayName(sceneCast[0]!)} · dual cast`
-                    : `With ${sceneCast.map((c) => displayName(c)).join(", ")} · group`
-                  : statusLine}
-              </p>
+              {!chatOpen && (
+                <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                  {hasCast
+                    ? sceneCast.length === 1
+                      ? `With ${displayName(sceneCast[0]!)} · dual cast`
+                      : `With ${sceneCast.map((c) => displayName(c)).join(", ")} · group`
+                    : statusLine.replace(/^Companion · /, "")}
+                </p>
+              )}
             </div>
             <div className="muse-companion-dock-tools">
               {hasCast && (

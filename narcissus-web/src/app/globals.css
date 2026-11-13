@@ -1232,8 +1232,14 @@ body {
     width: auto;
     bottom: calc(min(54dvh, 500px) + 0.4rem);
     max-height: none;
-    padding: 0.4rem 0.55rem;
-    gap: 0.2rem;
+    padding: 0.35rem 0.5rem;
+    gap: 0;
+    border-color: rgba(0, 229, 255, 0.16);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(0, 229, 255, 0.08);
+    background:
+      linear-gradient(165deg, rgba(16, 24, 42, 0.92) 0%, rgba(8, 12, 22, 0.88) 100%);
   }
 
   .muse-chat-stage--chat-open .muse-companion-dock-tabs,
@@ -1372,8 +1378,8 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 0.95rem 1.05rem 0.85rem;
+  gap: 0.45rem;
+  padding: 0.85rem 1.05rem 0.75rem;
   background:
     linear-gradient(180deg, rgba(0, 229, 255, 0.12) 0%, rgba(0, 163, 255, 0.04) 55%, transparent 100%),
     linear-gradient(180deg, #10182a 0%, #0a1020 100%);
@@ -1450,7 +1456,21 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: space-between;
+  gap: 0.4rem 0.55rem;
+  margin-top: 0.15rem;
+}
+
+.muse-chat-toolbar-primary,
+.muse-chat-toolbar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.muse-chat-toolbar-meta {
+  margin-left: auto;
 }
 
 .muse-chat-tool {
@@ -1511,7 +1531,7 @@ body {
 .muse-chat-tool--danger {
   border-color: rgba(240, 196, 184, 0.28);
   color: #f0c4b8;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .muse-chat-tool--danger:hover:not(:disabled),
@@ -1543,7 +1563,9 @@ body {
 /* Cast controls stay compact; picker lives in the mutual-exclusive overlay */
 .muse-chat-cast-chrome {
   position: relative;
-  margin-top: 0.45rem;
+  margin-top: 0.15rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(0, 229, 255, 0.1);
 }
 
 .muse-chat-cast-chips {

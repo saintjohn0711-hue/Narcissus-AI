@@ -1402,7 +1402,7 @@ function ChatPageInner() {
                             ? `${castModeLabel} · ${castLabel}`
                             : castModeLabel
                           : companionFull
-                            ? "Companion · Adults 18+"
+                            ? "Adults 18+"
                             : partner.dynTags.slice(0, 3).join(" · ") ||
                               "No dynamics tagged"}
                         {modelLabel ? ` · ${modelLabel}` : ""}
@@ -1435,8 +1435,8 @@ function ChatPageInner() {
                           data-testid="muse-cast-picker-toggle"
                         >
                           {castPartners.length === 0
-                            ? "Add Muses to cast"
-                            : `Cast · ${castPartners.length + 1} of ${MAX_MUSE_CAST_MATES + 1}`}
+                            ? "Add cast"
+                            : `Cast · ${castPartners.length + 1}`}
                         </button>
                         {castPartners.length > 0 && (
                           <button
@@ -1488,94 +1488,88 @@ function ChatPageInner() {
                     role="toolbar"
                     aria-label="Chat options"
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleChatOverlay("memories")}
-                      className={`muse-chat-tool ${
-                        memoriesOpen ? "muse-chat-tool--on" : ""
-                      }`}
-                      title="What she remembers — add lasting facts for chat"
-                      aria-expanded={memoriesOpen}
-                      data-testid="muse-memories-toggle"
-                    >
-                      Memories
-                      {visibleMemories.length
-                        ? ` (${visibleMemories.length})`
-                        : ""}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleChatOverlay("ribbons")}
-                      className={`muse-chat-tool ${
-                        ribbonsOpen ? "muse-chat-tool--on" : ""
-                      }`}
-                      title="Sex ribbons — complete chat tasks, collect across Muses"
-                      aria-expanded={ribbonsOpen}
-                      data-testid="muse-ribbons-toggle"
-                    >
-                      Ribbons
-                      {museRibbons.length ? ` (${museRibbons.length})` : ""}
-                      {collection.totalCount
-                        ? ` · ${collection.totalCount}`
-                        : ""}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void setTryNewThings(!tryNewActive)}
-                      className={`muse-chat-tool ${
-                        tryNewActive ? "muse-chat-tool--on" : ""
-                      }`}
-                      title={
-                        tryNewActive
-                          ? "Allowed to try new things / shift mode"
-                          : "Stay in established vibe — tap to grant try-new"
-                      }
-                    >
-                      {tryNewActive ? "Try new · on" : "Try new"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleChatOverlay("voice")}
-                      className={`muse-chat-tool ${
-                        voicePanelOpen ? "muse-chat-tool--on" : ""
-                      }`}
-                      title={
-                        voicePanelOpen
-                          ? "Hide Muse voice options"
-                          : "Muse voice — gender, accent, preset, auto-play"
-                      }
-                      aria-expanded={voicePanelOpen}
-                      data-testid="muse-voice-toggle"
-                    >
-                      Voice
-                      {partner.voiceGender === "male" ? " · ♂" : " · ♀"}
-                      {(() => {
-                        const accent = accentFromVoiceId(partner.voiceId);
-                        return accent !== "auto"
-                          ? ` · ${accentLabel(accent)}`
-                          : "";
-                      })()}
-                    </button>
-                    <label className="muse-chat-tool muse-chat-tool--pov">
-                      <span>POV</span>
-                      <select
-                        value={pov}
-                        onChange={(e) => setPov(e.target.value as ChatPov)}
-                        className="muse-chat-pov-select"
+                    <div className="muse-chat-toolbar-primary">
+                      <button
+                        type="button"
+                        onClick={() => toggleChatOverlay("memories")}
+                        className={`muse-chat-tool ${
+                          memoriesOpen ? "muse-chat-tool--on" : ""
+                        }`}
+                        title="What she remembers — add lasting facts for chat"
+                        aria-expanded={memoriesOpen}
+                        data-testid="muse-memories-toggle"
                       >
-                        <option value="1st">1st</option>
-                        <option value="3rd">3rd</option>
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => void resetChat()}
-                      disabled={resetting || messages.length === 0}
-                      className="muse-chat-tool muse-chat-tool--danger"
-                      title="Clear this Muse’s conversation (memories stay)"
-                    >
-                      {resetting ? "Resetting…" : "Reset"}
-                    </button>
+                        Memories
+                        {visibleMemories.length
+                          ? ` · ${visibleMemories.length}`
+                          : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleChatOverlay("ribbons")}
+                        className={`muse-chat-tool ${
+                          ribbonsOpen ? "muse-chat-tool--on" : ""
+                        }`}
+                        title="Sex ribbons — complete chat tasks, collect across Muses"
+                        aria-expanded={ribbonsOpen}
+                        data-testid="muse-ribbons-toggle"
+                      >
+                        Ribbons
+                        {museRibbons.length ? ` · ${museRibbons.length}` : ""}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void setTryNewThings(!tryNewActive)}
+                        className={`muse-chat-tool ${
+                          tryNewActive ? "muse-chat-tool--on" : ""
+                        }`}
+                        title={
+                          tryNewActive
+                            ? "Allowed to try new things / shift mode"
+                            : "Stay in established vibe — tap to grant try-new"
+                        }
+                      >
+                        {tryNewActive ? "Try new · on" : "Try new"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleChatOverlay("voice")}
+                        className={`muse-chat-tool ${
+                          voicePanelOpen ? "muse-chat-tool--on" : ""
+                        }`}
+                        title={
+                          voicePanelOpen
+                            ? "Hide Muse voice options"
+                            : "Muse voice — gender, accent, preset, auto-play"
+                        }
+                        aria-expanded={voicePanelOpen}
+                        data-testid="muse-voice-toggle"
+                      >
+                        Voice
+                      </button>
+                    </div>
+                    <div className="muse-chat-toolbar-meta">
+                      <label className="muse-chat-tool muse-chat-tool--pov">
+                        <span>POV</span>
+                        <select
+                          value={pov}
+                          onChange={(e) => setPov(e.target.value as ChatPov)}
+                          className="muse-chat-pov-select"
+                        >
+                          <option value="1st">1st</option>
+                          <option value="3rd">3rd</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void resetChat()}
+                        disabled={resetting || messages.length === 0}
+                        className="muse-chat-tool muse-chat-tool--danger"
+                        title="Clear this Muse’s conversation (memories stay)"
+                      >
+                        {resetting ? "…" : "Reset"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1793,10 +1787,10 @@ function ChatPageInner() {
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-[#c4b7a8]">
                         {!speechOk
-                          ? "Speech isn’t available in this browser — chat still works without voice."
+                          ? "Speech unavailable here — chat still works."
                           : naturalTts || voicePreview.natural
-                            ? "Natural voice — pick accent + delivery (each plays a short test). Tap Play on a bubble."
-                            : "Using this browser’s voice for now. Add OPENAI_API_KEY on Vercel for natural Muse TTS — Preview/Play soft-recover; chat is never blocked."}
+                            ? "Pick accent & delivery — each plays a short test."
+                            : "Browser voice for now. Natural TTS needs OPENAI_API_KEY."}
                       </p>
                     </div>
                     <button
