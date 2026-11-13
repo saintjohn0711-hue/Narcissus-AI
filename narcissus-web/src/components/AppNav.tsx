@@ -64,7 +64,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
         className={
           companion
             ? "app-nav app-nav--companion"
-            : "app-nav mb-8 flex items-center justify-between gap-3 border-b border-[var(--line)] pb-4 md:mb-10"
+            : "app-nav mb-8 flex items-center justify-between gap-3 border-b border-[var(--glow)]/15 pb-4 md:mb-10"
         }
       >
         <Link
@@ -72,7 +72,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
           className="app-nav-brand flex min-w-0 items-center gap-2.5 text-[var(--ink)] no-underline"
           aria-label="Narcissus AI home"
         >
-          <span className="relative inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--line)]">
+          <span className="relative inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25">
             <Image
               src="/brand/narcissus-logo.jpg"
               alt=""
@@ -105,7 +105,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
                 href={link.href}
                 className={`rounded-sm px-3 py-1.5 text-sm tracking-wide transition ${
                   active
-                    ? "bg-[var(--accent)]/20 text-[var(--accent-strong)]"
+                    ? "bg-[var(--glow)]/15 text-[var(--glow)] ring-1 ring-[var(--glow)]/25"
                     : "text-[#c4b7a8] hover:text-[var(--ink)]"
                 }`}
               >
@@ -118,7 +118,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
 
         <button
           type="button"
-          className={`app-nav-menu-btn rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)] ${
+          className={`app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--soft)] transition ${
             companion ? "" : "md:hidden"
           }`}
           aria-expanded={open}
@@ -144,9 +144,9 @@ export function AppNav({ variant = "default" }: AppNavProps) {
             aria-modal="true"
             aria-label="Site menu"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--glow)]/15 px-5 py-4">
               <p
-                className="text-lg text-[var(--accent-strong)]"
+                className="text-lg text-[var(--glow)]"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
                 Menu
@@ -154,7 +154,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
               <button
                 ref={closeBtnRef}
                 type="button"
-                className="rounded-sm border border-[var(--line)] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)]"
+                className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--soft)] transition"
                 onClick={() => setOpen(false)}
               >
                 Close
@@ -168,10 +168,10 @@ export function AppNav({ variant = "default" }: AppNavProps) {
                     key={link.href}
                     href={link.href}
                     onClick={() => setOpen(false)}
-                    className={`rounded-sm px-3 py-3 text-base tracking-wide transition ${
+                    className={`app-nav-drawer-link rounded-sm px-3 py-3 text-base tracking-wide transition ${
                       active
-                        ? "bg-[var(--accent)]/20 text-[var(--accent-strong)]"
-                        : "text-[#c4b7a8] hover:bg-[#12182a] hover:text-[var(--ink)]"
+                        ? "is-active"
+                        : "text-[#c4b7a8] hover:text-[var(--ink)]"
                     }`}
                   >
                     {link.label}
@@ -179,7 +179,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
                 );
               })}
             </nav>
-            <div className="border-t border-[var(--line)] px-5 py-4">
+            <div className="border-t border-[var(--glow)]/15 px-5 py-4">
               <AuthControls className="flex flex-wrap items-center gap-2 text-sm" />
             </div>
           </div>

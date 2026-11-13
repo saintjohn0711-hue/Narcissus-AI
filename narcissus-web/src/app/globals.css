@@ -95,7 +95,9 @@ body {
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgba(3, 5, 10, 0.62);
+  background:
+    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(0, 163, 255, 0.12), transparent 55%),
+    rgba(3, 5, 10, 0.72);
   cursor: pointer;
 }
 
@@ -108,10 +110,62 @@ body {
   height: 100%;
   max-height: 100dvh;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  border-left: 1px solid rgba(229, 195, 178, 0.16);
-  background: #080b14;
-  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.45);
+  border-left: 1px solid rgba(0, 229, 255, 0.22);
+  background:
+    radial-gradient(ellipse 90% 45% at 100% 0%, rgba(0, 229, 255, 0.1), transparent 55%),
+    radial-gradient(ellipse 70% 40% at 0% 100%, rgba(59, 89, 152, 0.22), transparent 55%),
+    linear-gradient(185deg, #0c1220 0%, #080b14 48%, #05080f 100%);
+  box-shadow:
+    -18px 0 48px rgba(0, 0, 0, 0.5),
+    -1px 0 28px rgba(0, 229, 255, 0.08);
   animation: app-nav-drawer-in 0.22s ease-out;
+}
+
+.app-nav-drawer-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(0, 229, 255, 0.55) 18%,
+    rgba(0, 163, 255, 0.35) 55%,
+    rgba(196, 160, 140, 0.25) 82%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
+
+.app-nav-menu-btn {
+  border-color: rgba(0, 229, 255, 0.38) !important;
+  color: rgba(200, 240, 255, 0.9) !important;
+  background: rgba(8, 14, 28, 0.65);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.1);
+}
+
+.app-nav-menu-btn:hover,
+.app-nav-menu-btn:focus-visible {
+  border-color: rgba(0, 229, 255, 0.5) !important;
+  color: var(--glow) !important;
+  background: rgba(0, 229, 255, 0.08);
+}
+
+.app-nav-drawer-link {
+  border: 1px solid transparent;
+}
+
+.app-nav-drawer-link:hover {
+  border-color: rgba(0, 229, 255, 0.12);
+  background: rgba(0, 163, 255, 0.08) !important;
+}
+
+.app-nav-drawer-link.is-active {
+  border-color: rgba(0, 229, 255, 0.28);
+  background:
+    linear-gradient(90deg, rgba(0, 229, 255, 0.14), rgba(0, 163, 255, 0.05)) !important;
+  color: var(--glow) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.08);
 }
 
 @keyframes app-nav-drawer-in {
@@ -441,10 +495,14 @@ body {
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.7rem 0.75rem 0.75rem;
-  border: 1px solid rgba(0, 229, 255, 0.16);
+  border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 2px;
-  background: #080b14;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(0, 229, 255, 0.1), transparent 55%),
+    linear-gradient(165deg, #0c1220 0%, #080b14 60%, #05080f 100%);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 24px rgba(0, 229, 255, 0.08);
 }
 
 .muse-presence--chat-collapsed .muse-companion-dock {
@@ -717,25 +775,31 @@ body {
   min-height: 3rem;
   min-width: 3.75rem;
   padding: 0.7rem 1.15rem;
-  border: 1px solid rgba(196, 160, 140, 0.55);
+  border: 1px solid rgba(0, 229, 255, 0.45);
   border-radius: 2px;
-  background: linear-gradient(165deg, #1a1420 0%, #080b14 70%);
-  color: #e5c3b2;
+  background: linear-gradient(165deg, #0e1830 0%, #080b14 70%);
+  color: var(--glow);
   font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(229, 195, 178, 0.12);
+    0 0 28px rgba(0, 229, 255, 0.14),
+    inset 0 1px 0 rgba(0, 229, 255, 0.12);
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .muse-chat-fab:hover,
 .muse-chat-fab:focus-visible {
-  border-color: rgba(229, 195, 178, 0.85);
-  color: #f7f1e8;
+  border-color: rgba(0, 229, 255, 0.75);
+  color: #e8fbff;
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.55),
+    0 0 36px rgba(0, 229, 255, 0.22),
+    inset 0 1px 0 rgba(0, 229, 255, 0.18);
   transform: translateY(-1px);
 }
 
@@ -759,12 +823,15 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(229, 195, 178, 0.2);
+  border: 1px solid rgba(0, 229, 255, 0.2);
   border-radius: 2px;
-  background: #080b14;
+  background:
+    radial-gradient(ellipse 70% 40% at 100% 0%, rgba(0, 163, 255, 0.08), transparent 55%),
+    #080b14;
   box-shadow:
     0 18px 48px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(229, 195, 178, 0.08);
+    0 0 32px rgba(0, 229, 255, 0.06),
+    inset 0 1px 0 rgba(0, 229, 255, 0.1);
   transition: transform 0.28s ease, opacity 0.28s ease;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -788,7 +855,9 @@ body {
   flex-direction: column;
   gap: 0.55rem;
   padding: 0.85rem 1rem 0.75rem;
-  background: #0a0e18;
+  background:
+    linear-gradient(180deg, rgba(0, 163, 255, 0.06) 0%, transparent 100%),
+    #0a0e18;
   overflow: visible;
 }
 
@@ -809,7 +878,7 @@ body {
   flex-shrink: 0;
   min-height: 2.25rem;
   padding: 0.4rem 0.75rem;
-  border: 1px solid rgba(229, 195, 178, 0.28);
+  border: 1px solid rgba(0, 229, 255, 0.28);
   border-radius: 2px;
   background: transparent;
   color: var(--soft);
@@ -823,9 +892,9 @@ body {
 
 .muse-chat-drawer-close:hover,
 .muse-chat-drawer-close:focus-visible {
-  border-color: rgba(196, 160, 140, 0.55);
-  color: var(--ink);
-  background: rgba(196, 160, 140, 0.08);
+  border-color: rgba(0, 229, 255, 0.55);
+  color: var(--glow);
+  background: rgba(0, 229, 255, 0.08);
 }
 
 /* Chat-only options — live inside the open drawer, not the portrait stage */
@@ -842,27 +911,30 @@ body {
   gap: 0.35rem;
   min-height: 1.85rem;
   padding: 0.28rem 0.55rem;
-  border: 1px solid rgba(229, 195, 178, 0.22);
+  border: 1px solid rgba(0, 229, 255, 0.2);
   border-radius: 2px;
-  background: transparent;
+  background: rgba(8, 14, 28, 0.45);
   color: var(--soft);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .muse-chat-tool:hover,
 .muse-chat-tool:focus-visible {
-  border-color: rgba(196, 160, 140, 0.45);
+  border-color: rgba(0, 229, 255, 0.45);
   color: var(--ink);
+  background: rgba(0, 229, 255, 0.08);
 }
 
 .muse-chat-tool--on {
-  border-color: rgba(196, 160, 140, 0.55);
-  background: rgba(196, 160, 140, 0.1);
-  color: var(--ink);
+  border-color: rgba(0, 229, 255, 0.5);
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--glow);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.1);
 }
 
 .muse-chat-tool--pov {
@@ -936,12 +1008,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid rgba(196, 160, 140, 0.4);
-  background: rgba(196, 160, 140, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.1);
   padding: 0.28rem 0.55rem;
   font-size: 11px;
   color: var(--ink);
   min-height: 1.85rem;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.06);
 }
 
 .muse-chat-cast-chip img {
@@ -976,7 +1049,9 @@ body {
   margin: 0;
   cursor: pointer;
   pointer-events: auto;
-  background: rgba(4, 6, 12, 0.55);
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(0, 163, 255, 0.1), transparent 55%),
+    rgba(4, 6, 12, 0.62);
 }
 
 .muse-chat-overlay-layer {
@@ -997,10 +1072,16 @@ body {
   -webkit-overflow-scrolling: touch;
   margin: 0.45rem 0.55rem;
   padding: 0.85rem 0.9rem;
-  border: 1px solid rgba(229, 195, 178, 0.22);
+  border: 1px solid rgba(0, 229, 255, 0.24);
   border-radius: 2px;
-  background: #0c101c;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  background:
+    radial-gradient(ellipse 90% 55% at 10% 0%, rgba(0, 229, 255, 0.1), transparent 50%),
+    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(59, 89, 152, 0.18), transparent 55%),
+    linear-gradient(180deg, #0e1524 0%, #0a0e18 100%);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.5),
+    0 0 28px rgba(0, 229, 255, 0.08),
+    inset 0 1px 0 rgba(0, 229, 255, 0.1);
 }
 
 .muse-chat-overlay-head {
@@ -1042,9 +1123,9 @@ body {
   min-height: 2rem;
   min-width: 2.75rem;
   padding: 0.35rem 0.65rem;
-  border: 1px solid rgba(196, 160, 140, 0.4);
-  background: rgba(196, 160, 140, 0.08);
-  color: var(--accent-strong);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--glow);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -1055,15 +1136,16 @@ body {
 
 .muse-chat-narrate-btn:hover,
 .muse-chat-narrate-btn:focus-visible {
-  border-color: rgba(196, 160, 140, 0.65);
-  background: rgba(196, 160, 140, 0.16);
-  color: var(--ink);
+  border-color: rgba(0, 229, 255, 0.6);
+  background: rgba(0, 229, 255, 0.14);
+  color: #e8fbff;
 }
 
 .muse-chat-narrate-btn--on {
-  border-color: rgba(196, 160, 140, 0.7);
-  background: rgba(196, 160, 140, 0.18);
-  color: var(--ink);
+  border-color: rgba(0, 229, 255, 0.65);
+  background: rgba(0, 229, 255, 0.16);
+  color: var(--glow);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.12);
 }
 
 .muse-voice-panel {
@@ -1091,27 +1173,30 @@ body {
   min-height: 2rem;
   min-width: 2.4rem;
   padding: 0.35rem 0.55rem;
-  border: 1px solid rgba(229, 195, 178, 0.22);
+  border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 2px;
-  background: transparent;
+  background: rgba(8, 14, 28, 0.4);
   color: var(--soft);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .muse-voice-chip:hover,
 .muse-voice-chip:focus-visible {
-  border-color: rgba(196, 160, 140, 0.45);
+  border-color: rgba(0, 229, 255, 0.45);
   color: var(--ink);
+  background: rgba(0, 229, 255, 0.08);
 }
 
 .muse-voice-chip--on {
-  border-color: rgba(196, 160, 140, 0.65);
-  background: rgba(196, 160, 140, 0.15);
-  color: var(--accent-strong);
+  border-color: rgba(0, 229, 255, 0.55);
+  background: rgba(0, 229, 255, 0.14);
+  color: var(--glow);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.1);
 }
 
 @media (min-width: 640px) {
@@ -1125,7 +1210,7 @@ body {
   gap: 0.45rem;
   margin-top: 0.35rem;
   padding-top: 0.65rem;
-  border-top: 1px solid rgba(229, 195, 178, 0.12);
+  border-top: 1px solid rgba(0, 229, 255, 0.12);
 }
 
 .muse-voice-preview--compact {
@@ -1154,9 +1239,9 @@ body {
   width: 100%;
   min-height: 2.35rem;
   padding: 0.45rem 0.65rem;
-  border: 1px solid rgba(229, 195, 178, 0.22);
+  border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 2px;
-  background: #12100e;
+  background: #0c121c;
   color: var(--ink);
   font-size: 14px;
   line-height: 1.35;
@@ -1170,7 +1255,8 @@ body {
 
 .muse-voice-preview-input:focus {
   outline: none;
-  border-color: rgba(196, 160, 140, 0.55);
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12);
 }
 
 .muse-voice-preview-actions {
@@ -1206,7 +1292,7 @@ body {
   min-height: 2rem;
   min-width: 2.75rem;
   padding: 0.35rem 0.65rem;
-  border: 1px solid rgba(229, 195, 178, 0.28);
+  border: 1px solid rgba(0, 229, 255, 0.28);
   background: transparent;
   color: var(--soft);
   font-size: 11px;
@@ -1218,8 +1304,8 @@ body {
 
 .muse-chat-msg-edit-btn:hover,
 .muse-chat-msg-edit-btn:focus-visible {
-  border-color: rgba(196, 160, 140, 0.55);
-  color: var(--ink);
+  border-color: rgba(0, 229, 255, 0.55);
+  color: var(--glow);
 }
 
 .muse-chat-msg-edit-actions {
@@ -1241,13 +1327,19 @@ body {
   width: 100%;
   min-height: 4.5rem;
   resize: vertical;
-  border: 1px solid rgba(229, 195, 178, 0.28);
+  border: 1px solid rgba(0, 229, 255, 0.28);
   background: #12182a;
   color: #f7f1e8;
   padding: 0.65rem 0.75rem;
   font-size: 1rem;
   line-height: 1.55;
   border-radius: 2px;
+}
+
+.muse-chat-msg-edit-field:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12);
 }
 
 /* Ribbons / memories / voice sheets scroll inside the overlay — never grow the phone sheet */
@@ -1276,7 +1368,9 @@ body {
   z-index: 26;
   flex-shrink: 0;
   padding: 0.95rem 1.2rem calc(0.95rem + env(safe-area-inset-bottom, 0px));
-  background: #0a0e18;
+  background:
+    linear-gradient(0deg, rgba(0, 163, 255, 0.05) 0%, transparent 100%),
+    #0a0e18;
 }
 
 @media (min-width: 640px) {
@@ -1420,11 +1514,15 @@ body {
   gap: 0.45rem 0.55rem;
   max-width: min(22rem, calc(100% - 1.5rem));
   padding: 0.35rem 0.55rem;
-  border: 1px solid rgba(229, 195, 178, 0.22);
+  border: 1px solid rgba(0, 229, 255, 0.22);
   border-radius: 2px;
-  background: #080b14;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0, 229, 255, 0.08), transparent 60%),
+    #080b14;
   transform: translateX(-50%);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 0 18px rgba(0, 229, 255, 0.06);
 }
 
 .muse-presence--full .muse-presence-slideshow-chrome,
@@ -1436,10 +1534,10 @@ body {
 .muse-presence-slideshow-nav {
   min-width: 1.75rem;
   min-height: 1.75rem;
-  border: 1px solid rgba(229, 195, 178, 0.28);
+  border: 1px solid rgba(0, 229, 255, 0.28);
   border-radius: 2px;
   background: transparent;
-  color: #e5c3b2;
+  color: var(--glow);
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
@@ -1447,8 +1545,8 @@ body {
 
 .muse-presence-slideshow-nav:hover,
 .muse-presence-slideshow-nav:focus-visible {
-  border-color: rgba(229, 195, 178, 0.7);
-  color: #f7f1e8;
+  border-color: rgba(0, 229, 255, 0.7);
+  color: #e8fbff;
 }
 
 .muse-presence-slideshow-dots {
@@ -1463,13 +1561,13 @@ body {
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: rgba(229, 195, 178, 0.28);
+  background: rgba(0, 229, 255, 0.28);
   cursor: pointer;
 }
 
 .muse-presence-slideshow-dot.is-active {
-  background: #e5c3b2;
-  box-shadow: 0 0 0 1px rgba(229, 195, 178, 0.35);
+  background: var(--glow);
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.35), 0 0 8px rgba(0, 229, 255, 0.35);
 }
 
 .muse-presence-slideshow-label {
@@ -1479,7 +1577,7 @@ body {
   font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(229, 195, 178, 0.85);
+  color: rgba(0, 229, 255, 0.75);
 }
 
 @media (max-width: 640px) {

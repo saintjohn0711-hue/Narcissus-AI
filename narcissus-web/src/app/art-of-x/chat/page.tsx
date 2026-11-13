@@ -1381,7 +1381,7 @@ function ChatPageInner() {
               aria-hidden={companionFull ? !chatOpen : undefined}
             >
               {partner && (
-                <div className="muse-chat-drawer-header border-b border-[var(--line)]">
+                <div className="muse-chat-drawer-header border-b border-[var(--glow)]/15">
                   <div className="muse-chat-drawer-header-top">
                     <div className="min-w-0 flex-1">
                       <h2
@@ -1759,7 +1759,7 @@ function ChatPageInner() {
                               type="checkbox"
                               checked={on}
                               onChange={() => toggleCastMate(p.id)}
-                              className="accent-[var(--accent)] h-4 w-4"
+                              className="accent-[var(--glow)] h-4 w-4"
                             />
                             <span className="min-w-0 flex-1 truncate">
                               {displayName(p)}
@@ -1837,8 +1837,8 @@ function ChatPageInner() {
                           }}
                           className={`rounded-sm border px-2.5 py-1.5 text-xs capitalize ${
                             partner.voiceGender === g
-                              ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                              : "border-[var(--line)] text-[var(--soft)]"
+                              ? "border-[var(--glow)]/55 bg-[var(--glow)]/12 text-[var(--glow)]"
+                              : "border-[var(--glow)]/20 text-[var(--soft)] hover:border-[var(--glow)]/40"
                           }`}
                           data-testid={`chat-voice-gender-${g}`}
                         >
@@ -1910,8 +1910,8 @@ function ChatPageInner() {
                             }}
                             className={`rounded-sm border px-2.5 py-1.5 text-xs ${
                               partner.voicePreset === p.id
-                                ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                                : "border-[var(--line)] text-[var(--soft)]"
+                                ? "border-[var(--glow)]/55 bg-[var(--glow)]/12 text-[var(--glow)]"
+                                : "border-[var(--glow)]/20 text-[var(--soft)] hover:border-[var(--glow)]/40"
                             }`}
                             data-testid={`chat-voice-preset-${p.id}`}
                           >
@@ -2019,11 +2019,11 @@ function ChatPageInner() {
                       return (
                         <li
                           key={def.id}
-                          className="flex items-start justify-between gap-3 border border-[var(--line)]/70 bg-[#12182a]/55 px-2.5 py-2"
+                          className="flex items-start justify-between gap-3 border border-[var(--glow)]/18 bg-[#0c121c]/75 px-2.5 py-2"
                           data-testid={`muse-ribbon-task-${def.id}`}
                         >
                           <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--glow)]/85">
                               {tierLabel(def.tier)} · {def.name}
                               {earned ? " · earned" : ready ? " · ready" : ""}
                             </p>
@@ -2041,7 +2041,7 @@ function ChatPageInner() {
                                 type="button"
                                 disabled={!ready}
                                 onClick={() => void claimRibbon(def.id)}
-                                className="rounded-sm border border-[var(--line)] px-2 py-1 text-[10px] font-medium text-[var(--soft)] transition hover:border-[var(--accent)]/45 hover:text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-40"
+                                className="rounded-sm border border-[var(--glow)]/25 px-2 py-1 text-[10px] font-medium text-[var(--soft)] transition hover:border-[var(--glow)]/50 hover:text-[var(--glow)] disabled:cursor-not-allowed disabled:opacity-40"
                                 data-testid={`muse-ribbon-claim-${def.id}`}
                               >
                                 Claim
@@ -2156,7 +2156,7 @@ function ChatPageInner() {
                         value={memoryDraft}
                         onChange={(e) => setMemoryDraft(e.target.value)}
                         placeholder="Joey is her boyfriend"
-                        className="mt-1 w-full rounded-sm border border-[var(--line)] bg-[#12182a] px-3 py-2 text-sm text-[var(--ink)]"
+                        className="mt-1 w-full rounded-sm border border-[var(--glow)]/25 bg-[#0c121c] px-3 py-2 text-sm text-[var(--ink)]"
                         data-testid="muse-memory-input"
                       />
                     </label>
@@ -2167,7 +2167,7 @@ function ChatPageInner() {
                         onChange={(e) =>
                           setMemoryKind(e.target.value as MuseMemoryKind)
                         }
-                        className="mt-1 w-full rounded-sm border border-[var(--line)] bg-[#12182a] px-2 py-2 text-sm text-[var(--ink)]"
+                        className="mt-1 w-full rounded-sm border border-[var(--glow)]/25 bg-[#0c121c] px-2 py-2 text-sm text-[var(--ink)]"
                       >
                         {(
                           Object.keys(MEMORY_KIND_LABEL) as MuseMemoryKind[]
@@ -2183,7 +2183,7 @@ function ChatPageInner() {
                         <button
                           type="button"
                           onClick={cancelEditMemory}
-                          className="rounded-sm border border-[var(--line)] px-3 py-2 text-xs font-medium text-[var(--soft)]"
+                          className="rounded-sm border border-[var(--glow)]/25 px-3 py-2 text-xs font-medium text-[var(--soft)] hover:border-[var(--glow)]/45"
                         >
                           Cancel
                         </button>
@@ -2191,7 +2191,7 @@ function ChatPageInner() {
                       <button
                         type="submit"
                         disabled={!memoryDraft.trim()}
-                        className="rounded-sm bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-[var(--on-accent)] disabled:opacity-50"
+                        className="rounded-sm border border-[var(--glow)]/40 bg-[var(--glow)]/15 px-3 py-2 text-xs font-semibold text-[var(--glow)] disabled:opacity-50"
                         data-testid="muse-memory-save"
                       >
                         {editingMemoryId ? "Update" : "Add memory"}
@@ -2207,10 +2207,10 @@ function ChatPageInner() {
                       {visibleMemories.map((m) => (
                         <li
                           key={m.id}
-                          className="flex items-start justify-between gap-3 border border-[var(--line)]/70 bg-[#12182a]/55 px-2.5 py-2"
+                          className="flex items-start justify-between gap-3 border border-[var(--glow)]/18 bg-[#0c121c]/75 px-2.5 py-2"
                         >
                           <div className="min-w-0">
-                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--accent)]">
+                            <p className="text-[10px] uppercase tracking-[0.12em] text-[var(--glow)]/85">
                               {MEMORY_KIND_LABEL[m.kind] || m.kind}
                               {m.source === "explicit" ? " · saved" : " · auto"}
                             </p>
@@ -2222,7 +2222,7 @@ function ChatPageInner() {
                             <button
                               type="button"
                               onClick={() => beginEditMemory(m)}
-                              className="rounded-sm border border-[var(--line)] px-2 py-1 text-[10px] font-medium text-[var(--soft)] hover:text-[var(--ink)]"
+                              className="rounded-sm border border-[var(--glow)]/25 px-2 py-1 text-[10px] font-medium text-[var(--soft)] hover:border-[var(--glow)]/50 hover:text-[var(--glow)]"
                             >
                               Edit
                             </button>
@@ -2249,19 +2249,19 @@ function ChatPageInner() {
 
               <form
                 onSubmit={send}
-                className="muse-chat-drawer-composer flex gap-2 border-t border-[var(--line)]"
+                className="muse-chat-drawer-composer flex gap-2 border-t border-[var(--glow)]/15"
               >
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Message…"
                   disabled={sending || !partner}
-                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--line)] bg-[#12182a] px-4 py-3.5 text-base disabled:opacity-60"
+                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--glow)]/25 bg-[#0c121c] px-4 py-3.5 text-base disabled:opacity-60 focus:border-[var(--glow)]/50 focus:outline-none"
                 />
                 <button
                   type="submit"
                   disabled={sending || !partner || !text.trim()}
-                  className="rounded-sm bg-[var(--accent)] px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--on-accent)] disabled:opacity-50"
+                  className="rounded-sm border border-[var(--glow)]/40 bg-[var(--glow)]/15 px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--glow)] shadow-[0_0_20px_rgba(0,229,255,0.12)] disabled:opacity-50"
                 >
                   {sending ? "…" : "Send"}
                 </button>
