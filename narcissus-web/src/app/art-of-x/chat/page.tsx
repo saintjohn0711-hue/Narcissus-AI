@@ -1381,7 +1381,7 @@ function ChatPageInner() {
               aria-hidden={companionFull ? !chatOpen : undefined}
             >
               {partner && (
-                <div className="muse-chat-drawer-header border-b border-[var(--glow)]/15">
+                <div className="muse-chat-drawer-header">
                   <div className="muse-chat-drawer-header-top">
                     <div className="min-w-0 flex-1">
                       <h2
@@ -2249,19 +2249,19 @@ function ChatPageInner() {
 
               <form
                 onSubmit={send}
-                className="muse-chat-drawer-composer flex gap-2 border-t border-[var(--glow)]/15"
+                className="muse-chat-drawer-composer flex gap-2"
               >
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Message…"
                   disabled={sending || !partner}
-                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--glow)]/25 bg-[#0c121c] px-4 py-3.5 text-base disabled:opacity-60 focus:border-[var(--glow)]/50 focus:outline-none"
+                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--glow)]/30 bg-gradient-to-b from-[#121a2e] to-[#0c121c] px-4 py-3.5 text-base shadow-[inset_0_1px_0_rgba(0,229,255,0.08)] disabled:opacity-60 focus:border-[var(--glow)]/55 focus:outline-none focus:shadow-[0_0_18px_rgba(0,229,255,0.12)]"
                 />
                 <button
                   type="submit"
                   disabled={sending || !partner || !text.trim()}
-                  className="rounded-sm border border-[var(--glow)]/40 bg-[var(--glow)]/15 px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--glow)] shadow-[0_0_20px_rgba(0,229,255,0.12)] disabled:opacity-50"
+                  className="rounded-sm border border-[var(--glow)]/45 bg-gradient-to-b from-[rgba(0,229,255,0.22)] to-[rgba(0,163,255,0.08)] px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--glow)] shadow-[0_0_22px_rgba(0,229,255,0.16),inset_0_1px_0_rgba(0,229,255,0.2)] disabled:opacity-50"
                 >
                   {sending ? "…" : "Send"}
                 </button>
