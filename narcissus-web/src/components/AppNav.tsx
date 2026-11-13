@@ -144,9 +144,9 @@ export function AppNav({ variant = "default" }: AppNavProps) {
             aria-modal="true"
             aria-label="Site menu"
           >
-            <div className="flex items-center justify-between gap-3 border-b border-[var(--glow)]/15 px-5 py-4">
+            <div className="app-nav-drawer-header">
               <p
-                className="text-lg text-[var(--glow)]"
+                className="app-nav-drawer-title"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
                 Menu
@@ -154,13 +154,13 @@ export function AppNav({ variant = "default" }: AppNavProps) {
               <button
                 ref={closeBtnRef}
                 type="button"
-                className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--soft)] transition"
+                className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition"
                 onClick={() => setOpen(false)}
               >
                 Close
               </button>
             </div>
-            <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
+            <nav className="flex flex-1 flex-col gap-1.5 overflow-y-auto px-3 py-3.5">
               {LINKS.map((link) => {
                 const active = linkActive(pathname, link.href);
                 return (
@@ -168,7 +168,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
                     key={link.href}
                     href={link.href}
                     onClick={() => setOpen(false)}
-                    className={`app-nav-drawer-link rounded-sm px-3 py-3 text-base tracking-wide transition ${
+                    className={`app-nav-drawer-link px-3 py-3 text-base tracking-wide transition ${
                       active
                         ? "is-active"
                         : "text-[#c4b7a8] hover:text-[var(--ink)]"
@@ -179,7 +179,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
                 );
               })}
             </nav>
-            <div className="border-t border-[var(--glow)]/15 px-5 py-4">
+            <div className="app-nav-drawer-footer">
               <AuthControls className="flex flex-wrap items-center gap-2 text-sm" />
             </div>
           </div>
