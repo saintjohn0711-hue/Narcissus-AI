@@ -1330,6 +1330,24 @@ export function MusePresence({
             </div>
           </div>
 
+          {/*
+            Builder (Look / Customize / Generate) only when chat is closed AND the
+            user opens a section — never as a default popup over chat.
+          */}
+          {!chatOpen && dockSection === null && (
+            <button
+              type="button"
+              className="muse-companion-dock-expand"
+              onClick={() => setDockSection("look")}
+              data-testid="muse-companion-open-looks"
+            >
+              Look &amp; customize
+            </button>
+          )}
+
+          {!chatOpen && dockSection !== null && (
+            <>
+          <div className="muse-companion-dock-builder-bar">
           <div className="muse-companion-dock-tabs" role="tablist" aria-label="Companion controls">
             {(
               [
@@ -1349,6 +1367,16 @@ export function MusePresence({
                 {label}
               </button>
             ))}
+          </div>
+            <button
+              type="button"
+              className="muse-companion-dock-done"
+              onClick={() => setDockSection(null)}
+              data-testid="muse-companion-close-looks"
+              aria-label="Close look panel"
+            >
+              Done
+            </button>
           </div>
 
           {dockSection === "look" && (
@@ -1544,6 +1572,8 @@ export function MusePresence({
           )}
           {genError && (
             <p className="muse-companion-dock-error">{genError}</p>
+          )}
+            </>
           )}
         </div>
       ) : (

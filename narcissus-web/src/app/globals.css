@@ -1069,6 +1069,57 @@ body {
   opacity: 0.35;
 }
 
+.muse-companion-dock-expand {
+  width: 100%;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  background: rgba(0, 229, 255, 0.06);
+  color: var(--glow);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.65rem;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.muse-companion-dock-expand:hover,
+.muse-companion-dock-expand:focus-visible {
+  border-color: rgba(0, 229, 255, 0.48);
+  background: rgba(0, 229, 255, 0.12);
+}
+
+.muse-companion-dock-builder-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.muse-companion-dock-builder-bar .muse-companion-dock-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.muse-companion-dock-done {
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  background: rgba(8, 12, 22, 0.7);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.55rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.muse-companion-dock-done:hover,
+.muse-companion-dock-done:focus-visible {
+  color: var(--ink);
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
 .muse-companion-dock-tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1215,9 +1266,15 @@ body {
     max-height: min(10dvh, 96px);
   }
 
+  /* Chat closed: calm slim dock until Look & customize is opened */
   .muse-presence--chat-collapsed .muse-companion-dock {
     bottom: 0.85rem;
+    max-height: none;
+  }
+
+  .muse-presence--chat-collapsed.muse-presence--dock-open .muse-companion-dock {
     max-height: min(48dvh, 360px);
+    overflow: auto;
   }
 
   .muse-presence--chat-collapsed .muse-companion-dock .muse-companion-dock-body {
