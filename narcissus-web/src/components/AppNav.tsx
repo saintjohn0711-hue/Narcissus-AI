@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { AuthControls } from "@/components/AuthControls";
+import { BrandFaceFrame } from "@/components/BrandFaceFrame";
 import { PERSON_LABEL } from "@/lib/artOfX";
 
 const LINKS = [
@@ -153,24 +154,11 @@ export function AppNav({ variant = "default" }: AppNavProps) {
             <div className="app-nav-drawer-atmosphere" aria-hidden="true" />
             <div className="app-nav-drawer-header">
               <div className="min-w-0">
-                <div className="mb-2.5 flex items-center gap-2.5">
-                  <span className="app-nav-drawer-mark relative inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/35">
-                    <Image
-                      src="/brand/narcissus-logo.jpg"
-                      alt=""
-                      width={40}
-                      height={40}
-                      className="h-10 w-10 object-cover object-[center_28%]"
-                    />
-                  </span>
-                  <p
-                    className="app-nav-drawer-title"
-                    style={{ fontFamily: "var(--font-display), serif" }}
-                  >
-                    Menu
-                  </p>
+                <div className="mb-2 flex items-center gap-2.5">
+                  <BrandFaceFrame size="sm" label="" className="app-nav-drawer-face" />
+                  <p className="brand-metal-type brand-metal-type--nav">Menu</p>
                 </div>
-                <p className="app-nav-drawer-slogan text-[11px] font-light tracking-[0.04em] text-[var(--accent-strong)]">
+                <p className="brand-metal-type brand-metal-type--footer mt-0.5">
                   Your Reflection, Your Rules
                 </p>
               </div>

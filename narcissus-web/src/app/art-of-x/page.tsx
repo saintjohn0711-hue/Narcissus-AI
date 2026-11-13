@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
+import { BrandFaceFrame } from "@/components/BrandFaceFrame";
 import { ART_OF_X_NAV, PERSON_LABEL } from "@/lib/artOfX";
 
 export const metadata: Metadata = {
@@ -18,7 +19,7 @@ export default function ArtOfXHome() {
     <div className="aox-root relative min-h-screen overflow-x-hidden">
       <AppNav variant="overlay" />
 
-      <section className="aox-hero relative flex min-h-[100svh] flex-col justify-end overflow-hidden px-6 pb-16 pt-28 sm:px-10 sm:pb-20">
+      <section className="aox-hero relative flex min-h-[100svh] flex-col justify-end overflow-hidden px-6 pb-14 pt-24 sm:px-10 sm:pb-20">
         <div className="aox-hero-atmosphere" aria-hidden="true">
           <div className="aox-hero-art">
             <Image
@@ -27,7 +28,7 @@ export default function ArtOfXHome() {
               fill
               priority
               sizes="100vw"
-              className="select-none"
+              className="aox-hero-art-img select-none"
             />
           </div>
           <div className="aox-hero-rings" />
@@ -36,41 +37,29 @@ export default function ArtOfXHome() {
           <div className="aox-hero-grain" />
         </div>
 
-        <div className="aox-hero-copy relative z-10 mx-auto w-full max-w-4xl">
-          <div className="aox-fade-up">
-            <span className="aox-brand-mark relative mb-5 inline-flex h-[4.25rem] w-[4.25rem] overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/30 sm:mb-6 sm:h-24 sm:w-24">
-              <Image
-                src="/brand/narcissus-logo.jpg"
-                alt="Art of X"
-                width={96}
-                height={96}
-                priority
-                className="h-full w-full object-cover object-[center_28%]"
-              />
-            </span>
-            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.32em] text-[var(--glow)]">
-              Narcissus · Desire craft · 18+
-            </p>
-            <h1
-              className="text-[clamp(2.75rem,12vw,6.5rem)] font-semibold leading-[0.92] tracking-tight text-[var(--accent-strong)]"
-              style={{ fontFamily: "var(--font-display), serif" }}
-            >
-              Art of X
-            </h1>
+        <div className="aox-hero-copy relative z-10 mx-auto flex w-full max-w-4xl flex-col items-center text-center">
+          <div className="aox-fade-up aox-hero-emblem">
+            <BrandFaceFrame size="hero" label="Narcissus Art of X" />
           </div>
 
-          <p
-            className="aox-fade-up aox-fade-up-delay-1 mt-5 max-w-xl text-xl font-light leading-snug text-[var(--ink)] sm:text-2xl"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
+          <p className="aox-fade-up aox-fade-up-delay-1 mb-3 mt-2 text-[10px] font-semibold uppercase tracking-[0.36em] text-[var(--glow)]">
+            Narcissus · Desire craft · 18+
+          </p>
+
+          <h1 className="aox-fade-up aox-fade-up-delay-1 brand-metal-type brand-metal-type--hero">
+            Art of X
+          </h1>
+
+          <p className="aox-fade-up aox-fade-up-delay-1 brand-metal-type brand-metal-type--slogan mt-4">
             Your Reflection, Your Rules
           </p>
-          <p className="aox-fade-up aox-fade-up-delay-1 mt-3 max-w-lg text-base font-light leading-relaxed text-[var(--soft)]">
+
+          <p className="aox-fade-up aox-fade-up-delay-1 mt-4 max-w-lg text-base font-light leading-relaxed text-[var(--soft)]">
             {PERSON_LABEL.plural}, stories, and living AI chat — craft the
             people and scenes that stay with you.
           </p>
 
-          <div className="aox-fade-up aox-fade-up-delay-2 mt-10 flex flex-wrap items-center gap-4">
+          <div className="aox-fade-up aox-fade-up-delay-2 mt-9 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/art-of-x/partners"
               className="aox-cta-primary inline-flex items-center border border-[var(--glow)]/50 bg-[var(--glow)]/10 px-6 py-3 text-sm tracking-[0.14em] text-[var(--glow)] transition hover:bg-[var(--glow)]/20"
@@ -79,7 +68,7 @@ export default function ArtOfXHome() {
             </Link>
             <Link
               href="/art-of-x/chat"
-              className="inline-flex items-center border border-[var(--accent)]/45 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
+              className="aox-cta-metal inline-flex items-center border border-[var(--accent)]/50 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
             >
               Open AI chat
             </Link>
@@ -89,14 +78,12 @@ export default function ArtOfXHome() {
 
       <section className="aox-rooms relative border-t border-[var(--glow)]/15 px-6 py-16 sm:px-10 sm:py-20">
         <div className="aox-rooms-glow" aria-hidden="true" />
+        <div className="aox-rooms-ornament" aria-hidden="true" />
         <div className="relative z-10 mx-auto max-w-4xl">
-          <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-[var(--glow)]/80">
             Inside
           </p>
-          <h2
-            className="max-w-lg text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
+          <h2 className="brand-metal-type brand-metal-type--section max-w-xl">
             Three doors. One craft of desire.
           </h2>
           <p className="mt-3 max-w-md text-base font-light leading-relaxed text-[var(--soft)]">
@@ -111,10 +98,7 @@ export default function ArtOfXHome() {
                   className="aox-room group flex flex-col gap-2 py-8 transition sm:flex-row sm:items-baseline sm:justify-between sm:gap-10"
                   style={{ animationDelay: `${0.06 * (index + 1)}s` }}
                 >
-                  <span
-                    className="text-2xl text-[var(--ink)] transition group-hover:text-[var(--glow)] sm:text-3xl"
-                    style={{ fontFamily: "var(--font-display), serif" }}
-                  >
+                  <span className="brand-metal-type brand-metal-type--room transition group-hover:brightness-110">
                     {item.label}
                   </span>
                   <span className="max-w-md text-sm font-light leading-relaxed text-[var(--soft)] sm:text-right">
@@ -129,12 +113,9 @@ export default function ArtOfXHome() {
             <Link
               key={item.id}
               href={item.href}
-              className="aox-room-secondary mt-10 inline-flex flex-col gap-1 border-l-2 border-[var(--accent)]/35 pl-4 transition hover:border-[var(--accent)]/70"
+              className="aox-room-secondary mt-10 inline-flex flex-col gap-1 border-l-2 border-[var(--accent)]/45 pl-4 transition hover:border-[var(--accent)]/80"
             >
-              <span
-                className="text-lg text-[var(--accent-strong)]"
-                style={{ fontFamily: "var(--font-display), serif" }}
-              >
+              <span className="brand-metal-type brand-metal-type--room-sm">
                 {item.label}
               </span>
               <span className="max-w-md text-sm font-light text-[var(--muted)]">
@@ -147,7 +128,7 @@ export default function ArtOfXHome() {
 
       <footer className="relative border-t border-[var(--glow)]/12 px-6 py-8 sm:px-10">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4 text-sm text-[var(--muted)]">
-          <span style={{ fontFamily: "var(--font-display), serif" }}>
+          <span className="brand-metal-type brand-metal-type--footer">
             Narcissus AI · Art of X
           </span>
           <Link href="/studio" className="transition hover:text-[var(--glow)]">
