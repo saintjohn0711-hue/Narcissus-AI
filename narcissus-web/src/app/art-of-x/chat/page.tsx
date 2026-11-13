@@ -1389,7 +1389,7 @@ function ChatPageInner() {
                         style={{ fontFamily: "var(--font-display), serif" }}
                         title={castLabel}
                       >
-                        {castPartners.length >= 2 && partner
+                        {castPartners.length > 0 && partner
                           ? `${displayName(partner)} + ${castPartners.length}`
                           : castLabel}
                       </h2>
@@ -1422,73 +1422,34 @@ function ChatPageInner() {
                     )}
                   </div>
 
-                  {castPickOptions.length > 0 && (
-                    <div className="muse-chat-cast-chrome">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleChatOverlay("cast")}
-                          className={`muse-chat-tool ${
-                            castPickerOpen ? "muse-chat-tool--on" : ""
-                          }`}
-                          aria-expanded={castPickerOpen}
-                          data-testid="muse-cast-picker-toggle"
-                        >
-                          {castPartners.length === 0
-                            ? "Add cast"
-                            : `Cast · ${castPartners.length + 1}`}
-                        </button>
-                        {castPartners.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCastSelection([]);
-                              closeChatOverlay();
-                            }}
-                            className="muse-chat-tool muse-chat-tool--quiet"
-                          >
-                            Solo
-                          </button>
-                        )}
-                      </div>
-                      {castPartners.length > 0 && (
-                        <ul
-                          className="muse-chat-cast-chips mt-1.5"
-                          aria-label="Active cast"
-                        >
-                          {castPartners.map((p) => (
-                            <li key={p.id}>
-                              <button
-                                type="button"
-                                onClick={() => toggleCastMate(p.id)}
-                                className="muse-chat-cast-chip"
-                                title={`Remove ${displayName(p)}`}
-                              >
-                                {mainPhoto(p) ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={mainPhoto(p)!} alt="" />
-                                ) : null}
-                                {displayName(p)}
-                                <span
-                                  aria-hidden
-                                  className="text-[var(--muted)]"
-                                >
-                                  ×
-                                </span>
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )}
-
                   <div
                     className="muse-chat-toolbar"
                     role="toolbar"
                     aria-label="Chat options"
                   >
                     <div className="muse-chat-toolbar-primary">
+                      {castPickOptions.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleChatOverlay("cast")}
+                          className={`muse-chat-tool ${
+                            castPickerOpen || castPartners.length > 0
+                              ? "muse-chat-tool--on"
+                              : ""
+                          }`}
+                          aria-expanded={castPickerOpen}
+                          data-testid="muse-cast-picker-toggle"
+                          title={
+                            castPartners.length > 0
+                              ? `Cast · ${castPartners.length + 1} — tap to edit`
+                              : "Add Muses to cast"
+                          }
+                        >
+                          {castPartners.length === 0
+                            ? "Cast"
+                            : `Cast · ${castPartners.length + 1}`}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => toggleChatOverlay("memories")}
@@ -1724,20 +1685,64 @@ function ChatPageInner() {
                     >
                       Cast
                     </p>
-                    <button
-                      type="button"
-                      onClick={closeChatOverlay}
-                      className="muse-chat-tool shrink-0"
-                      data-testid="muse-cast-picker-close"
-                      aria-label="Close cast picker"
-                    >
-                      Close
-                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {castPartners.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCastSelection([]);
+                            closeChatOverlay();
+                          }}
+                          className="muse-chat-tool muse-chat-tool--quiet"
+                          data-testid="muse-cast-solo"
+                        >
+                          Solo
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={closeChatOverlay}
+                        className="muse-chat-tool shrink-0"
+                        data-testid="muse-cast-picker-close"
+                        aria-label="Close cast picker"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
                   <p className="mb-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
                     Pick up to {MAX_MUSE_CAST_MATES} more ·{" "}
                     {MAX_MUSE_CAST_MATES + 1} total
                   </p>
+                  {castPartners.length > 0 && (
+                    <ul
+                      className="muse-chat-cast-chips mb-2"
+                      aria-label="Active cast"
+                    >
+                      {castPartners.map((p) => (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => toggleCastMate(p.id)}
+                            className="muse-chat-cast-chip"
+                            title={`Remove ${displayName(p)}`}
+                          >
+                            {mainPhoto(p) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={mainPhoto(p)!} alt="" />
+                            ) : null}
+                            {displayName(p)}
+                            <span
+                              aria-hidden
+                              className="text-[var(--muted)]"
+                            >
+                              ×
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <ul className="muse-chat-overlay-list flex flex-col gap-1">
                     {castPickOptions.map((p) => {
                       const on = castPartners.some((c) =>
