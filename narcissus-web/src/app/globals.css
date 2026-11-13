@@ -138,15 +138,47 @@ body {
   pointer-events: none;
 }
 
+.app-nav-drawer-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 40% at 100% -5%, rgba(0, 229, 255, 0.14), transparent 55%),
+    radial-gradient(ellipse 55% 35% at 0% 70%, rgba(59, 89, 152, 0.18), transparent 60%);
+  opacity: 0.9;
+}
+
+.app-nav-drawer-panel > *:not(.app-nav-drawer-atmosphere) {
+  position: relative;
+  z-index: 1;
+}
+
+.app-nav-drawer-panel--aox {
+  background:
+    radial-gradient(ellipse 95% 42% at 100% -4%, rgba(0, 229, 255, 0.2), transparent 52%),
+    radial-gradient(ellipse 70% 40% at 0% 100%, rgba(59, 89, 152, 0.32), transparent 55%),
+    linear-gradient(185deg, #121c32 0%, #0a1222 42%, #060910 100%);
+}
+
+.app-nav-drawer-mark {
+  animation: home-logo-breathe 6.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 14px rgba(0, 229, 255, 0.28));
+}
+
+.app-nav-drawer-kicker {
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+}
+
 .app-nav-drawer-header {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 1.05rem 1.25rem 1rem;
+  padding: 1.15rem 1.25rem 1.05rem;
   background:
-    linear-gradient(180deg, rgba(0, 229, 255, 0.12) 0%, rgba(0, 163, 255, 0.04) 55%, transparent 100%),
+    linear-gradient(180deg, rgba(0, 229, 255, 0.14) 0%, rgba(0, 163, 255, 0.05) 55%, transparent 100%),
     linear-gradient(90deg, rgba(14, 22, 40, 0.95), rgba(10, 14, 24, 0.9));
 }
 
@@ -303,6 +335,205 @@ body {
 
 .partner-lightbox {
   animation: echo-rise 280ms ease-out both;
+}
+
+/* —— Art of X hub —— */
+.aox-hero-atmosphere {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.aox-hero-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.aox-hero-art img {
+  object-fit: cover;
+  object-position: center 26%;
+  transform: scale(1.04);
+  animation: aox-art-breathe 24s ease-in-out infinite alternate;
+  filter: saturate(1.05) contrast(1.04);
+}
+
+.aox-hero-rings {
+  position: absolute;
+  left: 50%;
+  top: 28%;
+  width: min(78vw, 640px);
+  height: min(78vw, 640px);
+  translate: -50% -42%;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 42%, rgba(0, 229, 255, 0.07) 43%, transparent 44%),
+    radial-gradient(circle, transparent 58%, rgba(0, 163, 255, 0.06) 59%, transparent 60%),
+    radial-gradient(circle, transparent 74%, rgba(59, 89, 152, 0.1) 75%, transparent 76%);
+  animation: aox-rings-pulse 12s ease-in-out infinite alternate;
+}
+
+.aox-hero-glow {
+  position: absolute;
+  width: min(58vw, 540px);
+  height: min(58vw, 540px);
+  left: 50%;
+  top: 20%;
+  translate: -50% -18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(0, 229, 255, 0.2) 0%,
+    rgba(0, 163, 255, 0.08) 40%,
+    transparent 70%
+  );
+  filter: blur(10px);
+  animation: home-glow-pulse 10s ease-in-out infinite alternate;
+}
+
+.aox-hero-wash {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(5, 8, 15, 0.62) 0%,
+      rgba(5, 8, 15, 0.22) 30%,
+      rgba(5, 8, 15, 0.5) 62%,
+      rgba(5, 8, 15, 0.94) 84%,
+      #05080f 100%
+    ),
+    radial-gradient(ellipse 70% 50% at 50% 34%, transparent 18%, rgba(5, 8, 15, 0.55) 100%),
+    radial-gradient(ellipse 45% 35% at 12% 78%, rgba(0, 229, 255, 0.08), transparent 70%);
+}
+
+.aox-hero-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.26;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: soft-light;
+}
+
+.aox-brand-mark {
+  animation: home-logo-breathe 6s ease-in-out infinite;
+  filter: drop-shadow(0 0 26px rgba(0, 229, 255, 0.28));
+}
+
+.aox-cta-primary {
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.18), 0 0 28px rgba(0, 229, 255, 0.14);
+}
+
+.aox-cta-primary:hover {
+  box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.35), 0 0 36px rgba(0, 229, 255, 0.22);
+}
+
+.aox-fade-up {
+  animation: home-fade-up 0.85s ease-out both;
+}
+
+.aox-fade-up-delay-1 {
+  animation-delay: 0.12s;
+}
+
+.aox-fade-up-delay-2 {
+  animation-delay: 0.24s;
+}
+
+.aox-rooms {
+  background:
+    radial-gradient(ellipse 70% 45% at 8% 0%, rgba(0, 163, 255, 0.08), transparent 55%),
+    linear-gradient(180deg, #070b14 0%, #05080f 100%);
+}
+
+.aox-rooms-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 50% 40% at 90% 20%,
+    rgba(196, 160, 140, 0.06),
+    transparent 60%
+  );
+}
+
+.aox-room {
+  animation: echo-rise 560ms ease-out both;
+  position: relative;
+}
+
+.aox-room:hover span:first-child {
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 18px rgba(0, 229, 255, 0.25);
+}
+
+.aox-room::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.55), transparent);
+  opacity: 0;
+  transition: width 0.28s ease, opacity 0.28s ease;
+}
+
+.aox-room:hover::before {
+  width: min(28%, 7rem);
+  opacity: 1;
+}
+
+@keyframes aox-art-breathe {
+  from {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+  to {
+    transform: scale(1.08) translate3d(0, -1.1%, 0);
+  }
+}
+
+@keyframes aox-rings-pulse {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+/* Overlay nav for atmospheric Art of X hub */
+.app-nav--overlay {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: max(0.85rem, env(safe-area-inset-top, 0px)) 1.25rem 0.85rem;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 8, 15, 0.82) 0%,
+    rgba(5, 8, 15, 0.35) 70%,
+    transparent 100%
+  );
+}
+
+.app-nav--overlay .app-nav-brand,
+.app-nav--overlay .app-nav-menu-btn,
+.app-nav--overlay nav {
+  pointer-events: auto;
+}
+
+@media (min-width: 768px) {
+  .app-nav--overlay {
+    padding-inline: 2.5rem;
+  }
 }
 
 /* —— Brand home —— */
@@ -2570,6 +2801,12 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .aox-hero-art img,
+  .aox-hero-rings,
+  .aox-hero-glow,
+  .aox-fade-up,
+  .aox-brand-mark,
+  .aox-room,
   .home-hero-art img,
   .home-hero-glow,
   .home-fade-up,
