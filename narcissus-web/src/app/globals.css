@@ -1526,8 +1526,27 @@ body {
   gap: 0.3rem;
 }
 
+.muse-chat-toolbar-primary {
+  /* Prefer horizontal scroll over a second tool row that steals message height */
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.muse-chat-toolbar-primary::-webkit-scrollbar {
+  display: none;
+}
+
+.muse-chat-toolbar-primary .muse-chat-tool {
+  flex-shrink: 0;
+}
+
 .muse-chat-toolbar-meta {
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .muse-chat-tool {
@@ -1617,14 +1636,7 @@ body {
   background: transparent;
 }
 
-/* Cast controls stay compact; picker lives in the mutual-exclusive overlay */
-.muse-chat-cast-chrome {
-  position: relative;
-  margin-top: 0.15rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid rgba(0, 229, 255, 0.1);
-}
-
+/* Active cast chips live in the cast overlay only — never grow the sheet header */
 .muse-chat-cast-chips {
   display: flex;
   flex-wrap: nowrap;
@@ -1778,7 +1790,9 @@ body {
 
 .muse-chat-drawer--open .muse-chat-drawer-messages,
 .muse-chat-drawer .muse-chat-drawer-messages {
-  min-height: min(28dvh, 12rem);
+  /* Protect transcript height when header/toolbar wrap (cast, etc.) */
+  flex: 1 1 0;
+  min-height: min(32dvh, 14rem);
 }
 
 .muse-chat-narrate {
@@ -2140,6 +2154,20 @@ body {
     /* ~46% of viewport for photo + slim dock; sheet stays large/readable */
     height: min(54dvh, 500px);
     max-height: min(54dvh, 500px);
+  }
+
+  .muse-chat-drawer-header {
+    /* Cap chrome so Cast/toolbar cannot crush the message column */
+    flex-shrink: 0;
+    max-height: 42%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .muse-chat-drawer--open .muse-chat-drawer-messages,
+  .muse-chat-drawer .muse-chat-drawer-messages {
+    min-height: min(28dvh, 11rem);
   }
 
   /* Large tap targets — toolbar / close stay usable above overlays */
