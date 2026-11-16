@@ -2,26 +2,54 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { AuthControls } from "@/components/AuthControls";
 import { BrandFaceFrame } from "@/components/BrandFaceFrame";
 import { PERSON_LABEL } from "@/lib/artOfX";
+import { OUTLETS, parseOutletParam, type OutletId } from "@/lib/outlets";
 
-const LINKS = [
-  { href: "/", label: "Home", group: "house" as const },
-  { href: "/studio", label: "Studio", group: "house" as const },
-  { href: "/art-of-x", label: "Art of X", group: "aox" as const },
-  { href: "/art-of-x/partners", label: PERSON_LABEL.plural, group: "aox" as const },
-  { href: "/art-of-x/stories", label: "Stories", group: "aox" as const },
-  { href: "/art-of-x/chat", label: "AI chat", group: "aox" as const },
-  { href: "/circle", label: "Circle", group: "house" as const },
-  { href: "/account", label: "Echo", group: "house" as const },
+const AOX_LINKS = [
+  { href: "/art-of-x", label: "Art of X" },
+  { href: "/art-of-x/partners", label: PERSON_LABEL.plural },
+  { href: "/art-of-x/stories", label: "Stories" },
+  { href: "/art-of-x/chat", label: "AI chat" },
 ] as const;
 
-function linkActive(pathname: string, href: string) {
+const HOUSE_LINKS = [
+  { href: "/", label: "Home" },
+  { href: "/studio", label: "Studio" },
+  { href: "/circle", label: "Circle" },
+  { href: "/account", label: "Echo" },
+] as const;
+
+/** Compact desktop chrome — outlets first, then two product doors */
+const DESKTOP_PRIMARY = [
+  ...OUTLETS.map((o) => ({ href: o.href, label: o.label, kind: "outlet" as const })),
+  { href: "/studio", label: "Studio", kind: "house" as const },
+  { href: "/art-of-x", label: "Art of X", kind: "aox" as const },
+];
+
+function linkActive(pathname: string, href: string, outlet: OutletId | null) {
   if (href === "/") return pathname === "/";
   if (href === "/art-of-x") return pathname === "/art-of-x";
+
+  const [path, qs] = href.split("?");
+  if (path === "/art-of-x/partners" && qs?.startsWith("outlet=")) {
+    const want = parseOutletParam(qs.slice("outlet=".length));
+    return (
+      (pathname === "/art-of-x/partners" ||
+        pathname.startsWith("/art-of-x/partners/")) &&
+      outlet === want
+    );
+  }
+  if (href === "/art-of-x/partners") {
+    return (
+      (pathname === "/art-of-x/partners" ||
+        pathname.startsWith("/art-of-x/partners/")) &&
+      outlet === null
+    );
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -34,8 +62,10 @@ type AppNavProps = {
   variant?: "default" | "companion" | "overlay";
 };
 
-export function AppNav({ variant = "default" }: AppNavProps) {
+function AppNavInner({ variant = "default" }: AppNavProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const outlet = parseOutletParam(searchParams.get("outlet"));
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -45,7 +75,7 @@ export function AppNav({ variant = "default" }: AppNavProps) {
 
   useEffect(() => {
     setOpen(false);
-  }, [pathname]);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!open) return;
@@ -67,9 +97,6 @@ export function AppNav({ variant = "default" }: AppNavProps) {
     : overlay
       ? "app-nav app-nav--overlay"
       : "app-nav mb-8 flex items-center justify-between gap-3 border-b border-[var(--glow)]/15 pb-4 md:mb-10";
-
-  const houseLinks = LINKS.filter((l) => l.group === "house");
-  const aoxLinks = LINKS.filter((l) => l.group === "aox");
 
   return (
     <>
@@ -96,44 +123,49 @@ export function AppNav({ variant = "default" }: AppNavProps) {
           </span>
         </Link>
 
-        <nav
-          className={
-            companion
-              ? "hidden"
-              : "hidden flex-wrap items-center gap-2 md:flex"
-          }
-          aria-label="Primary"
-        >
-          {LINKS.map((link) => {
-            const active = linkActive(pathname, link.href);
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`rounded-sm px-3 py-1.5 text-sm tracking-wide transition ${
-                  active
-                    ? "bg-[var(--glow)]/15 text-[var(--glow)] ring-1 ring-[var(--glow)]/25"
-                    : "text-[#c4b7a8] hover:text-[var(--ink)]"
-                }`}
-              >
-                {link.label}
-              </Link>
-            );
-          })}
-          <AuthControls />
-        </nav>
+        <div className="flex shrink-0 items-center gap-2">
+          <nav
+            className={
+              companion
+                ? "hidden"
+                : "hidden flex-wrap items-center gap-1.5 md:flex"
+            }
+            aria-label="Primary"
+          >
+            {DESKTOP_PRIMARY.map((link) => {
+              const active = linkActive(pathname, link.href, outlet);
+              const outletStyle = link.kind === "outlet";
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`rounded-sm px-3 py-1.5 text-sm tracking-wide transition ${
+                    active
+                      ? outletStyle
+                        ? "bg-[var(--glow)]/18 text-[var(--glow)] ring-1 ring-[var(--glow)]/35"
+                        : "bg-[var(--glow)]/15 text-[var(--glow)] ring-1 ring-[var(--glow)]/25"
+                      : outletStyle
+                        ? "text-[var(--ink)] hover:text-[var(--glow)]"
+                        : "text-[#c4b7a8] hover:text-[var(--ink)]"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+            <AuthControls />
+          </nav>
 
-        <button
-          type="button"
-          className={`app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition ${
-            companion ? "" : "md:hidden"
-          }`}
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => setOpen(true)}
-        >
-          Menu
-        </button>
+          <button
+            type="button"
+            className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => setOpen(true)}
+          >
+            Menu
+          </button>
+        </div>
       </header>
 
       {open && (
@@ -175,11 +207,36 @@ export function AppNav({ variant = "default" }: AppNavProps) {
             <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
               <div>
                 <p className="app-nav-drawer-kicker mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--glow)]">
+                  Outlets
+                </p>
+                <div className="flex flex-col gap-1">
+                  {OUTLETS.map((o) => {
+                    const active = linkActive(pathname, o.href, outlet);
+                    return (
+                      <Link
+                        key={o.id}
+                        href={o.href}
+                        onClick={() => setOpen(false)}
+                        className={`app-nav-drawer-link app-nav-drawer-link--outlet px-3 py-3.5 text-base tracking-wide transition ${
+                          active
+                            ? "is-active"
+                            : "text-[var(--ink)] hover:text-[var(--glow)]"
+                        }`}
+                      >
+                        {o.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="app-nav-drawer-kicker mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--glow)]/75">
                   Art of X
                 </p>
                 <div className="flex flex-col gap-1">
-                  {aoxLinks.map((link) => {
-                    const active = linkActive(pathname, link.href);
+                  {AOX_LINKS.map((link) => {
+                    const active = linkActive(pathname, link.href, outlet);
                     return (
                       <Link
                         key={link.href}
@@ -203,8 +260,8 @@ export function AppNav({ variant = "default" }: AppNavProps) {
                   House
                 </p>
                 <div className="flex flex-col gap-1">
-                  {houseLinks.map((link) => {
-                    const active = linkActive(pathname, link.href);
+                  {HOUSE_LINKS.map((link) => {
+                    const active = linkActive(pathname, link.href, outlet);
                     return (
                       <Link
                         key={link.href}
@@ -231,5 +288,75 @@ export function AppNav({ variant = "default" }: AppNavProps) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * useSearchParams needs a Suspense boundary in Next App Router.
+ * Fallback renders the same chrome without outlet-aware active states.
+ */
+export function AppNav(props: AppNavProps) {
+  return (
+    <Suspense fallback={<AppNavFallback {...props} />}>
+      <AppNavInner {...props} />
+    </Suspense>
+  );
+}
+
+function AppNavFallback({ variant = "default" }: AppNavProps) {
+  const companion = variant === "companion";
+  const overlay = variant === "overlay";
+  const headerClass = companion
+    ? "app-nav app-nav--companion"
+    : overlay
+      ? "app-nav app-nav--overlay"
+      : "app-nav mb-8 flex items-center justify-between gap-3 border-b border-[var(--glow)]/15 pb-4 md:mb-10";
+
+  return (
+    <header className={headerClass}>
+      <Link
+        href="/"
+        className="app-nav-brand flex min-w-0 items-center gap-2.5 text-[var(--ink)] no-underline"
+        aria-label="Narcissus AI home"
+      >
+        <span className="relative inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25">
+          <Image
+            src="/brand/narcissus-logo.jpg"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 object-cover object-[center_30%]"
+          />
+        </span>
+        <span
+          className="truncate text-[0.95rem] tracking-[0.05em] text-[var(--accent-strong)]"
+          style={{ fontFamily: "var(--font-display), serif" }}
+        >
+          Narcissus
+        </span>
+      </Link>
+      {!companion && (
+        <nav
+          className="hidden flex-wrap items-center gap-1.5 md:flex"
+          aria-label="Primary"
+        >
+          {DESKTOP_PRIMARY.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="rounded-sm px-3 py-1.5 text-sm tracking-wide text-[#c4b7a8]"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      )}
+      <span
+        className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] opacity-70"
+        aria-hidden
+      >
+        Menu
+      </span>
+    </header>
   );
 }

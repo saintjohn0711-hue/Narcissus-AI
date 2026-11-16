@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  FormEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { CatalogMultiSelect } from "@/components/CatalogMultiSelect";
 import { PartnerCard } from "@/components/PartnerCard";
@@ -31,6 +39,13 @@ import {
   type PartnerRecord,
   type PersonType,
 } from "@/lib/artOfX";
+import {
+  OUTLETS,
+  museMatchesOutlet,
+  parseOutletParam,
+  partnersHrefForOutlet,
+  type OutletId,
+} from "@/lib/outlets";
 import {
   consumePartnersPersistNotice,
   fetchPartners,
@@ -63,6 +78,24 @@ const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
 const VOICE_GENDERS: MuseVoiceGender[] = ["female", "male"];
 
 export default function PartnersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+          <AppNav />
+          <p className="mt-8 text-sm text-[var(--muted)]">Loading Muses…</p>
+        </div>
+      }
+    >
+      <PartnersPageInner />
+    </Suspense>
+  );
+}
+
+function PartnersPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const outlet = parseOutletParam(searchParams.get("outlet"));
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [filter, setFilter] = useState<"all" | PersonType>("all");
   const [sortMode, setSortMode] = useState<MuseSortMode>("manual");
@@ -88,8 +121,7 @@ export default function PartnersPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get("imported");
+    const raw = searchParams.get("imported");
     if (!raw) return;
     const n = Number(raw);
     if (Number.isFinite(n) && n > 0) {
@@ -97,8 +129,13 @@ export default function PartnersPage() {
         `Imported ${n} ${n === 1 ? PERSON_LABEL.singularLower : PERSON_LABEL.pluralLower} to your account`,
       );
     }
-    window.history.replaceState({}, "", "/art-of-x/partners");
-  }, []);
+    const next = partnersHrefForOutlet(outlet);
+    window.history.replaceState({}, "", next);
+  }, [searchParams, outlet]);
+
+  function setOutlet(next: OutletId | null) {
+    router.replace(partnersHrefForOutlet(next), { scroll: false });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -202,10 +239,19 @@ export default function PartnersPage() {
   }, [partners, ready]);
 
   const visible = useMemo(() => {
-    const filtered =
-      filter === "all" ? partners : partners.filter((p) => p.type === filter);
-    return sortMuses(filtered, sortMode, manualOrder);
-  }, [partners, filter, sortMode, manualOrder]);
+    let list = partners;
+    if (outlet) {
+      list = list.filter((p) => museMatchesOutlet(p.gender, outlet));
+    }
+    if (filter !== "all") {
+      list = list.filter((p) => p.type === filter);
+    }
+    return sortMuses(list, sortMode, manualOrder);
+  }, [partners, filter, outlet, sortMode, manualOrder]);
+
+  const outletTitle = outlet
+    ? OUTLETS.find((o) => o.id === outlet)?.label ?? PERSON_LABEL.plural
+    : PERSON_LABEL.plural;
 
   function scrollEditorIntoView() {
     requestAnimationFrame(() => {
@@ -590,11 +636,14 @@ export default function PartnersPage() {
 
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--glow)]">
+            {outlet ? `Outlet · ${outletTitle}` : "All outlets"}
+          </p>
           <h1
             className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
-            {PERSON_LABEL.plural}
+            {outlet ? `${outletTitle}` : PERSON_LABEL.plural}
           </h1>
           <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
             Desire ledger — who, what you&apos;ve done, kinks, dynamics, photos.
@@ -630,6 +679,26 @@ export default function PartnersPage() {
         </div>
       </header>
 
+      <div className="mb-4 flex flex-wrap gap-2" role="navigation" aria-label="Outlets">
+        <button
+          type="button"
+          onClick={() => setOutlet(null)}
+          className={`outlet-chip ${outlet === null ? "is-active" : ""}`}
+        >
+          All
+        </button>
+        {OUTLETS.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            onClick={() => setOutlet(o.id)}
+            className={`outlet-chip ${outlet === o.id ? "is-active" : ""}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-wrap gap-2">
           {(["all", ...TYPES] as const).map((f) => (
@@ -643,7 +712,7 @@ export default function PartnersPage() {
                   : "border-[var(--line)] text-[#c4b7a8]"
               }`}
             >
-              {f}
+              {f === "all" ? "Type · all" : f}
             </button>
           ))}
         </div>

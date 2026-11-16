@@ -3,12 +3,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
 import { BrandFaceFrame } from "@/components/BrandFaceFrame";
+import { OutletStrip } from "@/components/OutletStrip";
 import { ART_OF_X_NAV, PERSON_LABEL } from "@/lib/artOfX";
+import { OUTLETS } from "@/lib/outlets";
 
 export const metadata: Metadata = {
   title: "Art of X — Narcissus AI",
   description:
-    "Muses, stories, and AI chat — craft the people and scenes that stay with you.",
+    "Women, Men, Trans Muses — stories and AI chat. Your Reflection, Your Rules.",
 };
 
 const PRIMARY = ART_OF_X_NAV.filter((item) => item.id !== "circle");
@@ -55,24 +57,43 @@ export default function ArtOfXHome() {
           </p>
 
           <p className="aox-fade-up aox-fade-up-delay-1 mt-4 max-w-lg text-base font-light leading-relaxed text-[var(--soft)]">
-            {PERSON_LABEL.plural}, stories, and living AI chat — craft the
-            people and scenes that stay with you.
+            Pick who you want — then {PERSON_LABEL.singularLower}s, stories, and
+            living AI chat.
           </p>
 
-          <div className="aox-fade-up aox-fade-up-delay-2 mt-9 flex flex-wrap items-center justify-center gap-4">
+          <div className="aox-fade-up aox-fade-up-delay-2 mt-9 flex flex-wrap items-center justify-center gap-3">
+            {OUTLETS.map((o) => (
+              <Link
+                key={o.id}
+                href={o.href}
+                className="aox-cta-primary inline-flex items-center border border-[var(--glow)]/50 bg-[var(--glow)]/10 px-5 py-3 text-sm tracking-[0.14em] text-[var(--glow)] transition hover:bg-[var(--glow)]/20"
+              >
+                {o.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className="aox-fade-up aox-fade-up-delay-2 mt-4 flex flex-wrap items-center justify-center gap-4">
             <Link
               href="/art-of-x/partners"
-              className="aox-cta-primary inline-flex items-center border border-[var(--glow)]/50 bg-[var(--glow)]/10 px-6 py-3 text-sm tracking-[0.14em] text-[var(--glow)] transition hover:bg-[var(--glow)]/20"
+              className="aox-cta-metal inline-flex items-center border border-[var(--accent)]/50 px-5 py-2.5 text-xs tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
             >
-              Enter {PERSON_LABEL.plural}
+              All {PERSON_LABEL.plural}
             </Link>
             <Link
               href="/art-of-x/chat"
-              className="aox-cta-metal inline-flex items-center border border-[var(--accent)]/50 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
+              className="inline-flex items-center text-xs tracking-[0.12em] text-[var(--soft)] underline-offset-4 transition hover:text-[var(--glow)] hover:underline"
             >
               Open AI chat
             </Link>
           </div>
+        </div>
+      </section>
+
+      <section className="aox-outlets relative border-t border-[var(--glow)]/15 px-6 py-14 sm:px-10 sm:py-16">
+        <div className="aox-rooms-glow" aria-hidden="true" />
+        <div className="relative z-10 mx-auto max-w-4xl">
+          <OutletStrip variant="hub" />
         </div>
       </section>
 
@@ -81,13 +102,13 @@ export default function ArtOfXHome() {
         <div className="aox-rooms-ornament" aria-hidden="true" />
         <div className="relative z-10 mx-auto max-w-4xl">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.28em] text-[var(--glow)]/80">
-            Inside
+            Craft
           </p>
           <h2 className="brand-metal-type brand-metal-type--section max-w-xl">
-            Three doors. One craft of desire.
+            Rooms after you choose.
           </h2>
           <p className="mt-3 max-w-md text-base font-light leading-relaxed text-[var(--soft)]">
-            Pick a room — {PERSON_LABEL.singularLower}s, scenes, or conversation.
+            Ledger, scenes, or conversation — once you know who.
           </p>
 
           <ul className="aox-room-list mt-12 space-y-0 divide-y divide-[var(--glow)]/12 border-y border-[var(--glow)]/15">
