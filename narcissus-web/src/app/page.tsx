@@ -2,14 +2,15 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { AuthControls } from "@/components/AuthControls";
+import { OutletStrip } from "@/components/OutletStrip";
 
 export const metadata: Metadata = {
   title: "Narcissus AI — Your Reflection, Your Rules",
   description:
-    "Studio likeness edits, Art of X Muses and stories, Circle discovery, Echo account.",
+    "Women, Men, Trans Muses — Studio likeness edits, Art of X, Circle, Echo.",
 };
 
-const SECTIONS = [
+const HOUSE = [
   {
     id: "studio",
     href: "/studio",
@@ -62,18 +63,36 @@ export default function HomePage() {
             Narcissus AI
           </span>
         </Link>
-        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[var(--soft)]">
-          <Link href="/studio" className="transition hover:text-[var(--ink)]">
+        <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--soft)]">
+          <Link
+            href="/art-of-x/partners?outlet=women"
+            className="transition hover:text-[var(--glow)]"
+          >
+            Women
+          </Link>
+          <Link
+            href="/art-of-x/partners?outlet=men"
+            className="transition hover:text-[var(--glow)]"
+          >
+            Men
+          </Link>
+          <Link
+            href="/art-of-x/partners?outlet=trans"
+            className="transition hover:text-[var(--glow)]"
+          >
+            Trans
+          </Link>
+          <Link
+            href="/studio"
+            className="hidden transition hover:text-[var(--ink)] sm:inline"
+          >
             Studio
           </Link>
-          <Link href="/art-of-x" className="transition hover:text-[var(--ink)]">
+          <Link
+            href="/art-of-x"
+            className="hidden transition hover:text-[var(--ink)] sm:inline"
+          >
             Art of X
-          </Link>
-          <Link href="/circle" className="hidden transition hover:text-[var(--ink)] sm:inline">
-            Circle
-          </Link>
-          <Link href="/account" className="hidden transition hover:text-[var(--ink)] sm:inline">
-            Echo
           </Link>
           <AuthControls />
         </nav>
@@ -125,38 +144,45 @@ export default function HomePage() {
 
           <div className="home-fade-up home-fade-up-delay-2 mt-10 flex flex-wrap items-center gap-4">
             <Link
-              href="/studio"
+              href="/art-of-x"
               className="home-cta-primary inline-flex items-center border border-[var(--glow)]/50 bg-[var(--glow)]/10 px-6 py-3 text-sm tracking-[0.14em] text-[var(--glow)] transition hover:bg-[var(--glow)]/20"
+            >
+              Find your Muse
+            </Link>
+            <Link
+              href="/studio"
+              className="inline-flex items-center border border-[var(--accent)]/45 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
             >
               Enter Studio
             </Link>
-            <Link
-              href="/art-of-x"
-              className="inline-flex items-center border border-[var(--accent)]/45 px-6 py-3 text-sm tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--accent)] hover:bg-[var(--accent)]/10"
-            >
-              Explore Art of X
-            </Link>
           </div>
+        </div>
+      </section>
+
+      <section className="home-outlets relative border-t border-[var(--glow)]/15 px-6 py-16 sm:px-10 sm:py-20">
+        <div className="home-outlets-glow" aria-hidden="true" />
+        <div className="relative z-10 mx-auto max-w-4xl">
+          <OutletStrip variant="home" />
         </div>
       </section>
 
       <section className="relative border-t border-[var(--line)] px-6 py-20 sm:px-10">
         <div className="mx-auto max-w-4xl">
           <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-            Inside
+            House
           </p>
           <h2
             className="max-w-lg text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl"
             style={{ fontFamily: "var(--font-display), serif" }}
           >
-            Four rooms. One house of desire.
+            Four rooms when you know the house.
           </h2>
           <p className="mt-3 max-w-md text-base font-light leading-relaxed text-[var(--soft)]">
-            Start where you need — edits, Muses, discovery, or your account.
+            Studio, Art of X, Circle, Echo — after you pick who you want.
           </p>
 
           <ul className="mt-14 space-y-0 divide-y divide-[var(--line)] border-y border-[var(--line)]">
-            {SECTIONS.map((section) => (
+            {HOUSE.map((section) => (
               <li key={section.id}>
                 <Link
                   href={section.href}
