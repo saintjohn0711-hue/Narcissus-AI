@@ -6,22 +6,8 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { AuthControls } from "@/components/AuthControls";
 import { BrandFaceFrame } from "@/components/BrandFaceFrame";
-import { PERSON_LABEL } from "@/lib/artOfX";
+import { CoupleDial } from "@/components/CoupleDial";
 import { OUTLETS, parseOutletParam, type OutletId } from "@/lib/outlets";
-
-const AOX_LINKS = [
-  { href: "/art-of-x", label: "Art of X" },
-  { href: "/art-of-x/partners", label: PERSON_LABEL.plural },
-  { href: "/art-of-x/stories", label: "Stories" },
-  { href: "/art-of-x/chat", label: "AI chat" },
-] as const;
-
-const HOUSE_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/studio", label: "Studio" },
-  { href: "/circle", label: "Circle" },
-  { href: "/account", label: "Echo" },
-] as const;
 
 /** Compact desktop chrome — outlets first, then two product doors */
 const DESKTOP_PRIMARY = [
@@ -204,82 +190,12 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
               </button>
             </div>
 
-            <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
-              <div>
-                <p className="app-nav-drawer-kicker mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--glow)]">
-                  Outlets
-                </p>
-                <div className="flex flex-col gap-1">
-                  {OUTLETS.map((o) => {
-                    const active = linkActive(pathname, o.href, outlet);
-                    return (
-                      <Link
-                        key={o.id}
-                        href={o.href}
-                        onClick={() => setOpen(false)}
-                        className={`app-nav-drawer-link app-nav-drawer-link--outlet px-3 py-3.5 text-base tracking-wide transition ${
-                          active
-                            ? "is-active"
-                            : "text-[var(--ink)] hover:text-[var(--glow)]"
-                        }`}
-                      >
-                        {o.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <p className="app-nav-drawer-kicker mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--glow)]/75">
-                  Art of X
-                </p>
-                <div className="flex flex-col gap-1">
-                  {AOX_LINKS.map((link) => {
-                    const active = linkActive(pathname, link.href, outlet);
-                    return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setOpen(false)}
-                        className={`app-nav-drawer-link px-3 py-3 text-base tracking-wide transition ${
-                          active
-                            ? "is-active"
-                            : "text-[#c4b7a8] hover:text-[var(--ink)]"
-                        }`}
-                      >
-                        {link.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
-                <p className="app-nav-drawer-kicker mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--muted)]">
-                  House
-                </p>
-                <div className="flex flex-col gap-1">
-                  {HOUSE_LINKS.map((link) => {
-                    const active = linkActive(pathname, link.href, outlet);
-                    return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setOpen(false)}
-                        className={`app-nav-drawer-link px-3 py-3 text-base tracking-wide transition ${
-                          active
-                            ? "is-active"
-                            : "text-[#c4b7a8] hover:text-[var(--ink)]"
-                        }`}
-                      >
-                        {link.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            </nav>
+            <div className="app-nav-drawer-body flex flex-1 flex-col overflow-y-auto px-3 py-3">
+              <CoupleDial
+                isActive={(href) => linkActive(pathname, href, outlet)}
+                onNavigate={() => setOpen(false)}
+              />
+            </div>
 
             <div className="app-nav-drawer-footer">
               <AuthControls className="flex flex-wrap items-center gap-2 text-sm" />
