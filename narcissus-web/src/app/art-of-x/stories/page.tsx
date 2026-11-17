@@ -5,6 +5,7 @@ import { AppNav } from "@/components/AppNav";
 import {
   ALL_KINKS,
   DEFAULT_LOCS,
+  resolveSceneLocation,
   SCENE_ROLE_CHIPS,
   buildImagePrompt,
   buildSteerDirectionFromBoxes,
@@ -88,7 +89,7 @@ export default function StoriesPage() {
     () => partners.filter((p) => selectedIds.includes(p.id)),
     [partners, selectedIds],
   );
-  const loc = DEFAULT_LOCS.find((l) => l.id === locId) || DEFAULT_LOCS[0]!;
+  const loc = resolveSceneLocation(locId);
 
   const currentBrief = useMemo<StoryDirectionBrief>(
     () => ({
@@ -330,8 +331,7 @@ export default function StoriesPage() {
     if (s.length === "short" || s.length === "medium" || s.length === "long") {
       setLength(s.length);
     }
-    const loadedLoc =
-      DEFAULT_LOCS.find((l) => l.id === s.locationId) || loc;
+    const loadedLoc = resolveSceneLocation(s.locationId);
     const nextIntensity =
       typeof s.intensity === "number" ? s.intensity : intensity;
     const nextKinks = Array.isArray(s.kinks) ? [...s.kinks] : [];

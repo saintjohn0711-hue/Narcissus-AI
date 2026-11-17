@@ -10,8 +10,10 @@ import {
   displayName,
   genderLabel,
   normalizeKinks,
+  resolveSceneLocation,
   samePartnerId,
   type PartnerRecord,
+  type SceneLocation,
 } from "@/lib/artOfX";
 import {
   formatMemoriesForPrompt,
@@ -184,11 +186,27 @@ function normalizeCastList(
   return out;
 }
 
+function sceneSettingPromptBlock(location?: SceneLocation | null): string {
+  const resolved: SceneLocation = location?.name?.trim()
+    ? {
+        id: String(location.id || "custom").slice(0, 40),
+        name: String(location.name).slice(0, 80),
+        desc: String(location.desc || "").slice(0, 240),
+      }
+    : resolveSceneLocation(location?.id);
+  return [
+    "Scene setting:",
+    `You are in ${resolved.name}. ${resolved.desc}`,
+    "Let the place flavor every beat — sound, risk, props, temperature — without narrating a travel brochure.",
+  ].join("\n");
+}
+
 /** Build the in-character system prompt for partner AI chat. */
 export function buildPartnerChatSystemPrompt(
   partner: PartnerRecord,
   pov: ChatPov = "1st",
   cast?: PartnerRecord | PartnerRecord[] | null,
+  location?: SceneLocation | null,
 ): string {
   const name = displayName(partner);
   const castList = normalizeCastList(partner, cast);
@@ -197,6 +215,7 @@ export function buildPartnerChatSystemPrompt(
   const tryNewGranted =
     Boolean(partner.tryNewThings) ||
     castList.some((c) => Boolean(c.tryNewThings));
+  const settingBlock = sceneSettingPromptBlock(location);
 
   if (castList.length > 0) {
     const castLabel = [name, ...castNames].join(", ");
@@ -241,6 +260,8 @@ export function buildPartnerChatSystemPrompt(
       "Shared session gates:",
       tryNewThingsPromptBlock(tryNewGranted),
       "",
+      settingBlock,
+      "",
       "Voice & POV:",
       povInstruction,
       castList.length === 1
@@ -265,6 +286,8 @@ export function buildPartnerChatSystemPrompt(
     "",
     "Identity:",
     museIdentityBlock(partner),
+    "",
+    settingBlock,
     "",
     "Voice & POV:",
     povInstruction,
