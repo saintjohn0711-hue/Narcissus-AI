@@ -2847,9 +2847,10 @@ body {
 
 .muse-chat-drawer-messages {
   min-height: 0;
-  /* Keep a readable message column even when cast chrome / panels are open */
+  /* Transcript scrolls under the fixed top composer */
   flex: 1 1 auto;
-  padding: 1.1rem 1.2rem;
+  padding: 0.95rem 1.2rem 1.15rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .muse-chat-drawer--open .muse-chat-drawer-messages,
@@ -3110,8 +3111,9 @@ body {
 }
 
 .muse-chat-drawer-messages--empty {
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
+  /* Sit empty prompt under the top composer — not floating mid-panel */
+  padding-top: 0.85rem;
+  padding-bottom: 1.25rem;
 }
 
 .muse-chat-empty {
@@ -3119,22 +3121,26 @@ body {
   color: #e8dcd0;
 }
 
+/* Composer pinned under header — messages grow downward; never shrink with thread */
 .muse-chat-drawer-composer {
   position: relative;
   z-index: 26;
+  flex: 0 0 auto;
   flex-shrink: 0;
-  padding: 0.95rem 1.2rem calc(0.95rem + env(safe-area-inset-bottom, 0px));
+  align-items: stretch;
+  gap: 0.55rem;
+  padding: 0.85rem 1.2rem 0.95rem;
   background:
-    linear-gradient(0deg, rgba(0, 229, 255, 0.08) 0%, rgba(0, 163, 255, 0.03) 45%, transparent 100%),
-    linear-gradient(180deg, #0c1424 0%, #0a0e18 100%);
+    linear-gradient(180deg, rgba(0, 229, 255, 0.1) 0%, rgba(0, 163, 255, 0.03) 55%, transparent 100%),
+    linear-gradient(180deg, #0e1628 0%, #0a1020 100%);
 }
 
-.muse-chat-drawer-composer::before {
+.muse-chat-drawer-composer::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 0;
+  bottom: 0;
   height: 1px;
   background: linear-gradient(
     90deg,
@@ -3144,6 +3150,18 @@ body {
     transparent 100%
   );
   box-shadow: 0 0 12px rgba(0, 229, 255, 0.18);
+}
+
+.muse-chat-composer-input {
+  min-height: 3.15rem;
+  line-height: 1.4;
+}
+
+.muse-chat-composer-send {
+  flex-shrink: 0;
+  min-height: 3.15rem;
+  min-width: 4.75rem;
+  align-self: stretch;
 }
 
 @media (min-width: 640px) {
@@ -3161,11 +3179,16 @@ body {
   }
 
   .muse-chat-drawer-messages {
-    padding: 1.35rem 1.45rem;
+    padding: 1.15rem 1.45rem 1.35rem;
   }
 
   .muse-chat-drawer-composer {
-    padding: 1.1rem 1.45rem;
+    padding: 0.95rem 1.45rem 1.05rem;
+  }
+
+  .muse-chat-composer-input,
+  .muse-chat-composer-send {
+    min-height: 3.35rem;
   }
 }
 
@@ -3190,16 +3213,21 @@ body {
   }
 
   .muse-chat-drawer-messages {
-    padding: 1.45rem 1.65rem;
+    padding: 1.25rem 1.65rem 1.55rem;
   }
 
   .muse-chat-drawer-messages--empty {
-    padding-top: 2rem;
+    padding-top: 1.75rem;
     padding-bottom: 2rem;
   }
 
   .muse-chat-drawer-composer {
-    padding: 1.2rem 1.65rem 1.35rem;
+    padding: 1.05rem 1.65rem 1.15rem;
+  }
+
+  .muse-chat-composer-input,
+  .muse-chat-composer-send {
+    min-height: 3.5rem;
   }
 }
 
@@ -3262,6 +3290,15 @@ body {
   .muse-voice-chip {
     min-height: 2.5rem;
     padding: 0.45rem 0.7rem;
+  }
+
+  .muse-chat-drawer-composer {
+    padding: 0.75rem 1rem 0.85rem;
+  }
+
+  .muse-chat-composer-input,
+  .muse-chat-composer-send {
+    min-height: 3rem;
   }
 }
 

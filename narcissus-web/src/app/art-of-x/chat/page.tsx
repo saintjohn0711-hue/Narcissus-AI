@@ -1568,6 +1568,30 @@ function ChatPageInner() {
                 </div>
               )}
 
+              <form
+                onSubmit={send}
+                className="muse-chat-drawer-composer flex gap-2"
+                data-testid="muse-chat-composer"
+              >
+                <input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Message…"
+                  disabled={sending || !partner}
+                  aria-label="Message"
+                  data-testid="muse-chat-composer-input"
+                  className="prompt-field muse-chat-composer-input min-w-0 flex-1 rounded-sm border border-[var(--glow)]/30 bg-gradient-to-b from-[#121a2e] to-[#0c121c] px-4 py-3.5 text-base shadow-[inset_0_1px_0_rgba(0,229,255,0.08)] disabled:opacity-60 focus:border-[var(--glow)]/55 focus:outline-none focus:shadow-[0_0_18px_rgba(0,229,255,0.12)]"
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !partner || !text.trim()}
+                  data-testid="muse-chat-composer-send"
+                  className="muse-chat-composer-send rounded-sm border border-[var(--glow)]/45 bg-gradient-to-b from-[rgba(0,229,255,0.22)] to-[rgba(0,163,255,0.08)] px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--glow)] shadow-[0_0_22px_rgba(0,229,255,0.16),inset_0_1px_0_rgba(0,229,255,0.2)] disabled:opacity-50"
+                >
+                  {sending ? "…" : "Send"}
+                </button>
+              </form>
+
               <div className="muse-chat-drawer-main">
               {error && (
                 <div className="border-b border-[var(--line)] bg-[#3a1814] px-4 py-2.5 text-sm text-[#f0c4b8] sm:px-5">
@@ -1578,7 +1602,7 @@ function ChatPageInner() {
               <div
                 className={`muse-chat-drawer-messages flex-1 overflow-auto ${
                   messages.length === 0
-                    ? "muse-chat-drawer-messages--empty flex flex-col justify-center"
+                    ? "muse-chat-drawer-messages--empty flex flex-col justify-start"
                     : "space-y-3"
                 }`}
               >
@@ -2269,26 +2293,6 @@ function ChatPageInner() {
               )}
 
               </div>
-
-              <form
-                onSubmit={send}
-                className="muse-chat-drawer-composer flex gap-2"
-              >
-                <input
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Message…"
-                  disabled={sending || !partner}
-                  className="prompt-field min-w-0 flex-1 rounded-sm border border-[var(--glow)]/30 bg-gradient-to-b from-[#121a2e] to-[#0c121c] px-4 py-3.5 text-base shadow-[inset_0_1px_0_rgba(0,229,255,0.08)] disabled:opacity-60 focus:border-[var(--glow)]/55 focus:outline-none focus:shadow-[0_0_18px_rgba(0,229,255,0.12)]"
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !partner || !text.trim()}
-                  className="rounded-sm border border-[var(--glow)]/45 bg-gradient-to-b from-[rgba(0,229,255,0.22)] to-[rgba(0,163,255,0.08)] px-5 py-3.5 text-[0.9375rem] font-semibold text-[var(--glow)] shadow-[0_0_22px_rgba(0,229,255,0.16),inset_0_1px_0_rgba(0,229,255,0.2)] disabled:opacity-50"
-                >
-                  {sending ? "…" : "Send"}
-                </button>
-              </form>
             </div>
           </section>
         </div>
