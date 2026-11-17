@@ -377,13 +377,18 @@ export const PERSON_LABEL = {
 } as const;
 
 export type MuseSortMode =
+  | "acts-desc"
   | "manual"
   | "name-asc"
   | "name-desc"
   | "updated-desc"
   | "newest";
 
+/** Default ledger / picker order — highest act rank first. */
+export const DEFAULT_MUSE_SORT: MuseSortMode = "acts-desc";
+
 export const MUSE_SORT_OPTIONS: { value: MuseSortMode; label: string }[] = [
+  { value: "acts-desc", label: "By acts" },
   { value: "manual", label: "Your order" },
   { value: "name-asc", label: "Name A–Z" },
   { value: "name-desc", label: "Name Z–A" },
@@ -395,12 +400,22 @@ export function samePartnerId(a: unknown, b: unknown): boolean {
   return Number(a) === Number(b) && Number.isFinite(Number(a));
 }
 
+/**
+ * Sort Muses for display. Prefer importing `sortMuses` from `@/lib/museSort`
+ * so “By acts” uses Echo-aligned overscore weights; this copy keeps non-act
+ * modes available without a museActStats cycle.
+ */
 export function sortMuses(
   list: PartnerRecord[],
   mode: MuseSortMode,
   manualOrder: number[] = [],
 ): PartnerRecord[] {
   const copy = [...list];
+  if (mode === "acts-desc") {
+    // Act-weighted order lives in museSort / museActStats — keep insertion
+    // order here so this helper never imports scoring.
+    return copy;
+  }
   if (mode === "manual") {
     if (!manualOrder.length) return copy;
     const rank = new Map(manualOrder.map((id, i) => [Number(id), i]));

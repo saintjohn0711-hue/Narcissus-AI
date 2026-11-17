@@ -871,6 +871,18 @@ body {
   border-radius: 2px;
 }
 
+/* Subtle act-rank mark — rose gold on navy, dense-row friendly */
+.muse-row-rank {
+  font-family: var(--font-display), "Times New Roman", serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: color-mix(in srgb, var(--accent-strong) 82%, #f3e0d4);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 28%, transparent);
+  opacity: 0.92;
+}
+
 .muse-row-panel {
   animation: muse-row-panel-in 240ms ease-out both;
   background:

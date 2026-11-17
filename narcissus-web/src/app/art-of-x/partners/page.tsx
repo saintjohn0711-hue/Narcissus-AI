@@ -44,10 +44,10 @@ import {
   pairedMusesFor,
   samePartnerId,
   saveMuseOrder,
-  sortMuses,
   toggleMusePairing,
   withMainPhoto,
   withMuseKindFields,
+  DEFAULT_MUSE_SORT,
   type MuseKind,
   type MuseMember,
   type MuseSortMode,
@@ -55,6 +55,8 @@ import {
   type PersonGender,
   type PersonType,
 } from "@/lib/artOfX";
+import { museActRankMap } from "@/lib/museActStats";
+import { sortMuses } from "@/lib/museSort";
 import {
   OUTLETS,
   museMatchesOutlet,
@@ -115,7 +117,7 @@ function PartnersPageInner() {
   const outlet = parseOutletParam(searchParams.get("outlet"));
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [filter, setFilter] = useState<"all" | PersonType>("all");
-  const [sortMode, setSortMode] = useState<MuseSortMode>("manual");
+  const [sortMode, setSortMode] = useState<MuseSortMode>(DEFAULT_MUSE_SORT);
   const [manualOrder, setManualOrder] = useState<number[]>([]);
   const [editing, setEditing] = useState<PartnerRecord | null>(null);
   /** Muse id waiting on delete confirm — null when no dialog. */
@@ -272,6 +274,9 @@ function PartnersPageInner() {
     }
     return sortMuses(list, sortMode, manualOrder);
   }, [partners, filter, outlet, sortMode, manualOrder]);
+
+  /** Rank across the full roster (not just the filtered slice). */
+  const actRanks = useMemo(() => museActRankMap(partners), [partners]);
 
   const outletTitle = outlet
     ? OUTLETS.find((o) => o.id === outlet)?.label ?? PERSON_LABEL.plural
@@ -1829,35 +1834,44 @@ function PartnersPageInner() {
             Muses (Woman · Rocky · Jaxx).
           </p>
         )}
-        {visible.map((p, cardIndex) => (
-          <PartnerCard
-            key={p.id}
-            partner={p}
-            roster={partners}
-            pairingOpen={pairingForId != null && samePartnerId(pairingForId, p.id)}
-            onTogglePairing={() =>
-              setPairingForId((cur) =>
-                cur != null && samePartnerId(cur, p.id) ? null : Number(p.id),
-              )
-            }
-            onPairWith={(otherId) => setPairWith(p.id, otherId)}
-            onUnpair={(otherId) => setPairWith(p.id, otherId)}
-            onEdit={() => openEdit(p)}
-            onRemove={() => requestRemove(p.id)}
-            onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}
-            onToggleAct={(act) => togglePartnerAct(p.id, act)}
-            onMoveUp={
-              sortMode === "manual" ? () => moveMuse(p.id, -1) : undefined
-            }
-            onMoveDown={
-              sortMode === "manual" ? () => moveMuse(p.id, 1) : undefined
-            }
-            canMoveUp={sortMode === "manual" && cardIndex > 0}
-            canMoveDown={
-              sortMode === "manual" && cardIndex < visible.length - 1
-            }
-          />
-        ))}
+        {visible.map((p, cardIndex) => {
+          const rankInfo = actRanks.get(Number(p.id));
+          return (
+            <PartnerCard
+              key={p.id}
+              partner={p}
+              roster={partners}
+              actRank={rankInfo?.rank}
+              actContribution={rankInfo?.contribution}
+              pairingOpen={
+                pairingForId != null && samePartnerId(pairingForId, p.id)
+              }
+              onTogglePairing={() =>
+                setPairingForId((cur) =>
+                  cur != null && samePartnerId(cur, p.id)
+                    ? null
+                    : Number(p.id),
+                )
+              }
+              onPairWith={(otherId) => setPairWith(p.id, otherId)}
+              onUnpair={(otherId) => setPairWith(p.id, otherId)}
+              onEdit={() => openEdit(p)}
+              onRemove={() => requestRemove(p.id)}
+              onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}
+              onToggleAct={(act) => togglePartnerAct(p.id, act)}
+              onMoveUp={
+                sortMode === "manual" ? () => moveMuse(p.id, -1) : undefined
+              }
+              onMoveDown={
+                sortMode === "manual" ? () => moveMuse(p.id, 1) : undefined
+              }
+              canMoveUp={sortMode === "manual" && cardIndex > 0}
+              canMoveDown={
+                sortMode === "manual" && cardIndex < visible.length - 1
+              }
+            />
+          );
+        })}
       </div>
 
       <ConfirmDialog
