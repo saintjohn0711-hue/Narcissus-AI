@@ -14,6 +14,7 @@ import {
   displayName,
   genderLabel,
   mainPhoto,
+  normalizeDoneActs,
   normalizeKinks,
   normalizePairedWith,
   pairedMusesFor,
@@ -245,7 +246,7 @@ export function PartnerCard({
       !samePartnerId(other.id, p.id) && !pairedIds.has(Number(other.id)),
   );
   const memoryCount = normalizeMemories(p.memories).length;
-  const doneActs = p.doneActs || [];
+  const doneActs = normalizeDoneActs(p.doneActs);
   const actCount = doneActs.length;
 
   const metaBits = [
@@ -521,7 +522,7 @@ export function PartnerCard({
                   type="search"
                   value={actQuery}
                   onChange={(e) => setActQuery(e.target.value)}
-                  placeholder="Search acts — oral, anal, toys…"
+                  placeholder="Search acts — blowjob, given, anal…"
                   className="prompt-field w-full rounded-sm border border-[var(--line)] bg-[#12161f] px-2.5 py-1.5 text-[13px]"
                 />
               </label>

@@ -28,7 +28,7 @@ export default function AccountPage() {
           className="echo-hero-title"
           kicker="Adults only · Account & settings"
           title="Echo"
-          lede="Your profile across Narcissus — identity, cloud save, Circle share codes, and linked viewers. Muse voice and chat options stay on each Muse / chat panel."
+          lede="Your profile across Narcissus — identity, Muse overscore and act stats, cloud save, Circle share codes, and linked viewers. Muse voice and chat options stay on each Muse / chat panel."
         />
 
         {isPending ? (

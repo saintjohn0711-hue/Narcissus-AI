@@ -4,6 +4,7 @@ import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
 import {
   PG_INT4_MAX,
+  normalizeDoneActs,
   normalizePairedWith,
   type PartnerRecord,
 } from "@/lib/artOfX";
@@ -66,7 +67,7 @@ function rowToPartner(
     dynamics: row.dynamics,
     dynTags: row.dynTags || [],
     kinks: (row.kinks || []) as PartnerRecord["kinks"],
-    doneActs: row.doneActs || [],
+    doneActs: normalizeDoneActs(row.doneActs),
     photos: row.photos || [],
     mainPhotoIndex: row.mainPhotoIndex ?? 0,
     favorite: row.favorite,
@@ -240,7 +241,7 @@ export async function PUT(req: NextRequest) {
         dynamics: p.dynamics || "",
         dynTags: p.dynTags || [],
         kinks: p.kinks || [],
-        doneActs: p.doneActs || [],
+        doneActs: normalizeDoneActs(p.doneActs),
         photos: p.photos || [],
         mainPhotoIndex: p.mainPhotoIndex ?? 0,
         favorite: Boolean(p.favorite),

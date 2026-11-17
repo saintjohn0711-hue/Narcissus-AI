@@ -297,30 +297,43 @@ export const ART_OF_X_NAV = [
   },
 ] as const;
 
-/** Grouped catalog for acts logged (editor multi-select). */
+/**
+ * Grouped catalog for acts logged (editor + Muse ledger + Echo stats).
+ * Directional acts use a clear “given” / “received” suffix so scoreboard
+ * filters can split who did what.
+ */
 export const ACT_GROUPS: Array<{ cat: string; tags: string[] }> = [
   {
-    cat: "Kiss / touch",
-    tags: ["Kissed", "Made out", "Handjob", "Received handjob", "Massage / body worship"],
+    cat: "Kiss / hands",
+    tags: [
+      "Kissed",
+      "Made out",
+      "Handjob given",
+      "Handjob received",
+      "Massage / body worship",
+    ],
   },
   {
     cat: "Oral",
     tags: [
       "Blowjob given",
       "Blowjob received",
-      "Facial",
-      "Cum in mouth",
-      "Rimming",
+      "Cunnilingus given",
+      "Cunnilingus received",
       "69",
       "Face-fucking",
+      "Facial",
+      "Cum in mouth",
+      "Rimming given",
+      "Rimming received",
     ],
   },
   {
     cat: "Penetration",
     tags: [
       "Vaginal sex",
-      "Anal sex (gave)",
-      "Anal sex (received)",
+      "Anal sex given",
+      "Anal sex received",
       "Pegging / strap-on",
       "Creampie",
       "Creampie cleanup",
@@ -360,6 +373,35 @@ export const ACT_GROUPS: Array<{ cat: string; tags: string[] }> = [
 ];
 
 export const DONE_ACTS = ACT_GROUPS.flatMap((g) => g.tags);
+
+/** Map legacy act labels → refined catalog (stats stay accurate). */
+export const ACT_ALIASES: Record<string, string> = {
+  Handjob: "Handjob given",
+  "Received handjob": "Handjob received",
+  "Anal sex (gave)": "Anal sex given",
+  "Anal sex (received)": "Anal sex received",
+  Rimming: "Rimming given",
+};
+
+export function canonicalizeAct(tag: string): string {
+  const t = String(tag || "").trim();
+  if (!t) return "";
+  return ACT_ALIASES[t] || t;
+}
+
+/** Dedupe + alias-migrate logged acts onto the current catalog labels. */
+export function normalizeDoneActs(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const next = canonicalizeAct(String(item || ""));
+    if (!next || seen.has(next)) continue;
+    seen.add(next);
+    out.push(next);
+  }
+  return out;
+}
 
 export const DYN_TAGS = [
   "Long-term",
@@ -1552,7 +1594,7 @@ export function arkDemoRoster(): PartnerRecord[] {
       dynTags: ["Long-term", "Controlling", "Owns me", "Dominant"],
       dynamics: "Calls the shots; directs partners; cage play",
       doneActs: [
-        "Anal sex (received)",
+        "Anal sex received",
         "Chastity / cage",
         "Domination",
         "Piss play",
@@ -1579,7 +1621,7 @@ export function arkDemoRoster(): PartnerRecord[] {
       doneActs: [
         "Blowjob given",
         "Face-fucking",
-        "Anal sex (received)",
+        "Anal sex received",
         "Dirty talk",
         "Facial",
       ],
@@ -1596,7 +1638,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     dynamics: s.dynamics,
     dynTags: s.dynTags,
     kinks: normalizeKinks(s.kinks),
-    doneActs: [...s.doneActs],
+    doneActs: normalizeDoneActs(s.doneActs),
     photos: [],
     mainPhotoIndex: 0,
     favorite: false,
@@ -1638,7 +1680,7 @@ export function loadPartners(): PartnerRecord[] {
             if (/cross\s*dresser/i.test(raw)) return "crossdresser";
             return "woman";
           })(),
-          doneActs: Array.isArray(p.doneActs) ? p.doneActs : [],
+          doneActs: normalizeDoneActs(p.doneActs),
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
           pairedWith: normalizePairedWith(
             (p as PartnerRecord).pairedWith,
