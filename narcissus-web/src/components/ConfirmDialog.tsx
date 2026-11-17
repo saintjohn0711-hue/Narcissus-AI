@@ -70,7 +70,7 @@ export function ConfirmDialog({
       onClick={onCancel}
     >
       <div
-        className="confirm-dialog-panel w-full max-w-md border border-[var(--accent)]/40 bg-[var(--bg-elevated)] p-5 shadow-[0_0_40px_rgba(0,163,255,0.08)] sm:p-6"
+        className="confirm-dialog-panel w-full max-w-md border border-[var(--accent)]/45 bg-[#0c1018] p-5 shadow-[0_12px_48px_rgba(0,0,0,0.55),0_0_40px_rgba(0,163,255,0.08)] sm:p-6"
         onClick={(e) => e.stopPropagation()}
         data-testid={`${testId}-panel`}
       >
