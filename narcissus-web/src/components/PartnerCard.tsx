@@ -30,6 +30,8 @@ type PartnerCardProps = {
   pairingOpen?: boolean;
   onTogglePairing?: () => void;
   onPairWith?: (otherId: number) => void;
+  /** Remove a “been together” link from this Muse */
+  onUnpair?: (otherId: number) => void;
   onEdit: () => void;
   onRemove: () => void;
   /** Persist featured/main photo when the viewer picks one */
@@ -210,6 +212,7 @@ export function PartnerCard({
   pairingOpen = false,
   onTogglePairing,
   onPairWith,
+  onUnpair,
   onEdit,
   onRemove,
   onSelectPhoto,
@@ -581,13 +584,27 @@ export function PartnerCard({
                 {hasPaired && (
                   <ul className="flex flex-wrap gap-1.5">
                     {paired.map((other) => (
-                      <li key={other.id}>
+                      <li
+                        key={other.id}
+                        className="inline-flex items-center gap-1 border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] text-[var(--accent-strong)]"
+                      >
                         <Link
                           href={`/art-of-x/chat?muse=${p.id}&with=${other.id}`}
-                          className="inline-flex items-center gap-1 border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] text-[var(--accent-strong)] transition hover:border-[var(--accent)]"
+                          className="transition hover:underline"
                         >
                           {displayName(other)}
                         </Link>
+                        {onUnpair && (
+                          <button
+                            type="button"
+                            onClick={() => onUnpair(Number(other.id))}
+                            className="ml-0.5 text-[var(--danger)] underline-offset-2 hover:underline"
+                            aria-label={`Unpair ${displayName(other)}`}
+                            data-testid="muse-unpair"
+                          >
+                            ×
+                          </button>
+                        )}
                       </li>
                     ))}
                   </ul>
