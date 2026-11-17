@@ -54,6 +54,30 @@ export type DirectionPairStat = {
   received: ActStatRow | null;
 };
 
+export type CategoryStat = {
+  cat: string;
+  actLogs: number;
+  distinctActs: number;
+  weightSum: number;
+};
+
+export type MuseLeaderRow = {
+  id: number;
+  name: string;
+  type: PersonType;
+  gender: PersonGender;
+  actCount: number;
+  contribution: number;
+};
+
+export type TierProgress = {
+  current: { id: string; label: string; blurb: string };
+  next: { id: string; label: string; threshold: number } | null;
+  /** 0–1 progress within current → next band (1 if Legend). */
+  ratio: number;
+  pointsToNext: number | null;
+};
+
 export type MuseActScoreboard = {
   filters: MuseActFilters;
   museTotal: number;
@@ -63,6 +87,7 @@ export type MuseActScoreboard = {
   /** Weighted overscore from filtered logs. */
   overscore: number;
   tier: { id: string; label: string; blurb: string };
+  tierProgress: TierProgress;
   /** Flat rows sorted by museCount desc, then catalog order. */
   byAct: ActStatRow[];
   /** Given/received pairs (and orphans) for the directional summary. */
@@ -76,6 +101,13 @@ export type MuseActScoreboard = {
     muses: number;
     actLogs: number;
   }>;
+  /** Category intensity for the Echo heat strip. */
+  byCategory: CategoryStat[];
+  givenTotal: number;
+  receivedTotal: number;
+  sharedTotal: number;
+  /** Muses ranked by weighted contribution in this filter. */
+  topMuses: MuseLeaderRow[];
 };
 
 const CAT_WEIGHT: Record<string, number> = {
@@ -162,43 +194,83 @@ function catalogIndex(tag: string): number {
   return i === -1 ? 9999 : i;
 }
 
+const TIER_THRESHOLDS: Array<{
+  id: string;
+  label: string;
+  blurb: string;
+  min: number;
+}> = [
+  {
+    id: "legend",
+    label: "Legend",
+    blurb: "A deep, varied ledger across your Muses.",
+    min: 120,
+  },
+  {
+    id: "seasoned",
+    label: "Seasoned",
+    blurb: "Broad experience with real weight behind it.",
+    min: 70,
+  },
+  {
+    id: "active",
+    label: "Active",
+    blurb: "Solid trail of acts — keep logging to climb.",
+    min: 35,
+  },
+  {
+    id: "curious",
+    label: "Curious",
+    blurb: "Started the ledger — a few acts, room to grow.",
+    min: 12,
+  },
+  {
+    id: "fresh",
+    label: "Fresh",
+    blurb: "Log acts on Muses to build your Echo overscore.",
+    min: 0,
+  },
+];
+
 export function overscoreTier(score: number): {
   id: string;
   label: string;
   blurb: string;
 } {
-  if (score >= 120) {
-    return {
-      id: "legend",
-      label: "Legend",
-      blurb: "A deep, varied ledger across your Muses.",
-    };
-  }
-  if (score >= 70) {
-    return {
-      id: "seasoned",
-      label: "Seasoned",
-      blurb: "Broad experience with real weight behind it.",
-    };
-  }
-  if (score >= 35) {
-    return {
-      id: "active",
-      label: "Active",
-      blurb: "Solid trail of acts — keep logging to climb.",
-    };
-  }
-  if (score >= 12) {
-    return {
-      id: "curious",
-      label: "Curious",
-      blurb: "Started the ledger — a few acts, room to grow.",
-    };
+  for (const t of TIER_THRESHOLDS) {
+    if (score >= t.min) {
+      return { id: t.id, label: t.label, blurb: t.blurb };
+    }
   }
   return {
     id: "fresh",
     label: "Fresh",
     blurb: "Log acts on Muses to build your Echo overscore.",
+  };
+}
+
+/** Progress toward the next overscore tier (Legend is maxed). */
+export function tierProgressFor(score: number): TierProgress {
+  const current = overscoreTier(score);
+  const ascending = [...TIER_THRESHOLDS].reverse();
+  const idx = ascending.findIndex((t) => t.id === current.id);
+  const next = idx >= 0 && idx < ascending.length - 1 ? ascending[idx + 1]! : null;
+  if (!next) {
+    return {
+      current,
+      next: null,
+      ratio: 1,
+      pointsToNext: null,
+    };
+  }
+  const floor = ascending[idx]!.min;
+  const span = Math.max(1, next.min - floor);
+  const ratio = Math.min(1, Math.max(0, (score - floor) / span));
+  return {
+    current,
+    next: { id: next.id, label: next.label, threshold: next.min },
+    ratio,
+    pointsToNext: Math.max(0, next.min - score),
   };
 }
 
@@ -330,6 +402,63 @@ export function buildMuseActScoreboard(
     };
   });
 
+  const catOrder = ACT_GROUPS.map((g) => g.cat);
+  const catMap = new Map<string, CategoryStat>();
+  for (const cat of catOrder) {
+    catMap.set(cat, { cat, actLogs: 0, distinctActs: 0, weightSum: 0 });
+  }
+  let givenTotal = 0;
+  let receivedTotal = 0;
+  let sharedTotal = 0;
+  for (const row of byAct) {
+    const meta = actMetaFor(row.tag);
+    const bucket =
+      catMap.get(row.cat) ||
+      ({
+        cat: row.cat,
+        actLogs: 0,
+        distinctActs: 0,
+        weightSum: 0,
+      } satisfies CategoryStat);
+    bucket.actLogs += row.museCount;
+    bucket.distinctActs += 1;
+    bucket.weightSum += meta.weight * row.museCount;
+    catMap.set(row.cat, bucket);
+    if (row.direction === "given") givenTotal += row.museCount;
+    else if (row.direction === "received") receivedTotal += row.museCount;
+    else sharedTotal += row.museCount;
+  }
+  const byCategory = [
+    ...catOrder.map((c) => catMap.get(c)!).filter(Boolean),
+    ...[...catMap.values()].filter((c) => !catOrder.includes(c.cat)),
+  ];
+
+  const topMuses: MuseLeaderRow[] = filtered
+    .map((p) => {
+      const acts = normalizeDoneActs(p.doneActs);
+      const mult = TYPE_MULT[p.type] ?? 1;
+      let contribution = 0;
+      for (const tag of acts) {
+        contribution += actMetaFor(tag).weight * mult;
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        gender: p.gender,
+        actCount: acts.length,
+        contribution: Math.round(contribution),
+      };
+    })
+    .filter((m) => m.actCount > 0)
+    .sort((a, b) => {
+      if (b.contribution !== a.contribution) {
+        return b.contribution - a.contribution;
+      }
+      return b.actCount - a.actCount;
+    })
+    .slice(0, 8);
+
   return {
     filters,
     museTotal: filtered.length,
@@ -340,11 +469,17 @@ export function buildMuseActScoreboard(
     distinctActs,
     overscore,
     tier: overscoreTier(overscore),
+    tierProgress: tierProgressFor(overscore),
     byAct,
     pairs,
     shared,
     byType,
     byOutlet,
+    byCategory,
+    givenTotal,
+    receivedTotal,
+    sharedTotal,
+    topMuses,
   };
 }
 
