@@ -21,6 +21,7 @@ import {
   samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import { CatalogMultiSelect } from "@/components/CatalogMultiSelect";
 import { normalizeMemories } from "@/lib/museChatMemory";
 
 type PartnerCardProps = {
@@ -229,13 +230,11 @@ export function PartnerCard({
   );
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [panel, setPanel] = useState<Panel>("none");
-  const [actQuery, setActQuery] = useState("");
   const actsPanelId = useId();
   const detailsPanelId = useId();
 
   useEffect(() => {
     setPanel("none");
-    setActQuery("");
   }, [p.id]);
 
   const thumb = mainPhoto(p);
@@ -281,18 +280,6 @@ export function PartnerCard({
     photos.length > 1 ||
     Boolean(onTogglePairing);
   const initial = (p.name || "?").trim().slice(0, 1).toUpperCase();
-
-  const filteredActGroups = useMemo(() => {
-    const q = actQuery.trim().toLowerCase();
-    if (!q) return ACT_GROUPS;
-    return ACT_GROUPS.map((g) => ({
-      cat: g.cat,
-      tags: g.tags.filter(
-        (t) =>
-          t.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q),
-      ),
-    })).filter((g) => g.tags.length > 0);
-  }, [actQuery]);
 
   const openLightbox = useCallback(() => {
     if (!photos.length) return;
@@ -495,79 +482,31 @@ export function PartnerCard({
             )}
           </div>
 
-          {doneActs.length > 0 && (
-            <ul className="muse-act-done mb-3 flex flex-col gap-1 border border-[var(--line)]/80 bg-[#0a0e18]/55 px-2.5 py-2">
+          {onToggleAct ? (
+            <CatalogMultiSelect
+              groups={ACT_GROUPS}
+              selected={doneActs}
+              onToggle={onToggleAct}
+              compact
+              label="Add act"
+              searchPlaceholder="Type an act — blowjob, given, anal…"
+              emptySelectedHint="Nothing logged yet — type below to add."
+              allowCustom
+              customPlaceholder="Add custom act…"
+              removeLabel="Undo"
+            />
+          ) : doneActs.length > 0 ? (
+            <ul className="muse-act-done flex flex-col gap-1 border border-[var(--line)]/80 bg-[#0a0e18]/55 px-2.5 py-2">
               {doneActs.map((act) => (
                 <li
                   key={act}
-                  className="flex items-center justify-between gap-2 border-b border-[var(--line)]/50 py-1 last:border-0"
+                  className="border-b border-[var(--line)]/50 py-1 text-[13px] text-[#f0e6dc] last:border-0"
                 >
-                  <span className="text-[13px] text-[#f0e6dc]">{act}</span>
-                  {onToggleAct && (
-                    <button
-                      type="button"
-                      onClick={() => onToggleAct(act)}
-                      className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--danger)] underline-offset-2 hover:underline"
-                    >
-                      Undo
-                    </button>
-                  )}
+                  {act}
                 </li>
               ))}
             </ul>
-          )}
-
-          {onToggleAct && (
-            <>
-              <label className="mb-2 block">
-                <span className="sr-only">Search acts</span>
-                <input
-                  type="search"
-                  value={actQuery}
-                  onChange={(e) => setActQuery(e.target.value)}
-                  placeholder="Search acts — blowjob, given, anal…"
-                  className="prompt-field w-full rounded-sm border border-[var(--line)] bg-[#12161f] px-2.5 py-1.5 text-[13px]"
-                />
-              </label>
-              <div className="muse-act-catalog max-h-56 space-y-2.5 overflow-y-auto overscroll-contain pr-0.5">
-                {filteredActGroups.map((g) => (
-                  <div key={g.cat}>
-                    <p className="mb-1 text-[9px] uppercase tracking-[0.18em] text-[var(--muted)]">
-                      {g.cat}
-                    </p>
-                    <div className="flex flex-col">
-                      {g.tags.map((tag) => {
-                        const on = doneActs.includes(tag);
-                        return (
-                          <label
-                            key={tag}
-                            className={`muse-act-check flex cursor-pointer items-center gap-2 border-b border-[var(--line)]/40 py-1.5 last:border-0 ${
-                              on ? "text-[var(--glow)]" : "text-[#c4b7a8]"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={on}
-                              onChange={() => onToggleAct(tag)}
-                              className="accent-[var(--glow)]"
-                            />
-                            <span className="text-[13px] leading-snug">
-                              {tag}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                {filteredActGroups.length === 0 && (
-                  <p className="text-[12px] text-[var(--muted)]">
-                    No acts match that search.
-                  </p>
-                )}
-              </div>
-            </>
-          )}
+          ) : null}
         </div>
       )}
 

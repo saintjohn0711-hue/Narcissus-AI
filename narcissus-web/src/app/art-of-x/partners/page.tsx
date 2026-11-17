@@ -1266,14 +1266,16 @@ function PartnersPageInner() {
               Acts logged
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Search the catalog or add custom — selected list stays easy to
-              scan; Remove deletes from this Muse.
+              Type in the select to find and add — same pattern as chat scene
+              picks. Selected list stays easy to scan; Remove deletes from this
+              Muse.
             </p>
             <CatalogMultiSelect
               groups={ACT_GROUPS}
               selected={normalizeDoneActs(editing.doneActs)}
               onToggle={toggleAct}
-              searchPlaceholder="Search acts — blowjob, given, anal…"
+              label="Add act"
+              searchPlaceholder="Type an act — blowjob, given, anal…"
               allowCustom
               customPlaceholder="Add custom act…"
             />
@@ -1284,14 +1286,15 @@ function PartnersPageInner() {
               Kinks
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Grouped desires — oral, penetration, toys, power, and more. Add
-              custom or Remove from the selected list.
+              Type to find desires — oral, toys, power, and more. Add custom or
+              Remove from the selected list.
             </p>
             <CatalogMultiSelect
               groups={KINK_GROUPS}
               selected={normalizeKinks(editing.kinks).map((k) => k.tag)}
               onToggle={toggleKink}
-              searchPlaceholder="Search kinks — bondage, free-use…"
+              label="Add kink"
+              searchPlaceholder="Type a kink — bondage, free-use…"
               allowCustom
               customPlaceholder="Add custom kink…"
             />
