@@ -10,6 +10,7 @@ import {
 } from "@/lib/museVoice";
 import {
   isOpenAiTtsConfigured,
+  OPENAI_TTS_DEFAULT_MODEL,
   OPENAI_TTS_MAX_CHARS,
   planOpenAiTts,
   resolveOpenAiTtsKey,
@@ -52,13 +53,16 @@ export async function GET() {
     provider: available ? "openai" : null,
     fallback: "web-speech",
     secret: "OPENAI_API_KEY",
-    model: process.env.OPENAI_TTS_MODEL?.trim() || "gpt-4o-mini-tts",
+    model: process.env.OPENAI_TTS_MODEL?.trim() || OPENAI_TTS_DEFAULT_MODEL,
+    hint: available
+      ? null
+      : "Add OPENAI_API_KEY on the Vercel project (Production + Preview), then redeploy. Do not invent a key.",
   });
 }
 
 /**
- * Natural Muse chat TTS — OpenAI `gpt-4o-mini-tts` → audio/mpeg.
- * Client falls back to Web Speech when this returns 503 / network error.
+ * Natural Muse chat TTS — OpenAI `gpt-4o-mini-tts` (+ marin/cedar-class voices)
+ * → audio/mpeg. Client falls back to Web Speech when this returns 503 / errors.
  */
 export async function POST(req: NextRequest) {
   const key = resolveOpenAiTtsKey();
