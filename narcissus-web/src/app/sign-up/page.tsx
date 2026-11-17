@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { authClient } from "@/lib/auth-client";
 import {
+  fetchPartners,
   promptImportLocalIfNeeded,
   resetStoreMode,
 } from "@/lib/artOfXStore";
@@ -49,6 +50,15 @@ export default function SignUpPage() {
         importedPartners = imported?.partners ?? 0;
       } catch {
         // Non-fatal — account still created; local data stays in browser
+      }
+      // Empty new accounts get Woman · Rocky · Jaxx so Muses isn't blank.
+      if (importedPartners === 0) {
+        try {
+          const seeded = await fetchPartners();
+          if (seeded.length > 0) importedPartners = seeded.length;
+        } catch {
+          // Non-fatal — partners page will seed on load
+        }
       }
       const dest =
         importedPartners > 0
