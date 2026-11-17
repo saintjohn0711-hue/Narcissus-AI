@@ -268,7 +268,7 @@ export function heuristicExtractMemories(
   }
 
   const place = userText.match(
-    /\b(?:at|in) (?:the |our )?(hotel|motel|bedroom|car|shower|cabin|office|rooftop|balcony|pool|beach|tent|yacht)\b/i,
+    /\b(?:at|in) (?:the |our )?(hotel(?: suite)?|motel|penthouse|rooftop|club(?: bathroom| vip)?|dance floor|limo|private jet|jet|yacht|beach cabana|cabana|spa|steam room|sauna|pool|hot tub|dungeon|elevator|office|fitting room|car|shower|train(?: sleeper)?|balcony|bedroom|cabin|beach|tent)\b/i,
   );
   if (place?.[1]) push(`Place that mattered: ${place[1].toLowerCase()}`, "place", "auto");
 

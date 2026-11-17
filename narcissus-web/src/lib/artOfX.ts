@@ -435,51 +435,16 @@ export const STATUSES: KinkStatus[] = [
   "Hard limit",
 ];
 
+/**
+ * Shared scene settings for Stories, Muse chat, and Companion scenes.
+ * ~20 sexy / fun-surprise picks — keep names vivid, never bland.
+ * Ids stay stable so saved Stories locationId values keep resolving.
+ */
 export const DEFAULT_LOCS: SceneLocation[] = [
   {
-    id: "bedroom",
-    name: "Bedroom / Home",
-    desc: "Soft lamp light, messy sheets. Private enough to get loud.",
-  },
-  {
     id: "hotel",
-    name: "Hotel / Motel",
-    desc: "One big bed, blackout curtains. Anonymous.",
-  },
-  {
-    id: "car",
-    name: "Car / Vehicle",
-    desc: "Fogged windows, leather and skin. Risk of being seen.",
-  },
-  {
-    id: "shower",
-    name: "Shower / Bathroom",
-    desc: "Steam, tile, water over bodies.",
-  },
-  {
-    id: "public",
-    name: "Public risk",
-    desc: "Somewhere you should not be doing this.",
-  },
-  {
-    id: "cabin",
-    name: "Private cabin",
-    desc: "Wood walls, remote. No neighbors.",
-  },
-  {
-    id: "apartment",
-    name: "Empty apartment",
-    desc: "Bare floors, echo. No one will know.",
-  },
-  {
-    id: "party",
-    name: "Party / House",
-    desc: "Music through walls. They might hear you.",
-  },
-  {
-    id: "kitchen",
-    name: "Kitchen counter",
-    desc: "Cold stone, half-cleared dishes. Home but not the bed.",
+    name: "Hotel suite",
+    desc: "King bed, blackout curtains, minibar wrecked. Room service can wait.",
   },
   {
     id: "penthouse",
@@ -492,74 +457,14 @@ export const DEFAULT_LOCS: SceneLocation[] = [
     desc: "Night air, skyline. Someone could look up.",
   },
   {
-    id: "balcony",
-    name: "City balcony",
-    desc: "Rail against your back. Traffic below, curtains half-drawn.",
-  },
-  {
-    id: "pool",
-    name: "Pool / Hot tub",
-    desc: "Warm water, wet skin, chlorine and steam.",
-  },
-  {
-    id: "sauna",
-    name: "Sauna / Spa",
-    desc: "Heat, cedar, towels that keep slipping.",
-  },
-  {
-    id: "beach",
-    name: "Beach at night",
-    desc: "Salt air, dark water, sand that sticks to skin.",
-  },
-  {
-    id: "forest",
-    name: "Forest clearing",
-    desc: "Trees close in. Quiet except for breath.",
-  },
-  {
-    id: "camping",
-    name: "Tent / Camping",
-    desc: "Thin walls, sleeping bags unzipped. Outside feels near.",
-  },
-  {
-    id: "yacht",
-    name: "Yacht cabin",
-    desc: "Gentle rock of the hull. Ocean nowhere and everywhere.",
-  },
-  {
-    id: "jet",
-    name: "Private jet",
-    desc: "Narrow aisle, leather seats, clouds outside the window.",
-  },
-  {
-    id: "limo",
-    name: "Limo backseat",
-    desc: "Partition up. Soft leather, city lights sliding past.",
-  },
-  {
-    id: "train",
-    name: "Train sleeper",
-    desc: "Rhythmic sway, thin door. Corridor footsteps possible.",
-  },
-  {
-    id: "elevator",
-    name: "Elevator",
-    desc: "Mirrored walls, floors ticking by. Could stop any second.",
-  },
-  {
-    id: "fitting",
-    name: "Fitting room",
-    desc: "Thin curtain, harsh light. Shoppers just outside.",
-  },
-  {
-    id: "office",
-    name: "Office after hours",
-    desc: "Desk lamp only. Cubicles empty, building locked.",
-  },
-  {
     id: "club-vip",
     name: "Club VIP room",
     desc: "Bass through the wall. Bottle service, velvet, locked door.",
+  },
+  {
+    id: "club-bath",
+    name: "Club bathroom",
+    desc: "Stall lock clicked. Music thumps; someone waits for the sink.",
   },
   {
     id: "dancefloor",
@@ -567,16 +472,87 @@ export const DEFAULT_LOCS: SceneLocation[] = [
     desc: "Bodies packed close. Hands can wander without a name.",
   },
   {
-    id: "library",
-    name: "Quiet library",
-    desc: "Stacks and silence. Whisper only — or try not to.",
+    id: "limo",
+    name: "Limo backseat",
+    desc: "Partition up. Soft leather, city lights sliding past.",
   },
   {
-    id: "greenhouse",
-    name: "Greenhouse",
-    desc: "Humid glass, leaves brushing skin. Soft dirt underfoot.",
+    id: "jet",
+    name: "Private jet",
+    desc: "Narrow aisle, leather seats, clouds outside the window.",
+  },
+  {
+    id: "yacht",
+    name: "Yacht cabin",
+    desc: "Gentle rock of the hull. Ocean nowhere and everywhere.",
+  },
+  {
+    id: "beach-cabana",
+    name: "Beach cabana",
+    desc: "Sheer curtains, salt air, daybed. Waves cover the sounds.",
+  },
+  {
+    id: "sauna",
+    name: "Spa steam room",
+    desc: "Heat, cedar, towels that keep slipping. Fog hides everything.",
+  },
+  {
+    id: "pool",
+    name: "Pool / Hot tub",
+    desc: "Warm water, wet skin, chlorine and steam.",
+  },
+  {
+    id: "dungeon",
+    name: "Private dungeon",
+    desc: "Leather, hardware, low light. Rules are the only furniture that matters.",
+  },
+  {
+    id: "elevator",
+    name: "Elevator",
+    desc: "Mirrored walls, floors ticking by. Could stop any second.",
+  },
+  {
+    id: "office",
+    name: "Office after hours",
+    desc: "Desk lamp only. Cubicles empty, building locked.",
+  },
+  {
+    id: "fitting",
+    name: "Fitting room",
+    desc: "Thin curtain, harsh light. Shoppers just outside.",
+  },
+  {
+    id: "car",
+    name: "Parked car",
+    desc: "Fogged windows, leather and skin. Risk of being seen.",
+  },
+  {
+    id: "shower",
+    name: "Steamy shower",
+    desc: "Tile, water over bodies, fogged glass. Nowhere to hide.",
+  },
+  {
+    id: "train",
+    name: "Train sleeper",
+    desc: "Rhythmic sway, thin door. Corridor footsteps possible.",
+  },
+  {
+    id: "balcony",
+    name: "City balcony",
+    desc: "Rail against your back. Traffic below, curtains half-drawn.",
   },
 ];
+
+/** Resolve a scene location by id; falls back to the first curated pick. */
+export function resolveSceneLocation(
+  id?: string | null,
+): SceneLocation {
+  if (id) {
+    const hit = DEFAULT_LOCS.find((l) => l.id === id);
+    if (hit) return hit;
+  }
+  return DEFAULT_LOCS[0]!;
+}
 
 export const SURPRISES = [
   "Someone unexpected texts that they are five minutes away.",

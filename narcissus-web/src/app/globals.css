@@ -2045,6 +2045,10 @@ body {
   color: var(--muted);
 }
 
+.muse-chat-tool--scene {
+  max-width: min(11.5rem, 42vw);
+}
+
 .muse-chat-pov-select {
   border: 0;
   background: #12182a;
@@ -2052,6 +2056,11 @@ body {
   font-size: 11px;
   padding: 0.1rem 0.2rem;
   cursor: pointer;
+}
+
+.muse-chat-scene-select {
+  max-width: 100%;
+  text-overflow: ellipsis;
 }
 
 .muse-chat-tool--danger {

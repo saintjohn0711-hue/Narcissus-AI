@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { PartnerRecord } from "@/lib/artOfX";
+import {
+  resolveSceneLocation,
+  type PartnerRecord,
+  type SceneLocation,
+} from "@/lib/artOfX";
 import {
   buildPartnerChatSystemPrompt,
   extractXaiText,
@@ -25,8 +29,25 @@ type ChatBody = {
   /** Latest user turn; appended if not already last in messages */
   message?: string;
   pov?: ChatPov;
+  /** Shared Stories/chat scene setting */
+  location?: SceneLocation | null;
   stream?: boolean;
 };
+
+function parseLocation(raw: unknown): SceneLocation {
+  if (!raw || typeof raw !== "object") return resolveSceneLocation();
+  const loc = raw as Partial<SceneLocation>;
+  if (typeof loc.name === "string" && loc.name.trim()) {
+    return {
+      id: String(loc.id || "custom").slice(0, 40),
+      name: String(loc.name).slice(0, 80),
+      desc: String(loc.desc || "").slice(0, 240),
+    };
+  }
+  return resolveSceneLocation(
+    typeof loc.id === "string" ? loc.id : undefined,
+  );
+}
 
 function normalizeCastBody(
   partner: PartnerRecord,
@@ -73,6 +94,7 @@ export async function POST(req: NextRequest) {
   }
 
   const pov = parsePov(body.pov);
+  const location = parseLocation(body.location);
   const history = Array.isArray(body.messages) ? body.messages : [];
   const latest =
     typeof body.message === "string" ? body.message.trim() : "";
@@ -94,7 +116,7 @@ export async function POST(req: NextRequest) {
   const messages: XaiChatMessage[] = [
     {
       role: "system",
-      content: buildPartnerChatSystemPrompt(partner, pov, castList),
+      content: buildPartnerChatSystemPrompt(partner, pov, castList, location),
     },
     ...partnerThreadToXaiMessages(thread),
   ];
