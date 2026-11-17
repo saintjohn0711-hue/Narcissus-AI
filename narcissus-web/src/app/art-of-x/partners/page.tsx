@@ -53,6 +53,7 @@ import {
   persistPartners,
   type StoreMode,
 } from "@/lib/artOfXStore";
+import { markDemoMusesSeeded, narcissusDemoRoster } from "@/lib/demoMuses";
 import {
   applyDreamMuseFill,
   parseDreamMuseLocal,
@@ -606,6 +607,23 @@ function PartnersPageInner() {
     saveMuseOrder(ids);
   }
 
+  function loadStarterMuses() {
+    if (
+      partners.length &&
+      !confirm(
+        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, and Jaxx?`,
+      )
+    ) {
+      return;
+    }
+    const demo = narcissusDemoRoster();
+    markDemoMusesSeeded();
+    setPartners(demo);
+    const ids = demo.map((p) => Number(p.id));
+    setManualOrder(ids);
+    saveMuseOrder(ids);
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
       <AppNav />
@@ -662,6 +680,13 @@ function PartnersPageInner() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={loadStarterMuses}
+            className="rounded-sm border border-[var(--line)] px-3 py-2 text-xs text-[#c4b7a8]"
+          >
+            Load starter Muses
+          </button>
           <button
             type="button"
             onClick={loadDemo}
@@ -1280,7 +1305,9 @@ function PartnersPageInner() {
       <div className="space-y-5">
         {visible.length === 0 && (
           <p className="text-sm text-[#c4b7a8]">
-            No {PERSON_LABEL.pluralLower} yet. Add one or load Ark demo people.
+            No {PERSON_LABEL.pluralLower} yet
+            {outlet ? ` in ${outletTitle}` : ""}. Add one or load starter
+            Muses (Woman · Rocky · Jaxx).
           </p>
         )}
         {visible.map((p, cardIndex) => (

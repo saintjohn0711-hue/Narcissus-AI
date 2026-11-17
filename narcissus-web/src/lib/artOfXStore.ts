@@ -20,6 +20,10 @@ import {
   type PartnerRecord,
   type SavedScene,
 } from "@/lib/artOfX";
+import {
+  demoMusesIfNeeded,
+  markDemoMusesSeeded,
+} from "@/lib/demoMuses";
 
 /** Cleared by consumePartnersPersistNotice() after a successful persist. */
 let lastPartnersPersistNotice: string | null = null;
@@ -94,16 +98,44 @@ export function clearLocalArtOfX(): void {
   }
 }
 
+/**
+ * Load Muses; when the roster is empty (new account / first visit),
+ * seed Woman · Rocky · Jaxx once and persist.
+ */
 export async function fetchPartners(): Promise<PartnerRecord[]> {
-  if ((await getStoreMode()) === "local") return loadPartnersLocal();
-  const res = await fetch("/api/art-of-x/partners", { cache: "no-store" });
-  if (res.status === 401) {
-    resetStoreMode();
-    return loadPartnersLocal();
+  const mode = await getStoreMode();
+  let list: PartnerRecord[];
+  if (mode === "local") {
+    list = loadPartnersLocal();
+  } else {
+    const res = await fetch("/api/art-of-x/partners", { cache: "no-store" });
+    if (res.status === 401) {
+      resetStoreMode();
+      list = loadPartnersLocal();
+    } else {
+      if (!res.ok) throw new Error("Failed to load partners");
+      const data = (await res.json()) as { partners: PartnerRecord[] };
+      list = data.partners || [];
+    }
   }
-  if (!res.ok) throw new Error("Failed to load partners");
-  const data = (await res.json()) as { partners: PartnerRecord[] };
-  return data.partners || [];
+  return ensureDemoMuses(list);
+}
+
+/** Seed demo Muses into an empty roster and persist. */
+export async function ensureDemoMuses(
+  list: PartnerRecord[],
+): Promise<PartnerRecord[]> {
+  const demos = demoMusesIfNeeded(list);
+  if (!demos) return list;
+  try {
+    const saved = await persistPartners(demos);
+    markDemoMusesSeeded();
+    return saved;
+  } catch {
+    // Persist failed (offline / session) — still show demos in-memory once.
+    markDemoMusesSeeded();
+    return demos;
+  }
 }
 
 async function preparePartnersForPersist(
