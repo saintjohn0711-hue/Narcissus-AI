@@ -18,6 +18,7 @@ import {
   normalizeKinks,
   normalizePairedWith,
   pairedMusesFor,
+  PERSON_LABEL,
   samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
@@ -395,6 +396,9 @@ export function PartnerCard({
                 type="button"
                 onClick={onRemove}
                 className="text-[var(--danger)] underline-offset-2 hover:underline"
+                aria-label={`Delete ${p.name || PERSON_LABEL.singularLower}`}
+                data-testid="muse-row-delete"
+                title={`Delete ${p.name || PERSON_LABEL.singularLower}`}
               >
                 ×
               </button>

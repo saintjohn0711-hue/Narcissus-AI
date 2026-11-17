@@ -11,6 +11,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { CatalogMultiSelect } from "@/components/CatalogMultiSelect";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { PartnerCard } from "@/components/PartnerCard";
@@ -108,6 +109,8 @@ function PartnersPageInner() {
   const [sortMode, setSortMode] = useState<MuseSortMode>("manual");
   const [manualOrder, setManualOrder] = useState<number[]>([]);
   const [editing, setEditing] = useState<PartnerRecord | null>(null);
+  /** Muse id waiting on delete confirm — null when no dialog. */
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const voicePreview = useMuseVoicePreview();
   /** Photo indexes chosen as sources for “Pull looks” */
   const [looksFromIdx, setLooksFromIdx] = useState<number[]>([]);
@@ -472,6 +475,21 @@ function PartnersPageInner() {
     setLooksNote(null);
   }
 
+  function requestRemove(id: number) {
+    setPendingDeleteId(Number(id));
+  }
+
+  function cancelRemove() {
+    setPendingDeleteId(null);
+  }
+
+  function confirmRemove() {
+    if (pendingDeleteId == null) return;
+    const id = pendingDeleteId;
+    setPendingDeleteId(null);
+    remove(id);
+  }
+
   function remove(id: number) {
     setPartners((prev) => prev.filter((p) => !samePartnerId(p.id, id)));
     setManualOrder((prev) => {
@@ -485,6 +503,18 @@ function PartnersPageInner() {
       setLooksNote(null);
     }
   }
+
+  const pendingDeleteMuse =
+    pendingDeleteId != null
+      ? partners.find((p) => samePartnerId(p.id, pendingDeleteId)) ?? null
+      : null;
+  const pendingDeleteName = pendingDeleteMuse
+    ? displayName(pendingDeleteMuse)
+    : editing &&
+        pendingDeleteId != null &&
+        samePartnerId(editing.id, pendingDeleteId)
+      ? displayName(editing)
+      : null;
 
   function moveMuse(id: number, dir: -1 | 1) {
     setSortMode("manual");
@@ -883,19 +913,31 @@ function PartnersPageInner() {
                 : "New"}{" "}
               {PERSON_LABEL.singularLower}
             </h2>
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(null);
-                setLooksFromIdx([]);
-                setLooksNote(null);
-                setDreamDesc("");
-                setDreamNote(null);
-              }}
-              className="text-xs text-[#c4b7a8]"
-            >
-              Cancel
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              {partners.some((p) => samePartnerId(p.id, editing.id)) && (
+                <button
+                  type="button"
+                  onClick={() => requestRemove(Number(editing.id))}
+                  className="text-xs text-[var(--danger)] underline-offset-2 hover:underline"
+                  data-testid="muse-edit-delete"
+                >
+                  Delete {PERSON_LABEL.singularLower}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setLooksFromIdx([]);
+                  setLooksNote(null);
+                  setDreamDesc("");
+                  setDreamNote(null);
+                }}
+                className="text-xs text-[#c4b7a8]"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
 
           <fieldset className="space-y-3 rounded-sm border border-[var(--accent)]/30 bg-[#14111a]/55 p-4">
@@ -1552,7 +1594,7 @@ function PartnersPageInner() {
             onPairWith={(otherId) => setPairWith(p.id, otherId)}
             onUnpair={(otherId) => setPairWith(p.id, otherId)}
             onEdit={() => openEdit(p)}
-            onRemove={() => remove(p.id)}
+            onRemove={() => requestRemove(p.id)}
             onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}
             onToggleAct={(act) => togglePartnerAct(p.id, act)}
             onMoveUp={
@@ -1568,6 +1610,26 @@ function PartnersPageInner() {
           />
         ))}
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteId != null}
+        title={
+          pendingDeleteName
+            ? `Delete ${pendingDeleteName}?`
+            : `Delete this ${PERSON_LABEL.singularLower}?`
+        }
+        description={
+          pendingDeleteName
+            ? `Are you sure you want to delete ${pendingDeleteName}? This removes the ${PERSON_LABEL.singularLower} from your list. You can’t undo this.`
+            : `Are you sure you want to delete this ${PERSON_LABEL.singularLower}? This removes them from your list. You can’t undo this.`
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Delete"
+        danger
+        onCancel={cancelRemove}
+        onConfirm={confirmRemove}
+        testId="muse-delete-confirm"
+      />
     </PageShell>
   );
 }
