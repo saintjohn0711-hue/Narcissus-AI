@@ -19,6 +19,7 @@ import {
   ACT_GROUPS,
   DYN_TAGS,
   KINK_GROUPS,
+  MAX_MUSE_CAST_MATES,
   MUSE_SORT_OPTIONS,
   PARTNER_PHOTO_LIMITS,
   PERSON_GENDERS,
@@ -341,6 +342,64 @@ function PartnersPageInner() {
   function setPairWith(aId: number, bId: number) {
     setPartners((prev) => toggleMusePairing(prev, aId, bId));
     setPairingForId(null);
+    // Keep open editor draft in sync so Save doesn’t wipe the toggle
+    setEditing((ed) => {
+      if (!ed) return ed;
+      if (!samePartnerId(ed.id, aId) && !samePartnerId(ed.id, bId)) return ed;
+      const otherId = samePartnerId(ed.id, aId) ? bId : aId;
+      const cur = normalizePairedWith(ed.pairedWith, ed.id);
+      const has = cur.some((id) => samePartnerId(id, otherId));
+      if (!has && cur.length >= MAX_MUSE_CAST_MATES) return ed;
+      return {
+        ...ed,
+        pairedWith: has
+          ? cur.filter((id) => !samePartnerId(id, otherId))
+          : normalizePairedWith([...cur, otherId], ed.id),
+      };
+    });
+  }
+
+  /** Add/remove a “been together” link from the open Muse editor draft. */
+  function toggleEditPair(otherId: number) {
+    if (!editing) return;
+    const aId = Number(editing.id);
+    const bId = Number(otherId);
+    if (!Number.isFinite(bId) || samePartnerId(aId, bId)) return;
+    const cur = normalizePairedWith(editing.pairedWith, editing.id);
+    const has = cur.some((id) => samePartnerId(id, bId));
+    if (!has && cur.length >= MAX_MUSE_CAST_MATES) return;
+    const nextPaired = has
+      ? cur.filter((id) => !samePartnerId(id, bId))
+      : normalizePairedWith([...cur, bId], editing.id);
+    setEditing({ ...editing, pairedWith: nextPaired });
+    // Bidirectional sync when both Muses already exist in the roster
+    setPartners((prev) => {
+      const aExists = prev.some((p) => samePartnerId(p.id, aId));
+      const bExists = prev.some((p) => samePartnerId(p.id, bId));
+      if (aExists && bExists) return toggleMusePairing(prev, aId, bId);
+      if (!bExists) return prev;
+      // New Muse draft: only update the other side’s link
+      return prev.map((p) => {
+        if (!samePartnerId(p.id, bId)) return p;
+        const linked = normalizePairedWith(p.pairedWith, p.id);
+        const already = linked.some((id) => samePartnerId(id, aId));
+        if (has && already) {
+          return {
+            ...p,
+            pairedWith: linked.filter((id) => !samePartnerId(id, aId)),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        if (!has && !already) {
+          return {
+            ...p,
+            pairedWith: normalizePairedWith([...linked, aId], p.id),
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return p;
+      });
+    });
   }
 
   const togetherPairs = useMemo(() => {
@@ -367,21 +426,46 @@ function PartnersPageInner() {
       ...editing,
       id: Number(editing.id),
       name: editing.name.trim(),
+      pairedWith: normalizePairedWith(editing.pairedWith, editing.id).slice(
+        0,
+        MAX_MUSE_CAST_MATES,
+      ),
       updatedAt: new Date().toISOString(),
     };
+    const desiredPairs = new Set(next.pairedWith.map((id) => Number(id)));
     setPartners((prev) => {
       const i = prev.findIndex((p) => samePartnerId(p.id, next.id));
+      let list: PartnerRecord[];
       if (i >= 0) {
         const copy = [...prev];
         copy[i] = next;
-        return copy;
+        list = copy;
+      } else {
+        setManualOrder((order) => {
+          const ids = [
+            Number(next.id),
+            ...order.filter((id) => id !== Number(next.id)),
+          ];
+          saveMuseOrder(ids);
+          return ids;
+        });
+        list = [next, ...prev];
       }
-      setManualOrder((order) => {
-        const ids = [Number(next.id), ...order.filter((id) => id !== Number(next.id))];
-        saveMuseOrder(ids);
-        return ids;
+      // Reconcile reciprocal “been together” links from the saved Muse
+      return list.map((p) => {
+        if (samePartnerId(p.id, next.id)) return p;
+        const linked = normalizePairedWith(p.pairedWith, p.id);
+        const hasLink = linked.some((id) => samePartnerId(id, next.id));
+        const shouldLink = desiredPairs.has(Number(p.id));
+        if (hasLink === shouldLink) return p;
+        return {
+          ...p,
+          pairedWith: shouldLink
+            ? normalizePairedWith([...linked, next.id], p.id)
+            : linked.filter((id) => !samePartnerId(id, next.id)),
+          updatedAt: next.updatedAt,
+        };
       });
-      return [next, ...prev];
     });
     setEditing(null);
     setLooksFromIdx([]);
@@ -434,12 +518,15 @@ function PartnersPageInner() {
 
   function toggleAct(act: string) {
     if (!editing) return;
-    const has = editing.doneActs.includes(act);
+    const tag = canonicalizeAct(act);
+    if (!tag) return;
+    const current = normalizeDoneActs(editing.doneActs);
+    const has = current.includes(tag);
     setEditing({
       ...editing,
       doneActs: has
-        ? editing.doneActs.filter((a) => a !== act)
-        : [...editing.doneActs, act],
+        ? current.filter((a) => a !== tag)
+        : [...current, tag],
     });
   }
 
@@ -928,6 +1015,8 @@ function PartnersPageInner() {
                         type="button"
                         onClick={() => removePhoto(i)}
                         className="absolute right-1 top-1 bg-black/70 px-1.5 text-xs text-[var(--danger)]"
+                        aria-label={`Delete photo ${i + 1}`}
+                        data-testid="muse-photo-delete"
                       >
                         ×
                       </button>
@@ -1177,14 +1266,16 @@ function PartnersPageInner() {
               Acts logged
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Search the catalog, add what you&apos;ve done — selected list stays
-              easy to scan.
+              Search the catalog or add custom — selected list stays easy to
+              scan; Remove deletes from this Muse.
             </p>
             <CatalogMultiSelect
               groups={ACT_GROUPS}
-              selected={editing.doneActs}
+              selected={normalizeDoneActs(editing.doneActs)}
               onToggle={toggleAct}
               searchPlaceholder="Search acts — blowjob, given, anal…"
+              allowCustom
+              customPlaceholder="Add custom act…"
             />
           </fieldset>
 
@@ -1193,20 +1284,43 @@ function PartnersPageInner() {
               Kinks
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Grouped desires — oral, penetration, toys, power, and more.
+              Grouped desires — oral, penetration, toys, power, and more. Add
+              custom or Remove from the selected list.
             </p>
             <CatalogMultiSelect
               groups={KINK_GROUPS}
               selected={normalizeKinks(editing.kinks).map((k) => k.tag)}
               onToggle={toggleKink}
               searchPlaceholder="Search kinks — bondage, free-use…"
+              allowCustom
+              customPlaceholder="Add custom kink…"
             />
           </fieldset>
 
-          <fieldset className="space-y-2">
+          <fieldset className="space-y-3">
             <legend className="text-sm uppercase tracking-[0.16em]">
               Dynamics
             </legend>
+            {editing.dynTags.length > 0 && (
+              <ul className="border border-[var(--line)] bg-[#0f0d0b]/55 px-3 py-2">
+                {editing.dynTags.map((tag) => (
+                  <li
+                    key={tag}
+                    className="flex items-center justify-between gap-3 border-b border-[var(--line)]/70 py-1.5 last:border-0"
+                  >
+                    <span className="text-sm text-[#f7f1e8]/92%">{tag}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleDyn(tag)}
+                      className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-[var(--danger)] underline-offset-2 hover:underline"
+                      data-testid="dyn-remove"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <div className="flex flex-wrap gap-2">
               {DYN_TAGS.map((tag) => {
                 const on = editing.dynTags.includes(tag);
@@ -1220,8 +1334,9 @@ function PartnersPageInner() {
                         ? "border-[var(--accent)] bg-[var(--accent)]/20 text-[var(--accent-strong)]"
                         : "border-[var(--line)] text-[#c4b7a8]"
                     }`}
+                    aria-pressed={on}
                   >
-                    {tag}
+                    {on ? tag : `+ ${tag}`}
                   </button>
                 );
               })}
@@ -1234,6 +1349,95 @@ function PartnersPageInner() {
               placeholder="Dynamics summary…"
               className="prompt-field mt-2 w-full rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
             />
+          </fieldset>
+
+          <fieldset className="space-y-3" data-testid="muse-edit-pairing">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Been together
+            </legend>
+            <p className="text-xs text-[var(--muted)]">
+              Pair this Muse with others you&apos;ve played with (up to{" "}
+              {MAX_MUSE_CAST_MATES}). Add from the roster; Remove unpairs.
+            </p>
+            {normalizePairedWith(editing.pairedWith, editing.id).length ===
+            0 ? (
+              <p className="text-sm text-[var(--muted)]">
+                No pairs yet — add another Muse below.
+              </p>
+            ) : (
+              <ul className="border border-[var(--line)] bg-[#0f0d0b]/55 px-3 py-2">
+                {normalizePairedWith(editing.pairedWith, editing.id).map(
+                  (id) => {
+                    const other = partners.find((p) =>
+                      samePartnerId(p.id, id),
+                    );
+                    return (
+                      <li
+                        key={id}
+                        className="flex items-center justify-between gap-3 border-b border-[var(--line)]/70 py-1.5 last:border-0"
+                      >
+                        <span className="text-sm text-[#f7f1e8]/92%">
+                          {other ? displayName(other) : `Muse #${id}`}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => toggleEditPair(Number(id))}
+                          className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-[var(--danger)] underline-offset-2 hover:underline"
+                          data-testid="muse-edit-unpair"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    );
+                  },
+                )}
+              </ul>
+            )}
+            {(() => {
+              const pairedIds = new Set(
+                normalizePairedWith(editing.pairedWith, editing.id).map((id) =>
+                  Number(id),
+                ),
+              );
+              const atCap = pairedIds.size >= MAX_MUSE_CAST_MATES;
+              const candidates = partners.filter(
+                (other) =>
+                  !samePartnerId(other.id, editing.id) &&
+                  !pairedIds.has(Number(other.id)),
+              );
+              if (atCap) {
+                return (
+                  <p className="text-xs text-[var(--muted)]">
+                    Cast full ({MAX_MUSE_CAST_MATES} mates) — remove one to add
+                    another.
+                  </p>
+                );
+              }
+              if (candidates.length === 0) {
+                return (
+                  <p className="text-xs text-[var(--muted)]">
+                    {partners.length <= 1
+                      ? "Save this Muse, then add another to pair."
+                      : "Already paired with everyone on the list."}
+                  </p>
+                );
+              }
+              return (
+                <div className="flex flex-wrap gap-1.5">
+                  {candidates.map((other) => (
+                    <button
+                      key={other.id}
+                      type="button"
+                      onClick={() => toggleEditPair(Number(other.id))}
+                      className="rounded-sm border border-[var(--line)] px-2 py-0.5 text-[11px] text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
+                      data-testid="muse-edit-pair-add"
+                    >
+                      + {displayName(other)}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </fieldset>
 
           <label className="grid gap-2 text-sm">
@@ -1343,6 +1547,7 @@ function PartnersPageInner() {
               )
             }
             onPairWith={(otherId) => setPairWith(p.id, otherId)}
+            onUnpair={(otherId) => setPairWith(p.id, otherId)}
             onEdit={() => openEdit(p)}
             onRemove={() => remove(p.id)}
             onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}

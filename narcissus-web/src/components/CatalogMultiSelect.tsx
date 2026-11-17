@@ -10,6 +10,9 @@ type CatalogMultiSelectProps = {
   onToggle: (tag: string) => void;
   searchPlaceholder?: string;
   emptySelectedHint?: string;
+  /** Allow free-text entries outside the catalog */
+  allowCustom?: boolean;
+  customPlaceholder?: string;
 };
 
 /**
@@ -22,8 +25,11 @@ export function CatalogMultiSelect({
   onToggle,
   searchPlaceholder = "Search…",
   emptySelectedHint = "Nothing selected yet — pick from the catalog below.",
+  allowCustom = false,
+  customPlaceholder = "Add custom…",
 }: CatalogMultiSelectProps) {
   const [query, setQuery] = useState("");
+  const [custom, setCustom] = useState("");
   const q = query.trim().toLowerCase();
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
@@ -41,6 +47,13 @@ export function CatalogMultiSelect({
       }))
       .filter((g) => g.tags.length > 0);
   }, [groups, q]);
+
+  function addCustom() {
+    const tag = custom.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!tag) return;
+    if (!selectedSet.has(tag)) onToggle(tag);
+    setCustom("");
+  }
 
   return (
     <div className="space-y-4">
@@ -62,6 +75,7 @@ export function CatalogMultiSelect({
                   type="button"
                   onClick={() => onToggle(tag)}
                   className="shrink-0 text-[11px] uppercase tracking-[0.14em] text-[var(--danger)] underline-offset-2 hover:underline"
+                  data-testid="catalog-remove"
                 >
                   Remove
                 </button>
@@ -70,6 +84,39 @@ export function CatalogMultiSelect({
           </ul>
         )}
       </div>
+
+      {allowCustom && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[12rem] flex-1 grid gap-1.5 text-xs text-[#c4b7a8]">
+            <span className="uppercase tracking-[0.18em] text-[var(--muted)]">
+              Custom
+            </span>
+            <input
+              type="text"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addCustom();
+                }
+              }}
+              placeholder={customPlaceholder}
+              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+              data-testid="catalog-custom-input"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={addCustom}
+            disabled={!custom.trim()}
+            className="rounded-sm border border-[var(--accent)]/50 px-3 py-2 text-xs uppercase tracking-[0.12em] text-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-40"
+            data-testid="catalog-custom-add"
+          >
+            Add
+          </button>
+        </div>
+      )}
 
       <label className="grid gap-1.5 text-xs text-[#c4b7a8]">
         <span className="uppercase tracking-[0.18em] text-[var(--muted)]">
