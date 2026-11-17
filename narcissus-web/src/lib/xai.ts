@@ -156,19 +156,25 @@ function museIdentityBlock(
       const members =
         Array.isArray(partner.members) && partner.members.length
           ? partner.members
-              .map((m) =>
-                m?.name
-                  ? m.role
-                    ? `${m.name} (${m.role})`
-                    : m.name
-                  : "",
-              )
+              .map((m) => {
+                if (!m?.name) return "";
+                const bits = [m.name];
+                if (m.presence === "guest") bits.push("guest/present");
+                if (m.gender) bits.push(String(m.gender));
+                if (m.role) bits.push(m.role);
+                return bits.join(" · ");
+              })
               .filter(Boolean)
           : [partner.partnerA, partner.partnerB].filter(Boolean);
       if (!members.length) return kind === "group" ? "- Group: (unnamed)" : "- Couple: (unnamed)";
+      const guestNote =
+        Array.isArray(partner.members) &&
+        partner.members.some((m) => m?.presence === "guest")
+          ? " Guests are present in the scene — do not invent acts between the user and a guest unless asked."
+          : "";
       return kind === "group"
-        ? `- Group partners: ${members.join(", ")}`
-        : `- Couple: ${members.join(" + ")}`;
+        ? `- Group partners: ${members.join(", ")}.${guestNote}`
+        : `- Couple: ${members.join(" + ")}.${guestNote}`;
     })(),
     partner.looks?.trim() ? `- Looks: ${partner.looks.trim()}` : "",
     partner.notes?.trim() ? `- Notes: ${partner.notes.trim()}` : "",
@@ -306,8 +312,11 @@ export function buildPartnerChatSystemPrompt(
 
   // Couple / group Muse = one roster entry that chats as a multi-partner unit.
   if ((kind === "couple" || kind === "group") && members.length >= 2) {
-    const memberNames = formatMemberNames(members);
-    const labelSamples = members
+    const partners = members.filter((m) => m.presence !== "guest");
+    const guests = members.filter((m) => m.presence === "guest");
+    const speakCast = partners.length >= 2 ? partners : members;
+    const memberNames = formatMemberNames(speakCast);
+    const labelSamples = speakCast
       .map((m) => `"${m.name}:"`)
       .slice(0, 3)
       .join(" / ");
@@ -320,16 +329,19 @@ export function buildPartnerChatSystemPrompt(
     return [
       `You are ${unitLabel}-casting ${name} (${memberNames}), an adult erotic AI Muse unit in Narcissus / Art of X.`,
       `This is one Muse entry that represents a ${unitLabel} — treat ${memberNames} as real partners sharing heat, history, and the same chat.`,
+      guests.length
+        ? `Guests present (not required sexual partners for the user): ${guests.map((g) => `${g.name}${g.role ? ` (${g.role})` : ""}`).join(", ")}. They may watch, banter, or join if asked — do not invent user↔guest acts unless the user goes there.`
+        : "",
       `Stay fully in character for each partner. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
       `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
       "",
       "Unit identity:",
       museIdentityBlock(partner),
       "",
-      "Named partners in this unit:",
+      "Named people in this unit:",
       ...members.map(
         (m, i) =>
-          `- ${String.fromCharCode(65 + i)}. ${m.name}${m.role ? ` — ${m.role}` : ""}`,
+          `- ${String.fromCharCode(65 + i)}. ${m.name}${m.presence === "guest" ? " [guest/present]" : ""}${m.role ? ` — ${m.role}` : ""}`,
       ),
       "",
       settingBlock,

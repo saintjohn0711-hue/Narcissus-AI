@@ -32,10 +32,69 @@ export type MuseKind = "solo" | "couple" | "group";
 
 export const MUSE_KINDS: MuseKind[] = ["solo", "couple", "group"];
 
+/** Solo presentation genders allowed on a couple/group member slot. */
+export const MEMBER_PRESENTATION_GENDERS: PersonGender[] = [
+  "woman",
+  "man",
+  "trans",
+  "crossdresser",
+];
+
+/**
+ * How this person shows up in the unit / session log:
+ * - partner — full sexual partner (default)
+ * - guest — present in the scene; acts with me not required (e.g. Roy watching)
+ */
+export type MuseMemberPresence = "partner" | "guest";
+
+export const MUSE_MEMBER_PRESENCES: MuseMemberPresence[] = [
+  "partner",
+  "guest",
+];
+
+/** Short role chips for couple/group slots + guest logging. */
+export const MUSE_MEMBER_ROLE_CHIPS = [
+  "Boy toy",
+  "Girl toy",
+  "Dom",
+  "Switch",
+  "Watcher",
+  "Third",
+  "Husband",
+  "Wife",
+  "Girlfriend",
+  "Boyfriend",
+] as const;
+
+export function museMemberPresenceLabel(p: MuseMemberPresence | string): string {
+  switch (p) {
+    case "guest":
+      return "Guest · present";
+    case "partner":
+      return "Partner";
+    default:
+      return p;
+  }
+}
+
 export type MuseMember = {
   name: string;
-  /** Optional beat — e.g. Dom, Switch, Watcher */
+  /** Optional beat — e.g. Boy toy, Dom, Switch */
   role?: string;
+  /**
+   * partner = sexual partner in the unit;
+   * guest = present in the scene / log without requiring acts with me.
+   */
+  presence?: MuseMemberPresence;
+  /** Outlet / presentation for the linked Solo Muse */
+  gender?: PersonGender;
+  photos?: string[];
+  mainPhotoIndex?: number;
+  voiceGender?: MuseVoiceGender;
+  voicePreset?: MuseVoicePresetId;
+  voiceId?: string;
+  /** Solo Muse id created/updated when this unit is saved */
+  linkedPartnerId?: number | null;
 };
 
 export type PersonGender =
@@ -87,14 +146,17 @@ export function museKindLabel(k: MuseKind | string): string {
   }
 }
 
-/** Couple = 2 named partners; group = 3–4 (aligned with max cast). */
+/**
+ * Couple = 2 partners (+ optional guests up to 4 total).
+ * Group = 3–4 partners (+ guests up to 5 total) so Roy-type extras fit.
+ */
 export const MUSE_KIND_MEMBER_LIMITS: Record<
   MuseKind,
-  { min: number; max: number }
+  { min: number; max: number; minPartners: number }
 > = {
-  solo: { min: 0, max: 0 },
-  couple: { min: 2, max: 2 },
-  group: { min: 3, max: 4 },
+  solo: { min: 0, max: 0, minPartners: 0 },
+  couple: { min: 2, max: 4, minPartners: 2 },
+  group: { min: 3, max: 5, minPartners: 3 },
 };
 
 export function isMuseKind(v: unknown): v is MuseKind {
@@ -127,6 +189,66 @@ export function normalizeMuseKind(
   return "solo";
 }
 
+function normalizeMemberGender(raw: unknown): PersonGender | undefined {
+  const g = String(raw || "").toLowerCase();
+  if (MEMBER_PRESENTATION_GENDERS.includes(g as PersonGender)) {
+    return g as PersonGender;
+  }
+  return undefined;
+}
+
+export function normalizeMemberPresence(
+  raw: unknown,
+): MuseMemberPresence {
+  return raw === "guest" ? "guest" : "partner";
+}
+
+export function emptyMuseMember(
+  partial: Partial<MuseMember> = {},
+): MuseMember {
+  const gender = normalizeMemberGender(partial.gender) || "woman";
+  const photos = Array.isArray(partial.photos)
+    ? partial.photos.filter((p): p is string => typeof p === "string" && !!p)
+    : [];
+  const voiceGender = normalizeVoiceGender(
+    partial.voiceGender,
+    gender,
+  );
+  const presence = normalizeMemberPresence(partial.presence);
+  return {
+    name: typeof partial.name === "string" ? partial.name.trim().slice(0, 80) : "",
+    role:
+      typeof partial.role === "string" && partial.role.trim()
+        ? partial.role.trim().slice(0, 40)
+        : undefined,
+    presence,
+    gender,
+    photos,
+    mainPhotoIndex:
+      typeof partial.mainPhotoIndex === "number" && photos.length
+        ? Math.min(Math.max(0, partial.mainPhotoIndex), photos.length - 1)
+        : 0,
+    voiceGender,
+    voicePreset: normalizeVoicePreset(partial.voicePreset, voiceGender),
+    voiceId:
+      typeof partial.voiceId === "string"
+        ? partial.voiceId.trim().slice(0, 200)
+        : "",
+    linkedPartnerId: (() => {
+      const n = Number(partial.linkedPartnerId);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })(),
+  };
+}
+
+export function memberPartnersOf(members: MuseMember[]): MuseMember[] {
+  return members.filter((m) => normalizeMemberPresence(m.presence) === "partner");
+}
+
+export function memberGuestsOf(members: MuseMember[]): MuseMember[] {
+  return members.filter((m) => normalizeMemberPresence(m.presence) === "guest");
+}
+
 export function normalizeMembers(list: unknown): MuseMember[] {
   if (!Array.isArray(list)) return [];
   const out: MuseMember[] = [];
@@ -138,24 +260,227 @@ export function normalizeMembers(list: unknown): MuseMember[] {
         const key = name.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push({ name });
+        out.push(emptyMuseMember({ name }));
       }
       continue;
     }
-    const o = raw as { name?: unknown; role?: unknown };
+    const o = raw as Partial<MuseMember>;
     const name = typeof o.name === "string" ? o.name.trim().slice(0, 80) : "";
     if (!name) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    const role =
-      typeof o.role === "string" && o.role.trim()
-        ? o.role.trim().slice(0, 40)
-        : undefined;
-    out.push(role ? { name, role } : { name });
-    if (out.length >= 4) break;
+    out.push(emptyMuseMember({ ...o, name }));
+    if (out.length >= 5) break;
   }
   return out;
+}
+
+/** Pull member slots from linked Solo Muses (photos / voice / gender edits). */
+export function hydrateMembersFromLinkedSolos(
+  unit: PartnerRecord,
+  roster: PartnerRecord[],
+): MuseMember[] {
+  const kind = normalizeMuseKind(unit.museKind, unit);
+  if (kind === "solo") return [];
+  const { max } = MUSE_KIND_MEMBER_LIMITS[kind];
+  return museMembersOf(unit)
+    .slice(0, max)
+    .map((m) => {
+      const linkId = Number(m.linkedPartnerId);
+      if (!Number.isFinite(linkId) || linkId <= 0) return emptyMuseMember(m);
+      const solo = roster.find((p) => samePartnerId(p.id, linkId));
+      if (!solo || normalizeMuseKind(solo.museKind, solo) !== "solo") {
+        return emptyMuseMember(m);
+      }
+      return emptyMuseMember({
+        ...m,
+        name: solo.name || m.name,
+        gender: normalizeMemberGender(solo.gender) || m.gender,
+        photos: solo.photos?.length ? [...solo.photos] : m.photos,
+        mainPhotoIndex: solo.mainPhotoIndex ?? m.mainPhotoIndex,
+        voiceGender: solo.voiceGender || m.voiceGender,
+        voicePreset: solo.voicePreset || m.voicePreset,
+        voiceId: solo.voiceId || m.voiceId,
+        linkedPartnerId: Number(solo.id),
+        role: m.role,
+      });
+    });
+}
+
+/**
+ * Unit gallery = each member's main photo (stable, compact).
+ * Keeps couple/group chat portraits without duplicating every solo shot.
+ */
+export function unitPhotosFromMembers(members: MuseMember[]): string[] {
+  const out: string[] = [];
+  // Prefer sexual partners for the unit portrait strip; guests optional after.
+  const ordered = [
+    ...memberPartnersOf(members),
+    ...memberGuestsOf(members),
+  ];
+  for (const m of ordered) {
+    const photos = Array.isArray(m.photos) ? m.photos : [];
+    if (!photos.length) continue;
+    const idx = Math.min(
+      Math.max(0, m.mainPhotoIndex ?? 0),
+      photos.length - 1,
+    );
+    const src = photos[idx];
+    if (src && !out.includes(src)) out.push(src);
+  }
+  return out.slice(0, PARTNER_PHOTO_LIMITS.perPartner);
+}
+
+/**
+ * Saving a couple/group Muse creates or updates linked Solo Muses per member
+ * so the same people can chat together (unit) or separately (each solo).
+ */
+export function syncUnitLinkedSolos(
+  roster: PartnerRecord[],
+  unitIn: PartnerRecord,
+): { roster: PartnerRecord[]; unit: PartnerRecord } {
+  const kind = normalizeMuseKind(unitIn.museKind, unitIn);
+  if (kind !== "couple" && kind !== "group") {
+    return { roster, unit: unitIn };
+  }
+
+  const now = new Date().toISOString();
+  let working = [...roster];
+  const members = museMembersOf(unitIn).map((m) => emptyMuseMember(m));
+  const linkedIds: number[] = [];
+
+  const nextMembers: MuseMember[] = members.map((m) => {
+    if (!m.name.trim()) return m;
+    // Guests stay on the unit ledger only — no Solo Muse / Echo inflation.
+    if (normalizeMemberPresence(m.presence) === "guest") {
+      return emptyMuseMember({
+        ...m,
+        linkedPartnerId: null,
+      });
+    }
+    const existingIdx = working.findIndex(
+      (p) =>
+        m.linkedPartnerId != null &&
+        samePartnerId(p.id, m.linkedPartnerId) &&
+        normalizeMuseKind(p.museKind, p) === "solo",
+    );
+    const gender = normalizeMemberGender(m.gender) || "woman";
+    const voiceGender = normalizeVoiceGender(m.voiceGender, gender);
+    const photos = Array.isArray(m.photos) ? [...m.photos] : [];
+    const baseNotes = m.role
+      ? `Linked from ${kind} Muse “${unitIn.name}” · ${m.role}`
+      : `Linked from ${kind} Muse “${unitIn.name}”`;
+
+    if (existingIdx >= 0) {
+      const prev = working[existingIdx]!;
+      const updated: PartnerRecord = {
+        ...prev,
+        name: m.name.trim(),
+        type: unitIn.type,
+        gender,
+        museKind: "solo",
+        members: [],
+        isCouple: false,
+        partnerA: "",
+        partnerB: "",
+        photos,
+        mainPhotoIndex: photos.length
+          ? Math.min(Math.max(0, m.mainPhotoIndex ?? 0), photos.length - 1)
+          : 0,
+        voiceGender,
+        voicePreset: normalizeVoicePreset(m.voicePreset, voiceGender),
+        voiceId: m.voiceId || "",
+        notes: prev.notes?.trim() ? prev.notes : baseNotes,
+        updatedAt: now,
+      };
+      working[existingIdx] = updated;
+      linkedIds.push(Number(updated.id));
+      return emptyMuseMember({
+        ...m,
+        linkedPartnerId: Number(updated.id),
+        gender,
+        photos,
+        voiceGender: updated.voiceGender,
+        voicePreset: updated.voicePreset,
+        voiceId: updated.voiceId,
+      });
+    }
+
+    const created = emptyPartner(m.name.trim(), working);
+    const solo: PartnerRecord = {
+      ...created,
+      type: unitIn.type,
+      gender,
+      museKind: "solo",
+      members: [],
+      isCouple: false,
+      photos,
+      mainPhotoIndex: photos.length
+        ? Math.min(Math.max(0, m.mainPhotoIndex ?? 0), photos.length - 1)
+        : 0,
+      voiceGender,
+      voicePreset: normalizeVoicePreset(m.voicePreset, voiceGender),
+      voiceId: m.voiceId || "",
+      notes: baseNotes,
+      // Share desire tags for continuity; leave doneActs empty so Echo
+      // overscore isn't triple-counted from the unit seed.
+      kinks: normalizeKinks(unitIn.kinks),
+      dynTags: [...(unitIn.dynTags || [])],
+      dynamics: unitIn.dynamics || "",
+      tryNewThings: Boolean(unitIn.tryNewThings),
+      favorite: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    working = [solo, ...working];
+    linkedIds.push(Number(solo.id));
+    return emptyMuseMember({
+      ...m,
+      linkedPartnerId: Number(solo.id),
+      gender,
+      photos,
+      voiceGender: solo.voiceGender,
+      voicePreset: solo.voicePreset,
+      voiceId: solo.voiceId,
+    });
+  });
+
+  const unitPhotos = unitPhotosFromMembers(nextMembers);
+  let unit = withMuseKindFields(
+    {
+      ...unitIn,
+      photos: unitPhotos.length ? unitPhotos : unitIn.photos || [],
+      mainPhotoIndex: 0,
+      updatedAt: now,
+    },
+    { museKind: kind, members: nextMembers },
+  );
+
+  // Pair unit ↔ each linked solo, and linked solos with each other.
+  const pairTargets = [
+    Number(unit.id),
+    ...linkedIds.filter((id) => !samePartnerId(id, unit.id)),
+  ];
+  working = ensureMuseGroupPairings(working, pairTargets);
+
+  // Ensure unit row in working list has latest members/photos/pairs.
+  const unitIdx = working.findIndex((p) => samePartnerId(p.id, unit.id));
+  const unitFromList =
+    unitIdx >= 0
+      ? {
+          ...unit,
+          pairedWith: normalizePairedWith(
+            working[unitIdx]!.pairedWith,
+            unit.id,
+          ),
+        }
+      : unit;
+  unit = unitFromList;
+  if (unitIdx >= 0) working[unitIdx] = unit;
+  else working = [unit, ...working];
+
+  return { roster: working, unit };
 }
 
 /**
@@ -171,17 +496,20 @@ export function museMembersOf(p: {
   partnerB?: string;
 }): MuseMember[] {
   const kind = normalizeMuseKind(p.museKind, p);
-  if (kind === "solo") return [];
   const fromMembers = normalizeMembers(p.members);
+  if (kind === "solo") {
+    // Session guests only (present / Boy toy / Girl toy — no acts required).
+    return memberGuestsOf(fromMembers).slice(0, 3);
+  }
   if (fromMembers.length > 0) {
     const { max } = MUSE_KIND_MEMBER_LIMITS[kind];
     return fromMembers.slice(0, max);
   }
   const a = String(p.partnerA || "").trim();
   const b = String(p.partnerB || "").trim();
-  if (a && b) return [{ name: a }, { name: b }];
-  if (a) return [{ name: a }];
-  if (b) return [{ name: b }];
+  if (a && b) return [emptyMuseMember({ name: a }), emptyMuseMember({ name: b })];
+  if (a) return [emptyMuseMember({ name: a })];
+  if (b) return [emptyMuseMember({ name: b })];
   return [];
 }
 
@@ -201,7 +529,8 @@ export function withMuseKindFields(
   let members = normalizeMembers(next.members ?? p.members);
   const limits = MUSE_KIND_MEMBER_LIMITS[museKind];
   if (museKind === "solo") {
-    members = [];
+    // Solo Muses may keep guest-only rows for session logs (present, no acts).
+    members = memberGuestsOf(members).slice(0, 3);
   } else {
     members = members.slice(0, limits.max);
   }
@@ -214,14 +543,15 @@ export function withMuseKindFields(
         : p.gender === "couple" || p.gender === "group"
           ? "woman"
           : p.gender);
+  const partnersOnly = memberPartnersOf(members);
   return {
     ...p,
     museKind,
     members,
     gender,
     isCouple: museKind === "couple",
-    partnerA: museKind === "solo" ? "" : members[0]?.name || "",
-    partnerB: museKind === "solo" ? "" : members[1]?.name || "",
+    partnerA: museKind === "solo" ? "" : partnersOnly[0]?.name || members[0]?.name || "",
+    partnerB: museKind === "solo" ? "" : partnersOnly[1]?.name || members[1]?.name || "",
   };
 }
 

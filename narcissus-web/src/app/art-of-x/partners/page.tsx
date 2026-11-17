@@ -21,8 +21,11 @@ import {
   DYN_TAGS,
   KINK_GROUPS,
   MAX_MUSE_CAST_MATES,
+  MEMBER_PRESENTATION_GENDERS,
   MUSE_KIND_MEMBER_LIMITS,
   MUSE_KINDS,
+  MUSE_MEMBER_PRESENCES,
+  MUSE_MEMBER_ROLE_CHIPS,
   MUSE_SORT_OPTIONS,
   PARTNER_PHOTO_LIMITS,
   PERSON_GENDERS,
@@ -30,26 +33,34 @@ import {
   arkDemoRoster,
   canonicalizeAct,
   displayName,
+  emptyMuseMember,
   emptyPartner,
   fileToPartnerPhoto,
   genderLabel,
+  hydrateMembersFromLinkedSolos,
   loadMuseOrder,
   mainPhoto,
+  memberGuestsOf,
+  memberPartnersOf,
   museKindLabel,
+  museMemberPresenceLabel,
   museMembersOf,
   normalizeDoneActs,
   normalizeKinks,
+  normalizeMemberPresence,
   normalizeMuseKind,
   normalizePairedWith,
   pairedMusesFor,
   samePartnerId,
   saveMuseOrder,
+  syncUnitLinkedSolos,
   toggleMusePairing,
   withMainPhoto,
   withMuseKindFields,
   DEFAULT_MUSE_SORT,
   type MuseKind,
   type MuseMember,
+  type MuseMemberPresence,
   type MuseSortMode,
   type PartnerRecord,
   type PersonGender,
@@ -300,7 +311,10 @@ function PartnersPageInner() {
   function openEdit(p: PartnerRecord) {
     const main = p.mainPhotoIndex ?? 0;
     const kind = normalizeMuseKind(p.museKind, p);
-    const members = museMembersOf(p);
+    const resolvedMembers =
+      kind === "solo"
+        ? museMembersOf(p)
+        : hydrateMembersFromLinkedSolos(p, partners);
     setEditing(
       withMuseKindFields(
         {
@@ -313,7 +327,12 @@ function PartnersPageInner() {
           dynTags: [...(p.dynTags || [])],
           pairedWith: normalizePairedWith(p.pairedWith, p.id),
         },
-        { museKind: kind, members },
+        {
+          museKind: kind,
+          members: resolvedMembers.length
+            ? resolvedMembers
+            : museMembersOf(p),
+        },
       ),
     );
     setLooksFromIdx(p.photos?.length ? [main] : []);
@@ -453,12 +472,21 @@ function PartnersPageInner() {
     if (!editing || !editing.name.trim()) return;
     const kind = normalizeMuseKind(editing.museKind, editing);
     const members = museMembersOf(editing);
-    if (kind === "couple" && members.filter((m) => m.name.trim()).length < 2) {
-      setSaveError("Couple Muses need two partner names.");
+    const partnersOnly = memberPartnersOf(members);
+    if (
+      kind === "couple" &&
+      partnersOnly.filter((m) => m.name.trim()).length < 2
+    ) {
+      setSaveError("Couple Muses need two partner names (guests are optional).");
       return;
     }
-    if (kind === "group" && members.filter((m) => m.name.trim()).length < 3) {
-      setSaveError("Group Muses need at least three partner names.");
+    if (
+      kind === "group" &&
+      partnersOnly.filter((m) => m.name.trim()).length < 3
+    ) {
+      setSaveError(
+        "Group Muses need at least three partners (guests are optional).",
+      );
       return;
     }
     const synced = withMuseKindFields(
@@ -474,39 +502,81 @@ function PartnersPageInner() {
       },
       { museKind: kind, members },
     );
-    const next = synced;
-    const desiredPairs = new Set(next.pairedWith.map((id) => Number(id)));
+
     setPartners((prev) => {
-      const i = prev.findIndex((p) => samePartnerId(p.id, next.id));
+      const i = prev.findIndex((p) => samePartnerId(p.id, synced.id));
       let list: PartnerRecord[];
       if (i >= 0) {
         const copy = [...prev];
-        copy[i] = next;
+        copy[i] = synced;
         list = copy;
       } else {
         setManualOrder((order) => {
           const ids = [
-            Number(next.id),
-            ...order.filter((id) => id !== Number(next.id)),
+            Number(synced.id),
+            ...order.filter((id) => id !== Number(synced.id)),
           ];
           saveMuseOrder(ids);
           return ids;
         });
-        list = [next, ...prev];
+        list = [synced, ...prev];
       }
-      // Reconcile reciprocal “been together” links from the saved Muse
+
+      // Couple/group → create/update linked Solo Muses for each partner slot.
+      if (kind === "couple" || kind === "group") {
+        const { roster, unit } = syncUnitLinkedSolos(list, synced);
+        const beforeIds = new Set(list.map((p) => Number(p.id)));
+        const newIds = roster
+          .map((p) => Number(p.id))
+          .filter((id) => !beforeIds.has(id));
+        if (newIds.length) {
+          setManualOrder((order) => {
+            const ids = [
+              ...order.filter((id) => id === Number(unit.id) || !newIds.includes(id)),
+              ...newIds.filter((id) => !order.includes(id)),
+            ];
+            // Keep unit near top; append new linked solos after it.
+            const unitPos = ids.indexOf(Number(unit.id));
+            const withoutNew = ids.filter((id) => !newIds.includes(id));
+            const insertAt = unitPos >= 0 ? unitPos + 1 : 1;
+            const merged = [
+              ...withoutNew.slice(0, insertAt),
+              ...newIds,
+              ...withoutNew.slice(insertAt),
+            ];
+            saveMuseOrder(merged);
+            return merged;
+          });
+        }
+        setSaveError(null);
+        setSaveNote(
+          `Saved ${kind} + ${memberPartnersOf(unit.members).length} linked Solo${
+            memberPartnersOf(unit.members).length === 1 ? "" : "s"
+          }${
+            memberGuestsOf(unit.members).length
+              ? ` · ${memberGuestsOf(unit.members).length} guest${
+                  memberGuestsOf(unit.members).length === 1 ? "" : "s"
+                } present`
+              : ""
+          }.`,
+        );
+        return roster;
+      }
+
+      const desiredPairs = new Set(synced.pairedWith.map((id) => Number(id)));
+      setSaveError(null);
       return list.map((p) => {
-        if (samePartnerId(p.id, next.id)) return p;
+        if (samePartnerId(p.id, synced.id)) return p;
         const linked = normalizePairedWith(p.pairedWith, p.id);
-        const hasLink = linked.some((id) => samePartnerId(id, next.id));
+        const hasLink = linked.some((id) => samePartnerId(id, synced.id));
         const shouldLink = desiredPairs.has(Number(p.id));
         if (hasLink === shouldLink) return p;
         return {
           ...p,
           pairedWith: shouldLink
-            ? normalizePairedWith([...linked, next.id], p.id)
-            : linked.filter((id) => !samePartnerId(id, next.id)),
-          updatedAt: next.updatedAt,
+            ? normalizePairedWith([...linked, synced.id], p.id)
+            : linked.filter((id) => !samePartnerId(id, synced.id)),
+          updatedAt: synced.updatedAt,
         };
       });
     });
@@ -819,15 +889,33 @@ function PartnersPageInner() {
   function setEditingKind(kind: MuseKind) {
     if (!editing) return;
     const current = museMembersOf(editing);
-    const { min, max } = MUSE_KIND_MEMBER_LIMITS[kind];
-    let members: MuseMember[] = current.slice(0, max);
-    while (members.length < min) {
-      members = [
-        ...members,
-        { name: kind === "couple" ? (members.length === 0 ? "Partner A" : "Partner B") : `Partner ${members.length + 1}` },
-      ];
+    const guests = memberGuestsOf(current);
+    const { minPartners, max } = MUSE_KIND_MEMBER_LIMITS[kind];
+    let partners = memberPartnersOf(current).slice(0, max);
+    const defaults: Array<Partial<MuseMember>> =
+      kind === "couple"
+        ? [
+            { name: "Partner A", gender: "woman", presence: "partner" },
+            { name: "Partner B", gender: "man", presence: "partner" },
+          ]
+        : kind === "group"
+          ? [
+              { name: "Partner 1", gender: "woman", presence: "partner" },
+              { name: "Partner 2", gender: "man", presence: "partner" },
+              { name: "Partner 3", gender: "woman", presence: "partner" },
+            ]
+          : [];
+    while (partners.length < minPartners) {
+      const d = defaults[partners.length] || {
+        name: `Partner ${partners.length + 1}`,
+        presence: "partner" as MuseMemberPresence,
+      };
+      partners = [...partners, emptyMuseMember(d)];
     }
-    if (kind === "solo") members = [];
+    const members =
+      kind === "solo"
+        ? guests
+        : [...partners, ...guests].slice(0, max);
     setEditing(
       withMuseKindFields(editing, {
         museKind: kind,
@@ -847,21 +935,90 @@ function PartnersPageInner() {
   function updateMember(index: number, patch: Partial<MuseMember>) {
     if (!editing) return;
     const kind = normalizeMuseKind(editing.museKind, editing);
-    const { max } = MUSE_KIND_MEMBER_LIMITS[kind];
-    const members = museMembersOf(editing).slice(0, max);
-    while (members.length <= index && members.length < max) {
-      members.push({ name: "" });
+    const { max } = MUSE_KIND_MEMBER_LIMITS[kind === "solo" ? "couple" : kind];
+    const cap = kind === "solo" ? 3 : max;
+    const members = (
+      kind === "solo" ? museMembersOf(editing) : museMembersOf(editing)
+    ).slice(0, cap);
+    while (members.length <= index && members.length < cap) {
+      members.push(
+        emptyMuseMember({
+          name: "",
+          presence: kind === "solo" ? "guest" : "partner",
+        }),
+      );
     }
-    if (index < 0 || index >= max) return;
-    const prev = members[index] || { name: "" };
-    members[index] = {
+    if (index < 0 || index >= cap) return;
+    const prev = emptyMuseMember(members[index] || { name: "" });
+    members[index] = emptyMuseMember({
+      ...prev,
+      ...patch,
       name: patch.name !== undefined ? patch.name : prev.name,
       role:
         patch.role !== undefined
           ? patch.role.trim() || undefined
           : prev.role,
-    };
+      presence: patch.presence
+        ? normalizeMemberPresence(patch.presence)
+        : prev.presence,
+    });
     setEditing(withMuseKindFields(editing, { museKind: kind, members }));
+  }
+
+  function addGuestMember() {
+    if (!editing) return;
+    const kind = normalizeMuseKind(editing.museKind, editing);
+    const members = [...museMembersOf(editing)];
+    const cap =
+      kind === "solo" ? 3 : MUSE_KIND_MEMBER_LIMITS[kind].max;
+    if (members.length >= cap) {
+      setSaveError(
+        kind === "solo"
+          ? "Up to 3 guests on a Solo session log."
+          : `This ${kind} is full (${cap} people including guests).`,
+      );
+      return;
+    }
+    members.push(
+      emptyMuseMember({
+        name: "Roy",
+        presence: "guest",
+        role: "Boy toy",
+        gender: "man",
+      }),
+    );
+    setEditing(withMuseKindFields(editing, { museKind: kind, members }));
+    setSaveError(null);
+  }
+
+  async function onMemberPhoto(
+    index: number,
+    files: FileList | null,
+    input?: HTMLInputElement | null,
+  ) {
+    if (!editing || !files?.length) return;
+    const members = [...museMembersOf(editing)];
+    const member = emptyMuseMember(members[index] || { name: "" });
+    const cap = Math.min(4, PARTNER_PHOTO_LIMITS.perPartner);
+    const room = cap - (member.photos?.length || 0);
+    if (room <= 0) {
+      if (input) input.value = "";
+      return;
+    }
+    const nextPhotos = [...(member.photos || [])];
+    for (const file of Array.from(files).slice(0, room)) {
+      if (!file.type.startsWith("image/")) continue;
+      try {
+        nextPhotos.push(await fileToPartnerPhoto(file));
+      } catch {
+        /* skip */
+      }
+    }
+    updateMember(index, {
+      photos: nextPhotos,
+      mainPhotoIndex: member.photos?.length ? member.mainPhotoIndex : 0,
+    });
+    if (input) input.value = "";
   }
 
   return (
@@ -1246,105 +1403,305 @@ function PartnersPageInner() {
             </fieldset>
           </div>
 
-          {normalizeMuseKind(editing.museKind, editing) !== "solo" && (
+          {(normalizeMuseKind(editing.museKind, editing) !== "solo" ||
+            museMembersOf(editing).length > 0) && (
             <fieldset
-              className="space-y-3 border border-[var(--line)] bg-[#0f0d0b]/40 p-4"
+              className="space-y-4 border border-[var(--line)] bg-[#0f0d0b]/40 p-4"
               data-testid="muse-members"
             >
               <legend className="px-1 text-sm uppercase tracking-[0.16em]">
-                {normalizeMuseKind(editing.museKind, editing) === "group"
-                  ? "Group partners"
-                  : "Couple partners"}
+                {normalizeMuseKind(editing.museKind, editing) === "solo"
+                  ? "Session guests"
+                  : normalizeMuseKind(editing.museKind, editing) === "group"
+                    ? "Group partners"
+                    : "Couple partners"}
               </legend>
               <p className="text-xs text-[var(--muted)]">
-                Named people in this unit. Chat labels each voice (e.g. Lexi: /
-                Dom:). Photos on this Muse cover the whole unit.
+                {normalizeMuseKind(editing.museKind, editing) === "solo"
+                  ? "Log people who were present (Boy toy / Girl toy) without forcing acts with them."
+                  : "Full slots for each person — name, photo, voice, outlet. Save creates linked Solos so you can chat together (this Muse) or separate. Add a guest when someone was present but you didn’t play with them."}
               </p>
-              {Array.from({
-                length: MUSE_KIND_MEMBER_LIMITS[
-                  normalizeMuseKind(editing.museKind, editing)
-                ].max,
-              }).map((_, i) => {
-                const member = museMembersOf(editing)[i] || { name: "" };
+
+              {museMembersOf(editing).map((raw, i) => {
+                const member = emptyMuseMember(raw);
+                const isGuest =
+                  normalizeMemberPresence(member.presence) === "guest";
+                const kind = normalizeMuseKind(editing.museKind, editing);
+                const minPartners =
+                  kind === "solo"
+                    ? 0
+                    : MUSE_KIND_MEMBER_LIMITS[kind].minPartners;
+                const partnerIndex = museMembersOf(editing)
+                  .slice(0, i + 1)
+                  .filter(
+                    (m) => normalizeMemberPresence(m.presence) === "partner",
+                  ).length - 1;
                 const required =
-                  i <
-                  MUSE_KIND_MEMBER_LIMITS[
-                    normalizeMuseKind(editing.museKind, editing)
-                  ].min;
+                  !isGuest && partnerIndex >= 0 && partnerIndex < minPartners;
                 return (
                   <div
-                    key={`member-${i}`}
-                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                    key={`member-${i}-${member.linkedPartnerId || i}`}
+                    className={`space-y-3 border px-3 py-3 ${
+                      isGuest
+                        ? "border-[var(--glow)]/35 bg-[#0a1220]/55"
+                        : "border-[var(--line)] bg-[#12100e]/50"
+                    }`}
+                    data-testid={`muse-member-slot-${i}`}
                   >
-                    <label className="grid gap-1 text-xs">
-                      <span className="uppercase tracking-[0.14em] text-[var(--muted)]">
-                        Name {i + 1}
-                        {required ? "" : " (optional)"}
-                      </span>
-                      <input
-                        value={member.name}
-                        required={required}
-                        onChange={(e) =>
-                          updateMember(i, { name: e.target.value })
-                        }
-                        placeholder={
-                          i === 0
-                            ? "Lexi"
-                            : i === 1
-                              ? "Dom"
-                              : `Partner ${i + 1}`
-                        }
-                        className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
-                        data-testid={`muse-member-name-${i}`}
-                      />
-                    </label>
-                    <label className="grid gap-1 text-xs">
-                      <span className="uppercase tracking-[0.14em] text-[var(--muted)]">
-                        Role
-                      </span>
-                      <input
-                        value={member.role || ""}
-                        onChange={(e) =>
-                          updateMember(i, { role: e.target.value })
-                        }
-                        placeholder="e.g. Dom, Switch…"
-                        className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
-                        data-testid={`muse-member-role-${i}`}
-                      />
-                    </label>
-                    {i >=
-                      MUSE_KIND_MEMBER_LIMITS[
-                        normalizeMuseKind(editing.museKind, editing)
-                      ].min && member.name ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const kind = normalizeMuseKind(
-                            editing.museKind,
-                            editing,
-                          );
-                          const next = museMembersOf(editing).filter(
-                            (_, j) => j !== i,
-                          );
-                          setEditing(
-                            withMuseKindFields(editing, {
-                              museKind: kind,
-                              members: next,
-                            }),
-                          );
-                        }}
-                        className="self-end text-[11px] uppercase tracking-[0.14em] text-[var(--danger)] underline-offset-2 hover:underline"
-                      >
-                        Clear
-                      </button>
-                    ) : (
-                      <span className="hidden sm:block" />
-                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+                        {isGuest
+                          ? `Guest ${
+                              museMembersOf(editing)
+                                .slice(0, i + 1)
+                                .filter(
+                                  (m) =>
+                                    normalizeMemberPresence(m.presence) ===
+                                    "guest",
+                                ).length
+                            } · present`
+                          : `Partner ${partnerIndex + 1}`}
+                        {member.linkedPartnerId
+                          ? ` · Solo #${member.linkedPartnerId}`
+                          : ""}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {kind !== "solo" &&
+                          MUSE_MEMBER_PRESENCES.map((pres) => (
+                            <button
+                              key={pres}
+                              type="button"
+                              onClick={() =>
+                                updateMember(i, { presence: pres })
+                              }
+                              className={`rounded-sm border px-2 py-0.5 text-[11px] ${
+                                normalizeMemberPresence(member.presence) ===
+                                pres
+                                  ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                                  : "border-[var(--line)] text-[#c4b7a8]"
+                              }`}
+                              data-testid={`muse-member-presence-${i}-${pres}`}
+                            >
+                              {museMemberPresenceLabel(pres)}
+                            </button>
+                          ))}
+                        {(isGuest || !required) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = museMembersOf(editing).filter(
+                                (_, j) => j !== i,
+                              );
+                              setEditing(
+                                withMuseKindFields(editing, {
+                                  museKind: kind,
+                                  members: next,
+                                }),
+                              );
+                            }}
+                            className="text-[11px] uppercase tracking-[0.14em] text-[var(--danger)] underline-offset-2 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-[5.5rem_1fr]">
+                      <div className="space-y-1.5">
+                        <div className="flex h-20 w-20 items-center justify-center overflow-hidden border border-[var(--line)] bg-[#0c0a09]">
+                          {member.photos?.[member.mainPhotoIndex || 0] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={member.photos[member.mainPhotoIndex || 0]}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-[10px] uppercase tracking-wide text-[var(--muted)]">
+                              Photo
+                            </span>
+                          )}
+                        </div>
+                        <label className="block cursor-pointer text-[10px] uppercase tracking-[0.14em] text-[var(--accent-strong)]">
+                          Add photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            data-testid={`muse-member-photo-${i}`}
+                            onChange={(e) =>
+                              void onMemberPhoto(
+                                i,
+                                e.target.files,
+                                e.currentTarget,
+                              )
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <label className="grid gap-1 text-xs">
+                            <span className="uppercase tracking-[0.14em] text-[var(--muted)]">
+                              Name{required ? "" : " (optional)"}
+                            </span>
+                            <input
+                              value={member.name}
+                              required={required}
+                              onChange={(e) =>
+                                updateMember(i, { name: e.target.value })
+                              }
+                              placeholder={
+                                isGuest
+                                  ? "Roy"
+                                  : i === 0
+                                    ? "Lexi"
+                                    : i === 1
+                                      ? "Dom"
+                                      : `Partner ${i + 1}`
+                              }
+                              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+                              data-testid={`muse-member-name-${i}`}
+                            />
+                          </label>
+                          <label className="grid gap-1 text-xs">
+                            <span className="uppercase tracking-[0.14em] text-[var(--muted)]">
+                              Role
+                            </span>
+                            <input
+                              value={member.role || ""}
+                              onChange={(e) =>
+                                updateMember(i, { role: e.target.value })
+                              }
+                              placeholder="Boy toy, Girl toy…"
+                              className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+                              data-testid={`muse-member-role-${i}`}
+                            />
+                          </label>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {MUSE_MEMBER_ROLE_CHIPS.map((chip) => (
+                            <button
+                              key={chip}
+                              type="button"
+                              onClick={() => updateMember(i, { role: chip })}
+                              className={`rounded-sm border px-2 py-0.5 text-[11px] ${
+                                member.role === chip
+                                  ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                                  : "border-[var(--line)] text-[#c4b7a8]"
+                              }`}
+                            >
+                              {chip}
+                            </button>
+                          ))}
+                        </div>
+                        <div>
+                          <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                            Outlet
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {MEMBER_PRESENTATION_GENDERS.map((g) => (
+                              <button
+                                key={g}
+                                type="button"
+                                onClick={() => {
+                                  const vg = defaultVoiceGender(g);
+                                  updateMember(i, {
+                                    gender: g,
+                                    voiceGender:
+                                      member.voiceGender ===
+                                      defaultVoiceGender(member.gender || "woman")
+                                        ? vg
+                                        : member.voiceGender,
+                                    voicePreset:
+                                      member.voiceGender ===
+                                      defaultVoiceGender(member.gender || "woman")
+                                        ? "auto"
+                                        : member.voicePreset,
+                                  });
+                                }}
+                                className={`rounded-sm border px-2 py-0.5 text-[11px] ${
+                                  member.gender === g
+                                    ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                                    : "border-[var(--line)] text-[#c4b7a8]"
+                                }`}
+                              >
+                                {genderLabel(g)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {!isGuest && (
+                          <div>
+                            <p className="mb-1 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                              Voice
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {VOICE_GENDERS.map((vg) => (
+                                <button
+                                  key={vg}
+                                  type="button"
+                                  onClick={() =>
+                                    updateMember(i, {
+                                      voiceGender: vg,
+                                      voicePreset: "auto",
+                                    })
+                                  }
+                                  className={`rounded-sm border px-2 py-0.5 text-[11px] capitalize ${
+                                    member.voiceGender === vg
+                                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                                      : "border-[var(--line)] text-[#c4b7a8]"
+                                  }`}
+                                >
+                                  {vg}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {isGuest && (
+                          <p className="text-[11px] text-[var(--muted)]">
+                            Guest / present — logged on this Muse for the
+                            session. Acts with you are not required (e.g. Boy
+                            toy Roy watching).
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}
+
+              <button
+                type="button"
+                onClick={addGuestMember}
+                className="rounded-sm border border-[var(--glow)]/45 px-3 py-2 text-xs uppercase tracking-[0.14em] text-[var(--accent-strong)] transition hover:border-[var(--glow)]"
+                data-testid="muse-add-guest"
+              >
+                + Add guest / present (Boy toy · Girl toy)
+              </button>
             </fieldset>
           )}
+
+          {normalizeMuseKind(editing.museKind, editing) === "solo" &&
+            museMembersOf(editing).length === 0 && (
+              <div className="border border-[var(--line)]/80 bg-[#0f0d0b]/35 px-4 py-3">
+                <p className="text-xs text-[var(--muted)]">
+                  Session log: add a guest who was present without acts — e.g.
+                  Boy toy Roy in a threesome you logged on this Muse.
+                </p>
+                <button
+                  type="button"
+                  onClick={addGuestMember}
+                  className="mt-2 rounded-sm border border-[var(--glow)]/45 px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--accent-strong)]"
+                  data-testid="muse-add-guest-solo"
+                >
+                  + Add guest / present
+                </button>
+              </div>
+            )}
 
           <fieldset className="space-y-2">
             <legend className="text-sm uppercase tracking-[0.16em]">
