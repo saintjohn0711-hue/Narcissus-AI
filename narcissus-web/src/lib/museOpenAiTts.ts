@@ -2,7 +2,11 @@
  * OpenAI TTS mapping for Muse chat narration.
  * Server-safe — used by `/api/art-of-x/tts` (and mirrored in docs).
  *
- * Requires `OPENAI_API_KEY`. No ElevenLabs path unless that secret is provisioned.
+ * Requires `OPENAI_API_KEY`. Prefers OpenAI’s highest-quality instruction
+ * voices (`marin` / `cedar`) with structured delivery prompts so Companion
+ * chat sounds human — not robotic Web Speech / announcer TTS.
+ *
+ * No ElevenLabs path unless that secret is provisioned.
  */
 
 import {
@@ -42,62 +46,103 @@ export type OpenAiTtsPlan = {
   accent: MuseVoiceAccentId;
 };
 
+/** Stable alias; override with `OPENAI_TTS_MODEL` (e.g. dated snapshot). */
+export const OPENAI_TTS_DEFAULT_MODEL = "gpt-4o-mini-tts";
+
 const ACCENT_INSTRUCTIONS: Record<MuseVoiceAccentId, string> = {
-  auto: "Speak clear, natural English.",
-  "en-US": "Speak with a natural American English accent.",
-  "en-GB": "Speak with a clear British English accent.",
-  "en-AU": "Speak with an Australian English accent.",
-  "en-IE": "Speak with an Irish English accent.",
-  "en-IN": "Speak with an Indian English accent.",
-  "en-ZA": "Speak with a South African English accent.",
+  auto: "Accent: natural clear English.",
+  "en-US": "Accent: natural American English.",
+  "en-GB": "Accent: clear British English.",
+  "en-AU": "Accent: Australian English.",
+  "en-IE": "Accent: soft Irish English.",
+  "en-IN": "Accent: Indian English.",
+  "en-ZA": "Accent: South African English.",
   "fr-FR":
-    "Prefer French when the text is French; otherwise speak English with a light French accent.",
+    "Accent: light French when speaking English; prefer French if the text is French.",
   "es-ES":
-    "Prefer Spanish (Spain) when the text is Spanish; otherwise speak English with a light Spanish accent.",
+    "Accent: light Spanish (Spain) when speaking English; prefer Spanish if the text is Spanish.",
   "es-MX":
-    "Prefer Mexican Spanish when the text is Spanish; otherwise speak English with a light Mexican Spanish accent.",
+    "Accent: light Mexican Spanish when speaking English; prefer Spanish if the text is Spanish.",
   "it-IT":
-    "Prefer Italian when the text is Italian; otherwise speak English with a light Italian accent.",
+    "Accent: light Italian when speaking English; prefer Italian if the text is Italian.",
   "pt-BR":
-    "Prefer Brazilian Portuguese when the text is Portuguese; otherwise speak English with a light Brazilian Portuguese accent.",
+    "Accent: light Brazilian Portuguese when speaking English; prefer Portuguese if the text is Portuguese.",
   "de-DE":
-    "Prefer German when the text is German; otherwise speak English with a light German accent.",
+    "Accent: light German when speaking English; prefer German if the text is German.",
   "nl-NL":
-    "Prefer Dutch when the text is Dutch; otherwise speak English with a light Dutch accent.",
+    "Accent: light Dutch when speaking English; prefer Dutch if the text is Dutch.",
 };
 
 type VoicePick = {
   voice: OpenAiTtsVoice;
-  tone: string;
+  /** Structured delivery lines (Affect / Tone / Pacing / Emotion / …). */
+  delivery: string[];
 };
 
+/**
+ * Prefer OpenAI’s flagship-quality `marin` (femme) / `cedar` (masc).
+ * Strong character presets keep a distinct base voice, then instructions
+ * pull the read toward intimate companion speech.
+ */
 function pickVoice(
   gender: MuseVoiceGender,
   preset: MuseVoicePresetId,
+  accent: MuseVoiceAccentId,
 ): VoicePick {
+  // British auto → fable’s UK lean still sounds more natural than forcing marin.
   if (gender === "female") {
     switch (preset) {
       case "sultry":
         return {
           voice: "coral",
-          tone: "Speak in a low, intimate, sultry tone — unhurried and close.",
+          delivery: [
+            "Voice Affect: intimate close-mic companion; soft breath at edges.",
+            "Tone: low, sultry, unhurried — private, never theatrical.",
+            "Pacing: slow and deliberate; linger on desire without rushing.",
+            "Emotion: warm heat and quiet confidence.",
+            "Pauses: short breath between sentences; never choppy.",
+            "Delivery: speak like you are inches away — not a voiceover.",
+          ],
         };
       case "soft":
         return {
-          voice: "sage",
-          tone: "Speak gently and softly, warm and caring.",
+          voice: "marin",
+          delivery: [
+            "Voice Affect: gentle, airy, caring companion.",
+            "Tone: soft and reassuring; light smile in the voice.",
+            "Pacing: easy and unhurried; never clipped.",
+            "Emotion: tenderness and quiet affection.",
+            "Pauses: soft breaths at commas; settle at periods.",
+            "Delivery: pillow-talk intimacy — human, not narrator.",
+          ],
         };
       case "bright":
         return {
           voice: "nova",
-          tone: "Speak with a bright, clear, lively tone.",
+          delivery: [
+            "Voice Affect: clear, lively, playful companion.",
+            "Tone: bright and warm without sounding chirpy or salesy.",
+            "Pacing: lightly energetic; still conversational.",
+            "Emotion: curiosity and flirtatious cheer.",
+            "Pauses: natural turn-taking beats, not robotic ticks.",
+            "Delivery: like a witty friend on a call — never announcer.",
+          ],
         };
       case "auto":
-      default:
+      default: {
+        const british = accent === "en-GB" || accent === "en-IE";
         return {
-          voice: "marin",
-          tone: "Speak naturally, warm and conversational, as a close companion.",
+          voice: british ? "fable" : "marin",
+          delivery: [
+            "Voice Affect: natural, polished companion — OpenAI flagship quality.",
+            "Tone: warm, conversational, emotionally present.",
+            "Pacing: everyday speech rhythm; slight variation, not metronome.",
+            "Emotion: easy closeness and attentive interest.",
+            "Pauses: brief human breaths at punctuation.",
+            "Delivery: private chat message — never robotic or news-reader.",
+          ],
         };
+      }
     }
   }
 
@@ -105,30 +150,61 @@ function pickVoice(
     case "deep":
       return {
         voice: "onyx",
-        tone: "Speak in a deep, resonant male register — calm and grounded.",
+        delivery: [
+          "Voice Affect: deep, resonant male register with natural chest warmth.",
+          "Tone: calm, grounded, intimate control — not cartoon basso.",
+          "Pacing: slightly slower; weight on key words.",
+          "Emotion: steady desire and quiet authority.",
+          "Pauses: deliberate; let lines land.",
+          "Delivery: close companion speech — human, never announcer.",
+        ],
       };
     case "warm":
       return {
-        voice: "ash",
-        tone: "Speak with a warm, friendly male conversational tone.",
+        voice: "cedar",
+        delivery: [
+          "Voice Affect: warm, friendly male companion.",
+          "Tone: inviting and sincere; soft smile without mirthless cheer.",
+          "Pacing: easy conversational flow.",
+          "Emotion: affection and easy confidence.",
+          "Pauses: natural breaths; never stiff.",
+          "Delivery: like talking to someone you trust — not TTS demo.",
+        ],
       };
     case "smooth":
       return {
         voice: "ballad",
-        tone: "Speak smoothly and confidently, steady male delivery.",
+        delivery: [
+          "Voice Affect: smooth, confident male — polished but human.",
+          "Tone: steady charm; low theatricality.",
+          "Pacing: even and fluid; no choppy syllables.",
+          "Emotion: cool assurance with quiet heat.",
+          "Pauses: elegant, brief; never mechanical.",
+          "Delivery: intimate companion read — not radio host.",
+        ],
       };
     case "auto":
-    default:
+    default: {
+      const british = accent === "en-GB" || accent === "en-IE";
       return {
-        voice: "cedar",
-        tone: "Speak naturally, warm and conversational, as a close companion.",
+        voice: british ? "ash" : "cedar",
+        delivery: [
+          "Voice Affect: natural, grounded male companion — OpenAI flagship quality.",
+          "Tone: warm, conversational, emotionally present.",
+          "Pacing: everyday speech rhythm; slight variation, not metronome.",
+          "Emotion: easy closeness and attentive interest.",
+          "Pauses: brief human breaths at punctuation.",
+          "Delivery: private chat message — never robotic or news-reader.",
+        ],
       };
+    }
   }
 }
 
 function clampSpeed(rate: number): number {
   // Muse presets use ~0.88–1.02; OpenAI speed is 0.25–4.0.
-  const mapped = Math.max(0.85, Math.min(1.15, rate));
+  // Keep near 1.0 so instructions (not speed) carry most of the character.
+  const mapped = Math.max(0.88, Math.min(1.08, rate));
   return Math.round(mapped * 100) / 100;
 }
 
@@ -143,26 +219,26 @@ export function planOpenAiTts(
   const gender = normalizeVoiceGender(settings.gender);
   const preset = normalizeVoicePreset(settings.preset, gender);
   const accent = normalizeVoiceAccent(settings.accent);
-  const pick = pickVoice(gender, preset);
+  const pick = pickVoice(gender, preset, accent);
   const presetDef = getVoicePreset(preset);
   const accentLine = ACCENT_INSTRUCTIONS[accent] || ACCENT_INSTRUCTIONS.auto;
   const accentDef = getVoiceAccent(accent);
 
   const instructions = [
-    "You are narrating a private companion chat message.",
-    "Sound human and natural — not robotic, not announcer-like.",
-    pick.tone,
+    "You are speaking a private companion chat reply aloud.",
+    "Sound like a real person in the room — never robotic, never announcer-like, never synthetic cadence.",
+    ...pick.delivery,
     accentLine,
     accentDef.lang
       ? `Locale preference: ${accentDef.lang} (${accentDef.blurb}).`
       : "",
-    "Keep pacing natural; pause briefly at punctuation.",
+    "Keep micro-dynamics human: soft consonants, natural emphasis, brief breaths.",
   ]
     .filter(Boolean)
-    .join(" ");
+    .join("\n");
 
   const model =
-    process.env.OPENAI_TTS_MODEL?.trim() || "gpt-4o-mini-tts";
+    process.env.OPENAI_TTS_MODEL?.trim() || OPENAI_TTS_DEFAULT_MODEL;
 
   return {
     model,
@@ -174,6 +250,28 @@ export function planOpenAiTts(
     accent,
   };
 }
+
+/**
+ * Static map for docs / UI — mirrors `pickVoice` defaults (US / auto accent).
+ * Accent may swap auto → fable (femme UK/IE) or ash (masc UK/IE).
+ */
+export const OPENAI_VOICE_PRESET_MAP: Record<
+  MuseVoiceGender,
+  Partial<Record<MuseVoicePresetId, OpenAiTtsVoice>>
+> = {
+  female: {
+    auto: "marin",
+    sultry: "coral",
+    soft: "marin",
+    bright: "nova",
+  },
+  male: {
+    auto: "cedar",
+    deep: "onyx",
+    warm: "cedar",
+    smooth: "ballad",
+  },
+};
 
 export function resolveOpenAiTtsKey(): string | null {
   const key = process.env.OPENAI_API_KEY?.trim();

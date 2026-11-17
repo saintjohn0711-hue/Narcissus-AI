@@ -22,8 +22,8 @@ Set locally in `.env.local` (or on Vercel for `narcissus-ai`):
 | `XAI_API_KEY` | xAI Grok for Art of X partner chat + Stories scene writer |
 | `XAI_MODEL` | Optional; defaults to `grok-4.7` |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway — enables looks vision (+ optional OpenAI-compat paths via `llmConfig`) |
-| `OPENAI_API_KEY` | Fallback if Gateway key is absent; **required for natural Muse chat TTS** (`POST /api/art-of-x/tts`) |
-| `OPENAI_TTS_MODEL` | Optional; defaults to `gpt-4o-mini-tts` |
+| `OPENAI_API_KEY` | Fallback if Gateway key is absent; **required for natural Muse chat TTS** (`POST /api/art-of-x/tts`). Set on Vercel Production + Preview, then redeploy. |
+| `OPENAI_TTS_MODEL` | Optional; defaults to `gpt-4o-mini-tts` (override e.g. `gpt-4o-mini-tts-2025-12-15`) |
 | `SCENE_MODEL` | Optional override for Gateway-backed scene/looks helpers |
 | `LOOKS_VISION_MODEL` | Optional looks-vision model override |
 
@@ -31,7 +31,7 @@ Set locally in `.env.local` (or on Vercel for `narcissus-ai`):
 
 Without a Gateway/OpenAI key, describe-looks stays unavailable; Scene builder still uses local craft when the LLM path is down.
 
-**Muse chat voice:** Companion chat narrates Muse replies with **OpenAI TTS** via `POST /api/art-of-x/tts` when `OPENAI_API_KEY` is set (gender / accent / delivery → `gpt-4o-mini-tts` voice + instructions). Preview-on-select uses the same natural engine. Without the key (or offline), the client uses browser Web Speech with soft recovery (voices loaded, cancel-race retry, non-blocking hints) — Preview/Play never hard-fails chat. Studio Say-This still uses local Edge-TTS on Comfy hosts. ElevenLabs is not wired (no project key).
+**Muse chat voice:** Companion chat narrates Muse replies with **OpenAI TTS** via `POST /api/art-of-x/tts` when `OPENAI_API_KEY` is set (gender / accent / delivery → `gpt-4o-mini-tts` + flagship `marin`/`cedar` voices and structured instructions). Demo Muses ship with presets (Woman → sultry, Rocky → deep, Jaxx → soft). Without the key (or offline), the client soft-falls back to browser Web Speech — Preview/Play never hard-fails chat. Studio Say-This still uses local Edge-TTS on Comfy hosts. ElevenLabs is not wired.
 
 ## API
 

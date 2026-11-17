@@ -144,7 +144,7 @@ export function MuseVoicePreviewBar({
       <p className="muse-voice-preview-hint">
         {api.natural
           ? "Selecting gender, accent, or delivery plays a short natural voice test."
-          : "Using this browser’s voice for now — natural Muse TTS needs OPENAI_API_KEY on the server. Chat stays usable either way."}
+          : "Using this browser’s voice for now — set OPENAI_API_KEY on Vercel (Production + Preview) and redeploy for natural OpenAI TTS. Chat stays usable either way."}
       </p>
       {api.hint ? (
         <p
