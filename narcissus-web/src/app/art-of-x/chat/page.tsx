@@ -176,6 +176,8 @@ function ChatPageInner() {
   );
   const [chatOpen, setChatOpen] = useState(true);
   const [chatPrefReady, setChatPrefReady] = useState(false);
+  /** Bump to open MusePresence stage menus while keeping the chat split. */
+  const [menusOpenRequest, setMenusOpenRequest] = useState(0);
   const [ribbonFlash, setRibbonFlash] = useState<string | null>(null);
   const [memoryDraft, setMemoryDraft] = useState("");
   const [memoryKind, setMemoryKind] = useState<MuseMemoryKind>("relationship");
@@ -1362,6 +1364,9 @@ function ChatPageInner() {
                       : undefined
                   }
                   chatOpen={companionFull ? chatOpen : undefined}
+                  menusOpenRequest={
+                    companionFull ? menusOpenRequest : undefined
+                  }
                   onPartnerPhotosChange={updatePartnerPhotos}
                 />
               </div>
@@ -1424,16 +1429,30 @@ function ChatPageInner() {
                       </p>
                     </div>
                     {companionFull && (
-                      <button
-                        type="button"
-                        onClick={closeChatPanel}
-                        className="muse-chat-drawer-close"
-                        data-testid="muse-chat-close"
-                        aria-label="Close chat"
-                        title="Close chat — show more of the Muse"
-                      >
-                        Close
-                      </button>
+                      <div className="muse-chat-drawer-header-actions">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMenusOpenRequest((n) => n + 1)
+                          }
+                          className="muse-chat-drawer-menus"
+                          data-testid="muse-chat-open-menus"
+                          aria-label="Open stage menus"
+                          title="Open Muse picker, Look, Customize, and Actions on the media side"
+                        >
+                          Menus
+                        </button>
+                        <button
+                          type="button"
+                          onClick={closeChatPanel}
+                          className="muse-chat-drawer-close"
+                          data-testid="muse-chat-close"
+                          aria-label="Close chat"
+                          title="Close chat — show more of the Muse"
+                        >
+                          Close
+                        </button>
+                      </div>
                     )}
                   </div>
 
