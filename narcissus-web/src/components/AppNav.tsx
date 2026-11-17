@@ -17,7 +17,9 @@ const DESKTOP_PRIMARY = [
 ];
 
 function linkActive(pathname: string, href: string, outlet: OutletId | null) {
-  if (href === "/") return pathname === "/";
+  if (href === "/" || href === "/menu") {
+    return pathname === "/menu" || pathname === "/";
+  }
   if (href === "/art-of-x") return pathname === "/art-of-x";
 
   const [path, qs] = href.split("?");
@@ -110,9 +112,9 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
     <>
       <header className={headerClass}>
         <Link
-          href="/"
+          href="/menu"
           className="app-nav-brand flex min-w-0 items-center gap-2.5 text-[var(--ink)] no-underline"
-          aria-label="Narcissus AI home"
+          aria-label="Narcissus menu"
         >
           <span className="relative inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25">
             <Image
@@ -258,9 +260,9 @@ function AppNavFallback({ variant = "default" }: AppNavProps) {
   return (
     <header className={headerClass}>
       <Link
-        href="/"
+        href="/menu"
         className="app-nav-brand flex min-w-0 items-center gap-2.5 text-[var(--ink)] no-underline"
-        aria-label="Narcissus AI home"
+        aria-label="Narcissus menu"
       >
         <span className="relative inline-flex h-8 w-8 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25">
           <Image
