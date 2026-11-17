@@ -1523,6 +1523,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     history: string;
     dynTags: string[];
     dynamics: string;
+    doneActs: string[];
   }> = [
     {
       name: "Carrie",
@@ -1535,6 +1536,13 @@ export function arkDemoRoster(): PartnerRecord[] {
         "Oral, group, dirty talk, free-use energy, cum play. Dominant-leaning at times.",
       dynTags: ["Ongoing", "Dominant", "Free-use", "Group regular"],
       dynamics: "Dominant-leaning; free-use energy; group comfortable",
+      doneActs: [
+        "Blowjob given",
+        "Dirty talk",
+        "Domination",
+        "Group sex",
+        "Facial",
+      ],
     },
     {
       name: "Cheryl",
@@ -1547,6 +1555,14 @@ export function arkDemoRoster(): PartnerRecord[] {
         "Long-term. Creampie cleanup, threesomes and groups, strap-on, dirty talk.",
       dynTags: ["Long-term", "Ongoing", "Hotwife/Cuck", "Group regular"],
       dynamics: "Long-term partner energy; creampie/cleanup; brings others in",
+      doneActs: [
+        "Vaginal sex",
+        "Creampie",
+        "Creampie cleanup",
+        "Threesome",
+        "Pegging / strap-on",
+        "Dirty talk",
+      ],
     },
     {
       name: "Matt",
@@ -1559,6 +1575,13 @@ export function arkDemoRoster(): PartnerRecord[] {
         "Long-term, controlling. Ass training, cage, piss play, directed partners.",
       dynTags: ["Long-term", "Controlling", "Owns me", "Dominant"],
       dynamics: "Calls the shots; directs partners; cage play",
+      doneActs: [
+        "Anal sex (received)",
+        "Chastity / cage",
+        "Domination",
+        "Piss play",
+        "Overnight",
+      ],
     },
     {
       name: "Jules",
@@ -1577,6 +1600,13 @@ export function arkDemoRoster(): PartnerRecord[] {
       history: "Dream/RP. Aggressive dominant; dirty talk.",
       dynTags: ["Dominant", "Rough", "Owns me"],
       dynamics: "Dream femboy; aggressive; dirty talk",
+      doneActs: [
+        "Blowjob given",
+        "Face-fucking",
+        "Anal sex (received)",
+        "Dirty talk",
+        "Facial",
+      ],
     },
   ];
   return seed.map((s, i) => ({
@@ -1590,7 +1620,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     dynamics: s.dynamics,
     dynTags: s.dynTags,
     kinks: normalizeKinks(s.kinks),
-    doneActs: [],
+    doneActs: [...s.doneActs],
     photos: [],
     mainPhotoIndex: 0,
     favorite: false,

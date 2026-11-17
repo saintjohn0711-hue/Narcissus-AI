@@ -5,10 +5,12 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import {
+  ACT_GROUPS,
   displayName,
   genderLabel,
   mainPhoto,
@@ -31,6 +33,8 @@ type PartnerCardProps = {
   onRemove: () => void;
   /** Persist featured/main photo when the viewer picks one */
   onSelectPhoto?: (index: number) => void;
+  /** Inline act toggle — persists without opening full editor */
+  onToggleAct?: (act: string) => void;
   /** Manual sort controls (Your order) */
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -38,33 +42,16 @@ type PartnerCardProps = {
   canMoveDown?: boolean;
 };
 
-function Section({
-  label,
-  children,
-  className = "",
-}: {
-  label: string;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={className}>
-      <h3 className="text-[11px] uppercase tracking-[0.22em] text-[#c4b7a8]/85">
-        {label}
-      </h3>
-      <div className="mt-2.5">{children}</div>
-    </section>
-  );
-}
+type Panel = "none" | "acts" | "details";
 
 function SoftList({ items }: { items: string[] }) {
   if (!items.length) return null;
   return (
-    <p className="text-[15px] leading-[1.65] text-[#e8dfd2]">
+    <p className="text-[13px] leading-[1.55] text-[#e8dfd2]">
       {items.map((item, i) => (
         <span key={`${item}-${i}`}>
           {i > 0 && (
-            <span className="mx-2 text-[var(--muted)]/55" aria-hidden>
+            <span className="mx-1.5 text-[var(--muted)]/55" aria-hidden>
               ·
             </span>
           )}
@@ -72,6 +59,23 @@ function SoftList({ items }: { items: string[] }) {
         </span>
       ))}
     </p>
+  );
+}
+
+function DetailBlock({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <h3 className="text-[10px] uppercase tracking-[0.2em] text-[var(--muted)]">
+        {label}
+      </h3>
+      <div className="mt-1.5">{children}</div>
+    </section>
   );
 }
 
@@ -196,8 +200,8 @@ function PhotoLightbox({
 }
 
 /**
- * Partner list card — photo gallery on top, then identity + stacked
- * labeled sections for looks / dynamics / history / notes / acts / kinks.
+ * Dense Muse list row — ~two lines of scan info, expandable activity log + details.
+ * Designed for long partner ledgers (many Muses × what you did with each).
  */
 export function PartnerCard({
   partner: p,
@@ -208,6 +212,7 @@ export function PartnerCard({
   onEdit,
   onRemove,
   onSelectPhoto,
+  onToggleAct,
   onMoveUp,
   onMoveDown,
   canMoveUp,
@@ -218,14 +223,18 @@ export function PartnerCard({
     Math.max(0, p.mainPhotoIndex ?? 0),
     Math.max(0, photos.length - 1),
   );
-  const [activeIndex, setActiveIndex] = useState(mainIdx);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [panel, setPanel] = useState<Panel>("none");
+  const [actQuery, setActQuery] = useState("");
+  const actsPanelId = useId();
+  const detailsPanelId = useId();
 
   useEffect(() => {
-    setActiveIndex(mainIdx);
-  }, [mainIdx, p.id]);
+    setPanel("none");
+    setActQuery("");
+  }, [p.id]);
 
-  const hero = photos[activeIndex] || mainPhoto(p);
+  const thumb = mainPhoto(p);
   const kinkTags = normalizeKinks(p.kinks).map((k) => k.tag);
   const paired = pairedMusesFor(p, roster);
   const pairedIds = new Set(
@@ -235,180 +244,122 @@ export function PartnerCard({
     (other) =>
       !samePartnerId(other.id, p.id) && !pairedIds.has(Number(other.id)),
   );
+  const memoryCount = normalizeMemories(p.memories).length;
+  const doneActs = p.doneActs || [];
+  const actCount = doneActs.length;
+
   const metaBits = [
     p.type,
     genderLabel(p.gender),
     photos.length
       ? `${photos.length} photo${photos.length === 1 ? "" : "s"}`
       : null,
-    paired.length
-      ? `together with ${paired.length}`
-      : null,
   ].filter(Boolean) as string[];
+
+  const previewActs = useMemo(() => doneActs.slice(0, 4), [doneActs]);
+  const moreActs = Math.max(0, actCount - previewActs.length);
 
   const hasLooks = Boolean(p.looks?.trim());
   const hasHistory = Boolean(p.history?.trim());
-  const hasActs = p.doneActs.length > 0;
   const hasKinks = kinkTags.length > 0;
   const hasDynTags = p.dynTags.length > 0;
   const hasDynamics = Boolean(p.dynamics?.trim());
   const hasDynBlock = hasDynTags || hasDynamics;
   const hasNotes = Boolean(p.notes?.trim());
   const hasPaired = paired.length > 0;
-  const hasBody =
+  const hasDetails =
     hasLooks ||
     hasHistory ||
-    hasActs ||
     hasKinks ||
     hasDynBlock ||
     hasNotes ||
     hasPaired ||
+    photos.length > 1 ||
     Boolean(onTogglePairing);
-  const hasProseAbove = hasLooks || hasDynBlock || hasHistory || hasNotes;
   const initial = (p.name || "?").trim().slice(0, 1).toUpperCase();
 
-  /** Browse only — does not persist main/featured (that needs an explicit star). */
-  const selectPhoto = useCallback(
-    (index: number, open = true) => {
-      if (!photos.length) return;
-      const i = Math.min(Math.max(0, index), photos.length - 1);
-      setActiveIndex(i);
-      if (open) setLightboxIndex(i);
-    },
-    [photos.length],
-  );
+  const filteredActGroups = useMemo(() => {
+    const q = actQuery.trim().toLowerCase();
+    if (!q) return ACT_GROUPS;
+    return ACT_GROUPS.map((g) => ({
+      cat: g.cat,
+      tags: g.tags.filter(
+        (t) =>
+          t.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q),
+      ),
+    })).filter((g) => g.tags.length > 0);
+  }, [actQuery]);
+
+  const openLightbox = useCallback(() => {
+    if (!photos.length) return;
+    setLightboxIndex(mainIdx);
+  }, [photos.length, mainIdx]);
 
   const setAsMain = useCallback(
     (index: number) => {
       if (!photos.length) return;
       const i = Math.min(Math.max(0, index), photos.length - 1);
-      setActiveIndex(i);
       onSelectPhoto?.(i);
     },
     [onSelectPhoto, photos.length],
   );
 
+  function togglePanel(next: Panel) {
+    setPanel((cur) => (cur === next ? "none" : next));
+  }
+
   return (
-    <article className="partner-card overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/45">
-      {/* Top photo gallery */}
-      <div className="border-b border-[var(--line)] bg-[#0c0a09]">
-        {hero ? (
-          <button
-            type="button"
-            onClick={() => selectPhoto(activeIndex, true)}
-            className="group relative flex min-h-48 w-full items-center justify-center bg-[#0c0a09] sm:min-h-56"
-            aria-label={`Open photo of ${p.name}`}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={hero}
-              alt=""
-              className="max-h-72 w-full object-contain transition duration-300 group-hover:opacity-95 sm:max-h-80"
-            />
-            <span className="pointer-events-none absolute bottom-3 right-3 text-[10px] uppercase tracking-[0.22em] text-[#c4b7a8]/0 transition group-hover:text-[#c4b7a8]/90">
-              Open
-            </span>
-          </button>
-        ) : (
-          <div
-            className="relative flex min-h-40 flex-col items-center justify-center gap-2 px-4 py-12"
-            aria-hidden
-          >
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(420px 220px at 50% 40%, rgba(232,168,124,0.12), transparent 70%)",
-              }}
-            />
+    <article
+      className={`partner-card muse-row overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/40 ${
+        panel !== "none" ? "muse-row--open" : ""
+      }`}
+      data-testid="muse-row"
+    >
+      {/* Dense two-row scan surface */}
+      <div className="muse-row-core flex gap-3 px-3 py-2.5 sm:gap-3.5 sm:px-4 sm:py-3">
+        <button
+          type="button"
+          onClick={openLightbox}
+          disabled={!thumb}
+          className="muse-row-thumb relative h-14 w-14 shrink-0 overflow-hidden bg-[#0c0a09] ring-1 ring-[var(--line)] transition enabled:hover:ring-[var(--glow)]/45 disabled:cursor-default sm:h-[3.75rem] sm:w-[3.75rem]"
+          aria-label={
+            thumb ? `Open photo of ${p.name}` : `${p.name} — no photo`
+          }
+        >
+          {thumb ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={thumb} alt="" className="h-full w-full object-cover" />
+          ) : (
             <span
-              className="relative text-4xl tracking-wide text-[var(--accent-strong)]/75"
+              className="flex h-full w-full items-center justify-center text-lg text-[var(--accent-strong)]/80"
               style={{ fontFamily: "var(--font-display), serif" }}
+              aria-hidden
             >
               {initial}
             </span>
-            <span className="relative text-[10px] uppercase tracking-[0.28em] text-[var(--muted)]">
-              No photo
-            </span>
-          </div>
-        )}
+          )}
+        </button>
 
-        {photos.length > 0 && (
-          <div className="border-t border-[var(--line)] px-4 py-3 sm:px-5">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-[var(--muted)]">
-                Photos
-              </p>
-              {photos.length > 1 && (
-                <p className="text-[10px] text-[var(--muted)]">
-                  Tap to open · set main in lightbox
-                </p>
-              )}
-            </div>
-            <div
-              className="partner-photo-strip -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1"
-              role="list"
-              aria-label={`${p.name} photos`}
-            >
-              {photos.map((src, i) => {
-                const isActive = i === activeIndex;
-                const isMain = i === (p.mainPhotoIndex ?? 0);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    role="listitem"
-                    onClick={() => selectPhoto(i, true)}
-                    aria-label={`Photo ${i + 1}${isMain ? ", main" : ""}`}
-                    aria-current={isActive ? "true" : undefined}
-                    className={`relative h-16 w-16 shrink-0 overflow-hidden bg-[#12100e] transition sm:h-[4.5rem] sm:w-[4.5rem] ${
-                      isMain
-                        ? "ring-1 ring-[var(--accent)]"
-                        : isActive
-                          ? "ring-1 ring-[var(--glow)]/50"
-                          : "ring-1 ring-[var(--line)] hover:ring-[var(--accent)]/45"
-                    }`}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Identity + body */}
-      <div className="flex min-w-0 flex-col">
-        <header className="relative border-b border-[var(--line)] px-5 py-4 sm:px-6 sm:py-5">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "radial-gradient(420px 160px at 0% 0%, rgba(232,168,124,0.14), transparent 60%)",
-            }}
-          />
-          <div className="relative flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {/* Row 1 — identity + actions */}
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <div className="min-w-0">
               <h2
-                className="truncate text-2xl text-[var(--ink)] sm:text-[1.85rem]"
+                className="truncate text-[1.05rem] leading-tight text-[var(--ink)] sm:text-[1.15rem]"
                 style={{ fontFamily: "var(--font-display), serif" }}
               >
                 {p.name}
               </h2>
-              <p className="mt-1.5 text-[11px] uppercase tracking-[0.2em] text-[var(--muted)]">
+              <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
                 {metaBits.join(" · ")}
+                {hasPaired
+                  ? ` · together ${paired.length}`
+                  : ""}
               </p>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-3 pt-1 text-xs">
+            <div className="muse-row-actions flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]">
               {(onMoveUp || onMoveDown) && (
-                <span className="flex gap-2 text-[var(--muted)]">
+                <span className="flex gap-1.5 text-[var(--muted)]">
                   <button
                     type="button"
                     onClick={onMoveUp}
@@ -440,24 +391,8 @@ export function PartnerCard({
                 className="text-[var(--accent-strong)] underline-offset-2 hover:underline"
                 data-testid="muse-card-memories-link"
               >
-                Memories
-                {normalizeMemories(p.memories).length
-                  ? ` (${normalizeMemories(p.memories).length})`
-                  : ""}
+                Mem{memoryCount ? ` ${memoryCount}` : ""}
               </Link>
-              {onTogglePairing && (
-                <button
-                  type="button"
-                  onClick={onTogglePairing}
-                  className={`underline-offset-2 hover:underline ${
-                    pairingOpen
-                      ? "text-[var(--accent-strong)]"
-                      : "text-[#c4b7a8]"
-                  }`}
-                >
-                  {pairingOpen ? "Cancel pair" : "Been together"}
-                </button>
-              )}
               <button
                 type="button"
                 onClick={onEdit}
@@ -470,52 +405,221 @@ export function PartnerCard({
                 onClick={onRemove}
                 className="text-[var(--danger)] underline-offset-2 hover:underline"
               >
-                Remove
+                ×
               </button>
             </div>
           </div>
-        </header>
 
-        {hasBody ? (
-          <div className="flex flex-col gap-5 px-5 py-5 sm:gap-6 sm:px-6 sm:py-6">
-            {(hasPaired || pairingOpen) && (
-              <Section label="Been together">
+          {/* Row 2 — activity summary + expand controls */}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <button
+              type="button"
+              onClick={() => togglePanel("acts")}
+              aria-expanded={panel === "acts"}
+              aria-controls={actsPanelId}
+              className={`muse-row-act-btn inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-[11px] transition ${
+                panel === "acts"
+                  ? "border-[var(--glow)]/55 bg-[var(--glow)]/10 text-[var(--glow)]"
+                  : "border-[var(--line)] text-[#c4b7a8] hover:border-[var(--glow)]/35 hover:text-[var(--ink)]"
+              }`}
+              data-testid="muse-row-acts-toggle"
+            >
+              <span className="font-medium tabular-nums">{actCount}</span>
+              <span className="uppercase tracking-[0.12em]">
+                {actCount === 1 ? "act" : "acts"}
+              </span>
+              <span aria-hidden className="text-[9px] opacity-70">
+                {panel === "acts" ? "▾" : "▸"}
+              </span>
+            </button>
+
+            {previewActs.length > 0 ? (
+              <p className="min-w-0 flex-1 truncate text-[12px] leading-snug text-[#d8cfc2]/90">
+                {previewActs.join(" · ")}
+                {moreActs > 0 ? (
+                  <span className="text-[var(--muted)]"> +{moreActs}</span>
+                ) : null}
+              </p>
+            ) : (
+              <p className="min-w-0 flex-1 truncate text-[12px] text-[var(--muted)]">
+                No acts logged yet
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => togglePanel("details")}
+              aria-expanded={panel === "details"}
+              aria-controls={detailsPanelId}
+              className={`shrink-0 text-[11px] uppercase tracking-[0.12em] underline-offset-2 hover:underline ${
+                panel === "details"
+                  ? "text-[var(--accent-strong)]"
+                  : "text-[var(--muted)] hover:text-[#c4b7a8]"
+              }`}
+              data-testid="muse-row-details-toggle"
+            >
+              {panel === "details" ? "Hide" : "More"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Inline sexual activity log */}
+      {panel === "acts" && (
+        <div
+          id={actsPanelId}
+          className="muse-row-panel border-t border-[var(--line)] px-3 py-3 sm:px-4"
+          data-testid="muse-row-acts-panel"
+        >
+          <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--glow)]">
+                Sexual activity with {p.name}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[var(--muted)]">
+                Tap to log what you&apos;ve done — saved with this Muse.
+              </p>
+            </div>
+            {onToggleAct ? null : (
+              <button
+                type="button"
+                onClick={onEdit}
+                className="text-[11px] text-[var(--accent-strong)] underline-offset-2 hover:underline"
+              >
+                Edit to log acts
+              </button>
+            )}
+          </div>
+
+          {doneActs.length > 0 && (
+            <ul className="muse-act-done mb-3 flex flex-col gap-1 border border-[var(--line)]/80 bg-[#0a0e18]/55 px-2.5 py-2">
+              {doneActs.map((act) => (
+                <li
+                  key={act}
+                  className="flex items-center justify-between gap-2 border-b border-[var(--line)]/50 py-1 last:border-0"
+                >
+                  <span className="text-[13px] text-[#f0e6dc]">{act}</span>
+                  {onToggleAct && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleAct(act)}
+                      className="shrink-0 text-[10px] uppercase tracking-[0.12em] text-[var(--danger)] underline-offset-2 hover:underline"
+                    >
+                      Undo
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {onToggleAct && (
+            <>
+              <label className="mb-2 block">
+                <span className="sr-only">Search acts</span>
+                <input
+                  type="search"
+                  value={actQuery}
+                  onChange={(e) => setActQuery(e.target.value)}
+                  placeholder="Search acts — oral, anal, toys…"
+                  className="prompt-field w-full rounded-sm border border-[var(--line)] bg-[#12161f] px-2.5 py-1.5 text-[13px]"
+                />
+              </label>
+              <div className="muse-act-catalog max-h-56 space-y-2.5 overflow-y-auto overscroll-contain pr-0.5">
+                {filteredActGroups.map((g) => (
+                  <div key={g.cat}>
+                    <p className="mb-1 text-[9px] uppercase tracking-[0.18em] text-[var(--muted)]">
+                      {g.cat}
+                    </p>
+                    <div className="flex flex-col">
+                      {g.tags.map((tag) => {
+                        const on = doneActs.includes(tag);
+                        return (
+                          <label
+                            key={tag}
+                            className={`muse-act-check flex cursor-pointer items-center gap-2 border-b border-[var(--line)]/40 py-1.5 last:border-0 ${
+                              on ? "text-[var(--glow)]" : "text-[#c4b7a8]"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              onChange={() => onToggleAct(tag)}
+                              className="accent-[var(--glow)]"
+                            />
+                            <span className="text-[13px] leading-snug">
+                              {tag}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {filteredActGroups.length === 0 && (
+                  <p className="text-[12px] text-[var(--muted)]">
+                    No acts match that search.
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Secondary details — looks, history, pairing, photo strip */}
+      {panel === "details" && (
+        <div
+          id={detailsPanelId}
+          className="muse-row-panel border-t border-[var(--line)] px-3 py-3 sm:px-4"
+          data-testid="muse-row-details-panel"
+        >
+          <div className="flex flex-col gap-3.5">
+            {(hasPaired || pairingOpen || onTogglePairing) && (
+              <DetailBlock label="Been together">
                 {hasPaired && (
-                  <ul className="flex flex-wrap gap-2">
+                  <ul className="flex flex-wrap gap-1.5">
                     {paired.map((other) => (
                       <li key={other.id}>
                         <Link
                           href={`/art-of-x/chat?muse=${p.id}&with=${other.id}`}
-                          className="inline-flex items-center gap-1.5 border border-[var(--accent)]/40 bg-[var(--accent)]/10 px-2.5 py-1 text-xs text-[var(--accent-strong)] transition hover:border-[var(--accent)]"
-                          title={`Chat with ${displayName(p)} + ${displayName(other)}`}
+                          className="inline-flex items-center gap-1 border border-[var(--accent)]/35 bg-[var(--accent)]/10 px-2 py-0.5 text-[11px] text-[var(--accent-strong)] transition hover:border-[var(--accent)]"
                         >
                           {displayName(other)}
-                          <span className="text-[var(--muted)]">· chat</span>
                         </Link>
                       </li>
                     ))}
                   </ul>
                 )}
+                {onTogglePairing && (
+                  <button
+                    type="button"
+                    onClick={onTogglePairing}
+                    className={`mt-1.5 text-[11px] underline-offset-2 hover:underline ${
+                      pairingOpen
+                        ? "text-[var(--accent-strong)]"
+                        : "text-[#c4b7a8]"
+                    }`}
+                  >
+                    {pairingOpen ? "Cancel pair" : "Mark been together"}
+                  </button>
+                )}
                 {pairingOpen && onPairWith && (
-                  <div className={hasPaired ? "mt-3" : ""}>
-                    <p className="mb-2 text-xs text-[#c4b7a8]">
-                      Mark who they&apos;ve played with — unlocks dual cast in
-                      chat.
-                    </p>
+                  <div className="mt-2">
                     {pairCandidates.length === 0 ? (
-                      <p className="text-xs text-[var(--muted)]">
+                      <p className="text-[11px] text-[var(--muted)]">
                         {roster.length <= 1
                           ? "Add another Muse first."
                           : "Already paired with everyone on the list."}
                       </p>
                     ) : (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-1.5">
                         {pairCandidates.map((other) => (
                           <button
                             key={other.id}
                             type="button"
                             onClick={() => onPairWith(Number(other.id))}
-                            className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-xs text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
+                            className="rounded-sm border border-[var(--line)] px-2 py-0.5 text-[11px] text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
                           >
                             + {displayName(other)}
                           </button>
@@ -524,78 +628,97 @@ export function PartnerCard({
                     )}
                   </div>
                 )}
-              </Section>
+              </DetailBlock>
+            )}
+
+            {photos.length > 1 && (
+              <DetailBlock label="Photos">
+                <div
+                  className="partner-photo-strip -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-0.5"
+                  role="list"
+                  aria-label={`${p.name} photos`}
+                >
+                  {photos.map((src, i) => {
+                    const isMain = i === (p.mainPhotoIndex ?? 0);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        role="listitem"
+                        onClick={() => setLightboxIndex(i)}
+                        aria-label={`Photo ${i + 1}${isMain ? ", main" : ""}`}
+                        className={`relative h-12 w-12 shrink-0 overflow-hidden bg-[#12100e] transition ${
+                          isMain
+                            ? "ring-1 ring-[var(--accent)]"
+                            : "ring-1 ring-[var(--line)] hover:ring-[var(--accent)]/45"
+                        }`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </DetailBlock>
             )}
 
             {hasLooks && (
-              <Section label="Looks">
-                <p className="text-[15px] leading-[1.65] text-[#f7f1e8]/95%">
+              <DetailBlock label="Looks">
+                <p className="text-[13px] leading-[1.55] text-[#f7f1e8]/92%">
                   {p.looks}
                 </p>
-              </Section>
+              </DetailBlock>
             )}
 
             {hasDynBlock && (
-              <Section label="Dynamics">
+              <DetailBlock label="Dynamics">
                 {hasDynTags && <SoftList items={p.dynTags} />}
                 {hasDynamics && (
                   <p
-                    className={`text-[15px] leading-[1.65] text-[#d8cfc2] ${
-                      hasDynTags ? "mt-2" : ""
+                    className={`text-[13px] leading-[1.55] text-[#d8cfc2] ${
+                      hasDynTags ? "mt-1" : ""
                     }`}
                   >
                     {p.dynamics}
                   </p>
                 )}
-              </Section>
+              </DetailBlock>
             )}
 
             {hasHistory && (
-              <Section label="History with them">
-                <p className="text-[15px] leading-[1.7] text-[#f7f1e8]/92%">
+              <DetailBlock label="History with them">
+                <p className="text-[13px] leading-[1.55] text-[#f7f1e8]/90%">
                   {p.history}
                 </p>
-              </Section>
+              </DetailBlock>
             )}
 
             {hasNotes && (
-              <Section label="Notes">
-                <p className="text-[15px] leading-[1.7] text-[#d8cfc2]">
+              <DetailBlock label="Notes">
+                <p className="text-[13px] leading-[1.55] text-[#d8cfc2]">
                   {p.notes}
                 </p>
-              </Section>
-            )}
-
-            {hasActs && (
-              <Section
-                label="Acts logged"
-                className={
-                  hasProseAbove ? "border-t border-[var(--line)] pt-5" : ""
-                }
-              >
-                <SoftList items={p.doneActs} />
-              </Section>
+              </DetailBlock>
             )}
 
             {hasKinks && (
-              <Section
-                label="Kinks"
-                className={
-                  hasProseAbove && !hasActs
-                    ? "border-t border-[var(--line)] pt-5"
-                    : ""
-                }
-              >
+              <DetailBlock label="Kinks">
                 <SoftList items={kinkTags} />
-              </Section>
+              </DetailBlock>
+            )}
+
+            {!hasDetails && (
+              <p className="text-[12px] text-[var(--muted)]">
+                No extra details yet — edit to add looks, history, and more.
+              </p>
             )}
           </div>
-        ) : (
-          <p className="px-5 py-5 text-sm text-[var(--muted)] sm:px-6">
-            No details yet — edit to add looks, history, kinks, and more.
-          </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {lightboxIndex !== null && photos.length > 0 && (
         <PhotoLightbox
@@ -603,10 +726,7 @@ export function PartnerCard({
           index={lightboxIndex}
           name={p.name}
           onClose={() => setLightboxIndex(null)}
-          onChange={(i) => {
-            setLightboxIndex(i);
-            setActiveIndex(i);
-          }}
+          onChange={(i) => setLightboxIndex(i)}
           onSetMain={onSelectPhoto ? setAsMain : undefined}
           isMain={lightboxIndex === (p.mainPhotoIndex ?? 0)}
         />

@@ -324,7 +324,83 @@ body {
 }
 
 .partner-card {
-  animation: echo-rise 480ms ease-out both;
+  animation: echo-rise 420ms ease-out both;
+}
+
+/* Dense Muse ledger — many partners, fast scan */
+.muse-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.muse-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 5.5rem;
+  border-radius: 2px;
+  transition:
+    border-color 220ms ease,
+    background-color 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.muse-row:hover {
+  border-color: color-mix(in srgb, var(--glow) 28%, var(--line));
+  background: color-mix(in srgb, var(--bg-elevated) 88%, #061018);
+}
+
+.muse-row--open {
+  border-color: color-mix(in srgb, var(--glow) 42%, var(--line));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow) 12%, transparent);
+}
+
+.muse-row-thumb {
+  border-radius: 2px;
+}
+
+.muse-row-panel {
+  animation: muse-row-panel-in 240ms ease-out both;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--glow) 6%, transparent),
+      transparent 48%
+    ),
+    color-mix(in srgb, #080b14 72%, var(--bg-elevated));
+}
+
+@keyframes muse-row-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.muse-act-catalog {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--glow) 35%, transparent) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.muse-act-catalog::-webkit-scrollbar {
+  width: 4px;
+}
+
+.muse-act-catalog::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--glow) 35%, transparent);
+  border-radius: 2px;
+}
+
+.muse-act-check {
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.muse-act-check:hover {
+  background: color-mix(in srgb, var(--glow) 6%, transparent);
 }
 
 .partner-photo-strip {
@@ -3587,6 +3663,8 @@ body {
   .echo-card,
   .echo-cloud-dot,
   .partner-card,
+  .muse-row,
+  .muse-row-panel,
   .partner-lightbox,
   .muse-presence-photo,
   .muse-presence-slide,
