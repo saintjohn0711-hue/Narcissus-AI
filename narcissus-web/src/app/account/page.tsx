@@ -2,11 +2,13 @@
 
 import { AppNav } from "@/components/AppNav";
 import { EchoProfileCard } from "@/components/EchoProfileCard";
+import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import { authClient } from "@/lib/auth-client";
 
 /**
- * Echo — Narcissus account profile.
- * Brand-forward account surface: identity, highlights, Circle code, sign out.
+ * Echo — Narcissus account / settings surface.
+ * Brand-forward: identity, highlights, Circle code, sign out.
  */
 export default function AccountPage() {
   const { data: session, isPending } = authClient.useSession();
@@ -19,31 +21,22 @@ export default function AccountPage() {
         <div className="echo-atmosphere-ripple" />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-3xl flex-col px-6 py-10 sm:px-10">
+      <PageShell width="md" outerClassName="relative z-10">
         <AppNav />
 
-        <header className="echo-hero-title mb-10">
-          <p className="echo-section-label mb-4 text-[10px] uppercase text-[var(--muted)]">
-            Adults only · Narcissus account
-          </p>
-          <h1
-            className="text-6xl font-semibold tracking-tight text-[var(--ink)] sm:text-7xl"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
-            Echo
-          </h1>
-          <p className="mt-4 max-w-lg text-base font-light leading-relaxed text-[#c4b7a8]">
-            Your profile across Narcissus — identity, what you’ve saved, Circle
-            share codes, and who you’ve linked.
-          </p>
-        </header>
+        <PageHeader
+          className="echo-hero-title"
+          kicker="Adults only · Account & settings"
+          title="Echo"
+          lede="Your profile across Narcissus — identity, cloud save, Circle share codes, and linked viewers. Muse voice and chat options stay on each Muse / chat panel."
+        />
 
         {isPending ? (
           <p className="text-sm text-[var(--muted)]">Loading account…</p>
         ) : (
           <EchoProfileCard signedIn={signedIn} />
         )}
-      </div>
+      </PageShell>
     </div>
   );
 }

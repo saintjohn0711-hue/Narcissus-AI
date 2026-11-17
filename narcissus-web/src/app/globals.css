@@ -18,6 +18,238 @@
   --danger: #d46a6a;
   --ok: #7dba8d;
   --on-accent: #0a0d16;
+
+  /* Shared spacing / radius / type roles (refine brand, don’t replace palette) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --text-muted: var(--muted);
+  --text-soft: var(--soft);
+  --page-pad-x: max(1.25rem, env(safe-area-inset-left, 0px));
+  --page-pad-x-end: max(1.25rem, env(safe-area-inset-right, 0px));
+  --page-pad-y: max(2rem, env(safe-area-inset-top, 0px));
+  --page-pad-bottom: max(2rem, env(safe-area-inset-bottom, 0px));
+  --focus-ring: 0 0 0 2px rgba(5, 8, 15, 0.9), 0 0 0 4px rgba(0, 229, 255, 0.55);
+}
+
+/* —— Shared page shell / header / controls —— */
+.page-shell {
+  margin-inline: auto;
+  display: flex;
+  min-height: 100%;
+  min-height: 100dvh;
+  width: 100%;
+  flex-direction: column;
+  padding:
+    var(--page-pad-y)
+    var(--page-pad-x-end)
+    var(--page-pad-bottom)
+    var(--page-pad-x);
+}
+
+@media (min-width: 640px) {
+  .page-shell {
+    --page-pad-x: max(2.5rem, env(safe-area-inset-left, 0px));
+    --page-pad-x-end: max(2.5rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+}
+
+.page-header--dense {
+  margin-bottom: var(--space-6);
+  gap: var(--space-3);
+}
+
+.page-kicker {
+  margin: 0 0 var(--space-2);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.page-kicker--glow {
+  color: var(--glow);
+  text-shadow: 0 0 14px rgba(0, 229, 255, 0.28);
+}
+
+.page-title {
+  margin: 0;
+  font-family: var(--font-display), serif;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.page-lede {
+  margin-top: var(--space-3);
+  max-width: 36rem;
+  font-size: 0.9375rem;
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ui-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ui-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ui-btn--primary {
+  border-color: rgba(196, 160, 140, 0.55);
+  background: var(--accent);
+  color: var(--on-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+
+.ui-btn--glow {
+  border-color: rgba(0, 229, 255, 0.45);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--glow);
+  letter-spacing: 0.1em;
+}
+
+.ui-btn--glow:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.18);
+}
+
+.ui-btn--secondary {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+  border-color: rgba(196, 160, 140, 0.45);
+  color: var(--ink);
+}
+
+.ui-btn--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+}
+
+.ui-btn--ghost:hover:not(:disabled) {
+  color: var(--text-soft);
+  border-color: rgba(0, 229, 255, 0.14);
+}
+
+.ui-btn--danger {
+  border-color: rgba(212, 106, 106, 0.35);
+  background: transparent;
+  color: #f0c4b8;
+}
+
+.ui-btn--danger:hover:not(:disabled) {
+  border-color: rgba(212, 106, 106, 0.55);
+  background: rgba(212, 106, 106, 0.08);
+}
+
+.ui-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  background:
+    linear-gradient(180deg, rgba(0, 229, 255, 0.18) 0%, rgba(10, 18, 34, 0.96) 55%, rgba(6, 10, 18, 0.98) 100%);
+  color: #e8fbff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow:
+    0 0 22px rgba(0, 229, 255, 0.16),
+    inset 0 1px 0 rgba(0, 229, 255, 0.22);
+}
+
+.ui-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.ui-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  padding: var(--space-4);
+}
+
+.ui-sheet {
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(ellipse 95% 50% at 8% -8%, rgba(0, 229, 255, 0.12), transparent 50%),
+    linear-gradient(180deg, #121a2e 0%, #0c1220 48%, #090e18 100%);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(0, 229, 255, 0.12);
+}
+
+@media (min-width: 640px) {
+  .page-title {
+    font-size: clamp(2.35rem, 4vw, 3.25rem);
+  }
 }
 
 * {
@@ -58,6 +290,18 @@ body {
   opacity: 1;
 }
 
+/* Default in-app chrome — safe areas + calm bottom rule */
+.app-nav:not(.app-nav--companion):not(.app-nav--overlay) {
+  padding-top: max(0px, env(safe-area-inset-top, 0px));
+}
+
+.app-nav-brand:focus-visible,
+.app-nav a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
 /* Phone-first site chrome: brand home + drawer (desktop keeps inline links) */
 .app-nav--companion {
   position: absolute;
@@ -68,7 +312,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: max(0.55rem, env(safe-area-inset-top, 0px)) 0.85rem 0.55rem;
+  padding: max(0.55rem, env(safe-area-inset-top, 0px))
+    max(0.85rem, env(safe-area-inset-right, 0px)) 0.55rem
+    max(0.85rem, env(safe-area-inset-left, 0px));
   background: linear-gradient(
     180deg,
     rgba(5, 8, 15, 0.88) 0%,
@@ -109,6 +355,7 @@ body {
   width: min(22.5rem, 92vw);
   height: 100%;
   max-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   border-left: 1px solid rgba(0, 229, 255, 0.28);
   background:
@@ -722,7 +969,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: max(0.85rem, env(safe-area-inset-top, 0px)) 1.25rem 0.85rem;
+  padding: max(0.85rem, env(safe-area-inset-top, 0px))
+    max(1.25rem, env(safe-area-inset-right, 0px)) 0.85rem
+    max(1.25rem, env(safe-area-inset-left, 0px));
   background: linear-gradient(
     180deg,
     rgba(5, 8, 15, 0.82) 0%,
@@ -756,6 +1005,20 @@ body {
   gap: 0.85rem;
   padding-bottom: 0.35rem;
   animation: couple-dial-in 0.42s ease-out;
+}
+
+.couple-dial--more {
+  gap: 0.65rem;
+  padding-top: 0.25rem;
+}
+
+.couple-dial--more .couple-dial-more-row {
+  gap: 0.5rem;
+}
+
+.couple-dial--more .couple-dial-chip {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.78rem;
 }
 
 .couple-dial-kicker {

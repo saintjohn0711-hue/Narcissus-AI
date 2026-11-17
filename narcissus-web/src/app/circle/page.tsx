@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
+import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
+import { UiButton } from "@/components/UiButton";
 import { authClient } from "@/lib/auth-client";
 import {
   CIRCLE_LOOKING_FOR,
@@ -93,41 +96,27 @@ export default function CircleDiscoverPage() {
         <div className="circle-neon-bar" />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col px-5 py-10 sm:px-8 lg:px-10">
+      <PageShell width="xl" outerClassName="relative z-10">
         <AppNav />
 
-        <header className="mb-8 flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <p className="mb-3 text-[10px] uppercase tracking-[0.28em] text-[#c49a8e]">
-              Adults only · Swingers discovery
-            </p>
-            <h1
-              className="text-5xl font-semibold tracking-tight text-[var(--ink)] sm:text-6xl"
-              style={{ fontFamily: "var(--font-display), serif" }}
-            >
-              Circle
-            </h1>
-            <p className="mt-3 max-w-xl text-base font-light leading-relaxed text-[#c4b7a8]">
-              Browse photo-forward profiles from swingers who opted in. Filter
-              by vibe and what they’re looking for — then link via Circle code
-              on Echo.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/circle/me"
-              className="rounded-sm border border-[rgba(232,120,88,0.45)] bg-[rgba(180,48,56,0.22)] px-3.5 py-2 text-sm text-[#f3c9b4] transition hover:bg-[rgba(180,48,56,0.34)]"
-            >
-              My profile
-            </Link>
-            <Link
-              href="/account"
-              className="rounded-sm border border-[var(--line)] px-3.5 py-2 text-sm text-[#c4b7a8] transition hover:border-[rgba(232,120,88,0.4)] hover:text-[var(--ink)]"
-            >
-              Share code
-            </Link>
-          </div>
-        </header>
+        <PageHeader
+          kicker="Adults only · Swingers discovery"
+          title="Circle"
+          lede="Browse photo-forward profiles from swingers who opted in. Filter by vibe and what they’re looking for — then link via Circle code on Echo."
+          actions={
+            <>
+              <Link
+                href="/circle/me"
+                className="rounded-sm border border-[rgba(232,120,88,0.45)] bg-[rgba(180,48,56,0.22)] px-3.5 py-2 text-sm text-[#f3c9b4] transition hover:bg-[rgba(180,48,56,0.34)]"
+              >
+                My profile
+              </Link>
+              <UiButton href="/account" tone="ghost">
+                Share code
+              </UiButton>
+            </>
+          }
+        />
 
         {!isPending && !signedIn && (
           <div className="border border-[var(--line)] bg-[#120c0d]/70 p-10 text-center">
@@ -340,7 +329,7 @@ export default function CircleDiscoverPage() {
             })}
           </ul>
         )}
-      </div>
+      </PageShell>
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
+import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import {
   ALL_KINKS,
   DEFAULT_LOCS,
@@ -390,20 +392,13 @@ export default function StoriesPage() {
         : null;
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+    <PageShell width="lg">
       <AppNav />
-      <header className="mb-8">
-        <h1
-          className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Scene builder
-        </h1>
-        <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
-          Art of X craft with Muses — pick cast, place, and kink boxes; generate
-          a scene, then continue or click more boxes to steer the next beat.
-        </p>
-      </header>
+      <PageHeader
+        kicker="Art of X"
+        title="Scene builder"
+        lede="Craft with Muses — pick cast, place, and kink boxes; generate a scene, then continue or click more boxes to steer the next beat."
+      />
 
       {loadError && (
         <p className="mb-4 text-sm text-[#f0c4b8]" role="alert">
@@ -802,6 +797,6 @@ export default function StoriesPage() {
           </section>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }

@@ -11,7 +11,10 @@ import {
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
 import { CatalogMultiSelect } from "@/components/CatalogMultiSelect";
+import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import { PartnerCard } from "@/components/PartnerCard";
+import { UiButton } from "@/components/UiButton";
 import {
   ACT_GROUPS,
   DYN_TAGS,
@@ -82,10 +85,10 @@ export default function PartnersPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+        <PageShell width="lg">
           <AppNav />
           <p className="mt-8 text-sm text-[var(--muted)]">Loading Muses…</p>
-        </div>
+        </PageShell>
       }
     >
       <PartnersPageInner />
@@ -625,7 +628,7 @@ function PartnersPageInner() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+    <PageShell width="lg">
       <AppNav />
       {importNote && (
         <p
@@ -652,18 +655,13 @@ function PartnersPageInner() {
         </p>
       )}
 
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--glow)]">
-            {outlet ? `Outlet · ${outletTitle}` : "All outlets"}
-          </p>
-          <h1
-            className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
-            {outlet ? `${outletTitle}` : PERSON_LABEL.plural}
-          </h1>
-          <p className="mt-2 max-w-xl text-sm font-light text-[#c4b7a8]">
+      <PageHeader
+        dense
+        kicker={outlet ? `Outlet · ${outletTitle}` : "All outlets"}
+        kickerTone="glow"
+        title={outlet ? `${outletTitle}` : PERSON_LABEL.plural}
+        lede={
+          <>
             Desire ledger — who, what you&apos;ve done, kinks, dynamics, photos.
             {storeMode === "database"
               ? " Saved to your Narcissus account."
@@ -677,32 +675,22 @@ function PartnersPageInner() {
               </a>
             )}
             {storeMode !== "database" && " to save to your account."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={loadStarterMuses}
-            className="rounded-sm border border-[var(--line)] px-3 py-2 text-xs text-[#c4b7a8]"
-          >
-            Load starter Muses
-          </button>
-          <button
-            type="button"
-            onClick={loadDemo}
-            className="rounded-sm border border-[var(--line)] px-3 py-2 text-xs text-[#c4b7a8]"
-          >
-            Load Ark demo people
-          </button>
-          <button
-            type="button"
-            onClick={openNew}
-            className="rounded-sm bg-[var(--accent)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#1a120c]"
-          >
-            Add {PERSON_LABEL.singularLower}
-          </button>
-        </div>
-      </header>
+          </>
+        }
+        actions={
+          <>
+            <UiButton tone="ghost" onClick={loadStarterMuses}>
+              Starter Muses
+            </UiButton>
+            <UiButton tone="ghost" onClick={loadDemo}>
+              Ark demo
+            </UiButton>
+            <UiButton tone="primary" onClick={openNew}>
+              Add {PERSON_LABEL.singularLower}
+            </UiButton>
+          </>
+        }
+      />
 
       <div className="mb-4 flex flex-wrap gap-2" role="navigation" aria-label="Outlets">
         <button
@@ -1338,6 +1326,6 @@ function PartnersPageInner() {
           />
         ))}
       </div>
-    </div>
+    </PageShell>
   );
 }

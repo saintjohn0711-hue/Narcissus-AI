@@ -4,6 +4,8 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import { authClient } from "@/lib/auth-client";
 import {
   fetchPartners,
@@ -74,23 +76,13 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col px-6 py-10 sm:px-10">
+    <PageShell width="sm">
       <AppNav />
-      <header className="mb-8">
-        <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-          Adults only · Account
-        </p>
-        <h1
-          className="text-4xl font-semibold tracking-tight text-[var(--ink)]"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Create account
-        </h1>
-        <p className="mt-3 text-sm font-light leading-relaxed text-[#c4b7a8]">
-          Partner data, stories, chats, Circle, and Echo save to your Narcissus
-          account in the cloud — not only this browser.
-        </p>
-      </header>
+      <PageHeader
+        kicker="Adults only · Account"
+        title="Create account"
+        lede="Partner data, stories, chats, Circle, and Echo save to your Narcissus account in the cloud — not only this browser."
+      />
 
       <form onSubmit={onSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1.5 text-sm">
@@ -160,6 +152,6 @@ export default function SignUpPage() {
           Log in
         </Link>
       </p>
-    </div>
+    </PageShell>
   );
 }

@@ -43,10 +43,22 @@ type AppNavProps = {
   /**
    * Companion immersive stage: compact floating chrome so Home/Menu stay
    * reachable when the full portrait layout hides the page header.
-   * Overlay: transparent hero chrome for atmospheric hubs (Art of X).
+   * Overlay: transparent hero chrome for atmospheric hubs (Art of X, home).
    */
   variant?: "default" | "companion" | "overlay";
 };
+
+function useMdUp() {
+  const [mdUp, setMdUp] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => setMdUp(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return mdUp;
+}
 
 function AppNavInner({ variant = "default" }: AppNavProps) {
   const pathname = usePathname();
@@ -55,9 +67,13 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
   const companion = variant === "companion";
   const overlay = variant === "overlay";
   const onArtOfX = pathname === "/art-of-x" || pathname.startsWith("/art-of-x/");
+  const mdUp = useMdUp();
+  const drawerMode = mdUp ? "more" : "full";
+  const menuLabel = mdUp ? "More" : "Menu";
 
   useEffect(() => {
     setOpen(false);
@@ -72,9 +88,11 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeBtnRef.current?.focus();
+    const menuBtn = menuBtnRef.current;
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
+      menuBtn?.focus();
     };
   }, [open]);
 
@@ -83,6 +101,10 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
     : overlay
       ? "app-nav app-nav--overlay"
       : "app-nav mb-8 flex items-center justify-between gap-3 border-b border-[var(--glow)]/15 pb-4 md:mb-10";
+
+  function closeDrawer() {
+    setOpen(false);
+  }
 
   return (
     <>
@@ -132,7 +154,7 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
                         : "bg-[var(--glow)]/15 text-[var(--glow)] ring-1 ring-[var(--glow)]/25"
                       : outletStyle
                         ? "text-[var(--ink)] hover:text-[var(--glow)]"
-                        : "text-[#c4b7a8] hover:text-[var(--ink)]"
+                        : "text-[var(--soft)] hover:text-[var(--ink)]"
                   }`}
                 >
                   {link.label}
@@ -143,13 +165,15 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
           </nav>
 
           <button
+            ref={menuBtnRef}
             type="button"
-            className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition"
+            className="app-nav-menu-btn ui-icon-btn"
             aria-expanded={open}
             aria-controls={panelId}
+            aria-haspopup="dialog"
             onClick={() => setOpen(true)}
           >
-            Menu
+            {menuLabel}
           </button>
         </div>
       </header>
@@ -160,21 +184,23 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
             type="button"
             className="app-nav-drawer-backdrop"
             aria-label="Close menu"
-            onClick={() => setOpen(false)}
+            onClick={closeDrawer}
           />
           <div
             id={panelId}
             className={`app-nav-drawer-panel${onArtOfX ? " app-nav-drawer-panel--aox" : ""}`}
             role="dialog"
             aria-modal="true"
-            aria-label="Site menu"
+            aria-label={mdUp ? "More destinations" : "Site menu"}
           >
             <div className="app-nav-drawer-atmosphere" aria-hidden="true" />
             <div className="app-nav-drawer-header">
               <div className="min-w-0">
                 <div className="mb-2 flex items-center gap-2.5">
                   <BrandFaceFrame size="sm" label="" className="app-nav-drawer-face" />
-                  <p className="brand-metal-type brand-metal-type--nav">Menu</p>
+                  <p className="brand-metal-type brand-metal-type--nav">
+                    {mdUp ? "More" : "Menu"}
+                  </p>
                 </div>
                 <p className="brand-metal-type brand-metal-type--footer mt-0.5">
                   Your Reflection, Your Rules
@@ -183,8 +209,8 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
               <button
                 ref={closeBtnRef}
                 type="button"
-                className="app-nav-menu-btn shrink-0 rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] transition"
-                onClick={() => setOpen(false)}
+                className="app-nav-menu-btn ui-icon-btn shrink-0"
+                onClick={closeDrawer}
               >
                 Close
               </button>
@@ -192,8 +218,9 @@ function AppNavInner({ variant = "default" }: AppNavProps) {
 
             <div className="app-nav-drawer-body flex flex-1 flex-col overflow-y-auto px-3 py-3">
               <CoupleDial
+                mode={drawerMode}
                 isActive={(href) => linkActive(pathname, href, outlet)}
-                onNavigate={() => setOpen(false)}
+                onNavigate={closeDrawer}
               />
             </div>
 
@@ -260,17 +287,14 @@ function AppNavFallback({ variant = "default" }: AppNavProps) {
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-sm px-3 py-1.5 text-sm tracking-wide text-[#c4b7a8]"
+              className="rounded-sm px-3 py-1.5 text-sm tracking-wide text-[var(--soft)]"
             >
               {link.label}
             </Link>
           ))}
         </nav>
       )}
-      <span
-        className="app-nav-menu-btn rounded-sm border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] opacity-70"
-        aria-hidden
-      >
+      <span className="app-nav-menu-btn ui-icon-btn opacity-70" aria-hidden>
         Menu
       </span>
     </header>
