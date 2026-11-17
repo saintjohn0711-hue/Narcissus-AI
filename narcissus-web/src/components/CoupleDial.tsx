@@ -77,10 +77,10 @@ export const DIAL_MORE: DialItem[] = [
   },
   {
     id: "home",
-    label: "Home",
-    href: "/",
+    label: "Menu",
+    href: "/menu",
     kind: "room",
-    hint: "Brand home",
+    hint: "Main menu",
   },
   {
     id: "circle",
