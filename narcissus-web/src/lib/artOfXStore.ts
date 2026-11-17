@@ -22,6 +22,7 @@ import {
 } from "@/lib/artOfX";
 import {
   demoMusesIfNeeded,
+  ensureDemoCoupleMuse,
   markDemoMusesSeeded,
 } from "@/lib/demoMuses";
 
@@ -121,20 +122,21 @@ export async function fetchPartners(): Promise<PartnerRecord[]> {
   return ensureDemoMuses(list);
 }
 
-/** Seed demo Muses into an empty roster and persist. */
+/** Seed demo Muses into an empty roster and persist. Soft-add Heat if missing. */
 export async function ensureDemoMuses(
   list: PartnerRecord[],
 ): Promise<PartnerRecord[]> {
   const demos = demoMusesIfNeeded(list);
-  if (!demos) return list;
+  const withCouple = demos ?? ensureDemoCoupleMuse(list);
+  if (!withCouple) return list;
   try {
-    const saved = await persistPartners(demos);
+    const saved = await persistPartners(withCouple);
     markDemoMusesSeeded();
     return saved;
   } catch {
     // Persist failed (offline / session) — still show demos in-memory once.
     markDemoMusesSeeded();
-    return demos;
+    return withCouple;
   }
 }
 

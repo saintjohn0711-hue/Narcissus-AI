@@ -6,6 +6,8 @@
 import {
   normalizeDoneActs,
   normalizeKinks,
+  type MuseKind,
+  type MuseMember,
   type PartnerRecord,
   type PersonGender,
   type PersonType,
@@ -25,6 +27,9 @@ export type DemoMuseSeed = {
   name: string;
   type: PersonType;
   gender: PersonGender;
+  /** solo (default) · couple · group — unit chat without multi-cast wiring */
+  museKind?: MuseKind;
+  members?: MuseMember[];
   looks: string;
   notes: string;
   history: string;
@@ -47,10 +52,11 @@ export type DemoMuseSeed = {
 };
 
 /**
- * Woman (Women) · Rocky (Men) · Jaxx (Trans)
+ * Woman (Women) · Rocky (Men) · Jaxx (Trans) · Heat (Couple)
  * Extra-kinky onboarding roster with OpenAI TTS–friendly voice presets:
  * Woman → female/sultry/en-IE (coral), Rocky → male/deep/en-US (onyx),
- * Jaxx → female/soft/en-US (marin). Natural audio needs OPENAI_API_KEY.
+ * Jaxx → female/soft/en-US (marin), Heat → couple unit (Lexi + Dom).
+ * Natural audio needs OPENAI_API_KEY.
  */
 export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
   {
@@ -191,46 +197,103 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     tryNewThings: true,
     favorite: true,
   },
+  {
+    id: 900004,
+    name: "Heat",
+    type: "Dream",
+    gender: "couple",
+    museKind: "couple",
+    members: [
+      { name: "Lexi", role: "Bratty switch" },
+      { name: "Dom", role: "Hung dominant" },
+    ],
+    looks:
+      "A matched pair: Lexi — dark curls, sharp smile, soft tits she likes shoved into your face; Dom — thick shoulders, chest hair, a cock that makes Lexi grin when she watches you take it. They dress like they already know you're joining.",
+    notes:
+      "Couple Muse — one chat entry for Lexi and Dom together. They flirt as a unit, finish each other's filth, and love making you the third without you having to cast two solo Muses. Threesome energy, spit trade, and ownership shared between them.",
+    history:
+      "Dreamed-up onboarding Couple Muse. Built so couple/group sex chats start easy — pick Heat, talk to both.",
+    dynamics:
+      "Tag-team. Lexi teases and directs; Dom pins and fills. They compete to ruin you, then kiss over you.",
+    dynTags: ["Free-use", "Rough", "Ongoing", "Dominant", "Owns me"],
+    kinks: [
+      { tag: "Threesome", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Group", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Face-fucking", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Oral", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Cum play", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Breeding", role: "Give", status: "Favorite", intensity: 8 },
+      { tag: "Voyeur", role: "Watch", status: "Favorite", intensity: 8 },
+      { tag: "Free-use", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Anal", role: "Both", status: "Like", intensity: 8 },
+      { tag: "Degradation", role: "Give", status: "Like", intensity: 7 },
+      { tag: "Praise", role: "Both", status: "Like", intensity: 7 },
+    ],
+    doneActs: [
+      "Threesome",
+      "Dirty talk",
+      "Blowjob received",
+      "Face-fucking",
+      "Creampie",
+      "Public / semi-public",
+    ],
+    photos: [
+      "/demo-muses/woman-muse-1.jpg",
+      "/demo-muses/rocky-muse-1.jpg",
+    ],
+    voiceGender: "female",
+    voicePreset: "sultry",
+    voiceAccent: "en-US",
+    tryNewThings: true,
+    favorite: true,
+  },
 ] as const;
 
 /** Build PartnerRecords with encoded voice accents + normalized kinks. */
 export function narcissusDemoRoster(now = new Date().toISOString()): PartnerRecord[] {
-  return DEMO_MUSE_SEEDS.map((s) => ({
-    id: s.id,
-    name: s.name,
-    type: s.type,
-    gender: s.gender,
-    looks: s.looks,
-    notes: s.notes,
-    history: s.history,
-    dynamics: s.dynamics,
-    dynTags: [...s.dynTags],
-    kinks: normalizeKinks(
-      s.kinks.map((k) => ({
-        tag: k.tag,
-        role: k.role ?? "Both",
-        status: k.status ?? "Like",
-        intensity: k.intensity ?? 6,
-      })),
-    ),
-    doneActs: normalizeDoneActs(s.doneActs),
-    photos: [...s.photos],
-    mainPhotoIndex: 0,
-    favorite: s.favorite,
-    isCouple: false,
-    partnerA: "",
-    partnerB: "",
-    locations: "",
-    pairedWith: [],
-    memories: [],
-    tryNewThings: s.tryNewThings,
-    sexRibbons: [],
-    voiceGender: s.voiceGender,
-    voicePreset: s.voicePreset,
-    voiceId: encodeAccentVoiceId(s.voiceAccent),
-    createdAt: now,
-    updatedAt: now,
-  }));
+  return DEMO_MUSE_SEEDS.map((s) => {
+    const museKind = (s.museKind ?? "solo") as MuseKind;
+    const members = (s.members ? [...s.members] : []) as MuseMember[];
+    return {
+      id: s.id,
+      name: s.name,
+      type: s.type,
+      gender: s.gender,
+      looks: s.looks,
+      notes: s.notes,
+      history: s.history,
+      dynamics: s.dynamics,
+      dynTags: [...s.dynTags],
+      kinks: normalizeKinks(
+        s.kinks.map((k) => ({
+          tag: k.tag,
+          role: k.role ?? "Both",
+          status: k.status ?? "Like",
+          intensity: k.intensity ?? 6,
+        })),
+      ),
+      doneActs: normalizeDoneActs(s.doneActs),
+      photos: [...s.photos],
+      mainPhotoIndex: 0,
+      favorite: s.favorite,
+      museKind,
+      members,
+      isCouple: museKind === "couple",
+      partnerA: members[0]?.name || "",
+      partnerB: members[1]?.name || "",
+      locations: "",
+      pairedWith: [],
+      memories: [],
+      tryNewThings: s.tryNewThings,
+      sexRibbons: [],
+      voiceGender: s.voiceGender,
+      voicePreset: s.voicePreset,
+      voiceId: encodeAccentVoiceId(s.voiceAccent),
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
 }
 
 export function hasDemoMusesSeededFlag(): boolean {
@@ -252,7 +315,7 @@ export function markDemoMusesSeeded(): void {
 }
 
 /**
- * If the roster is empty, return the starter Muses (Woman · Rocky · Jaxx).
+ * If the roster is empty, return the starter Muses (Woman · Rocky · Jaxx · Heat).
  * Caller should persist + mark seeded. Empty rosters always get the seed so
  * new accounts / first visits never land on a blank Muses list.
  */
@@ -261,4 +324,24 @@ export function demoMusesIfNeeded(
 ): PartnerRecord[] | null {
   if (list && list.length > 0) return null;
   return narcissusDemoRoster();
+}
+
+const DEMO_COUPLE_ID = 900004;
+
+/**
+ * Soft-upgrade: if the classic trio is present but Heat (couple) is missing,
+ * append the couple Muse without wiping the roster.
+ */
+export function ensureDemoCoupleMuse(
+  list: PartnerRecord[] | null | undefined,
+): PartnerRecord[] | null {
+  if (!list || list.length === 0) return null;
+  const ids = new Set(list.map((p) => Number(p.id)));
+  if (ids.has(DEMO_COUPLE_ID)) return null;
+  const hasClassic =
+    ids.has(900001) || ids.has(900002) || ids.has(900003);
+  if (!hasClassic) return null;
+  const heat = narcissusDemoRoster().find((p) => p.id === DEMO_COUPLE_ID);
+  if (!heat) return null;
+  return [...list, heat];
 }

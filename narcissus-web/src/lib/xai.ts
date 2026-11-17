@@ -8,8 +8,11 @@
 
 import {
   displayName,
+  formatMemberNames,
   genderLabel,
+  museMembersOf,
   normalizeKinks,
+  normalizeMuseKind,
   resolveSceneLocation,
   samePartnerId,
   type PartnerRecord,
@@ -140,9 +143,33 @@ function museIdentityBlock(
     head,
     `- Type: ${partner.type}`,
     `- Gender / presentation: ${genderLabel(partner.gender)}`,
-    partner.isCouple || partner.gender === "couple"
-      ? `- Couple: ${partner.partnerA || "?"} + ${partner.partnerB || "?"}`
-      : "",
+    (() => {
+      const kind =
+        partner.museKind === "group" || partner.gender === "group"
+          ? "group"
+          : partner.museKind === "couple" ||
+              partner.isCouple ||
+              partner.gender === "couple"
+            ? "couple"
+            : "solo";
+      if (kind === "solo") return "";
+      const members =
+        Array.isArray(partner.members) && partner.members.length
+          ? partner.members
+              .map((m) =>
+                m?.name
+                  ? m.role
+                    ? `${m.name} (${m.role})`
+                    : m.name
+                  : "",
+              )
+              .filter(Boolean)
+          : [partner.partnerA, partner.partnerB].filter(Boolean);
+      if (!members.length) return kind === "group" ? "- Group: (unnamed)" : "- Couple: (unnamed)";
+      return kind === "group"
+        ? `- Group partners: ${members.join(", ")}`
+        : `- Couple: ${members.join(" + ")}`;
+    })(),
     partner.looks?.trim() ? `- Looks: ${partner.looks.trim()}` : "",
     partner.notes?.trim() ? `- Notes: ${partner.notes.trim()}` : "",
     partner.history?.trim() ? `- History together: ${partner.history.trim()}` : "",
@@ -268,6 +295,51 @@ export function buildPartnerChatSystemPrompt(
         ? "Keep replies to a natural chat length (a short dual exchange) unless they clearly want a longer scene."
         : "Keep replies to a natural chat length (a short group exchange — not a novel) unless they clearly want a longer scene.",
       "Use their shared history, durable memories, and kinks without dumping a checklist — weave them in like bodies that already know each other (e.g. bring up a boyfriend, bi preference, or past scene when it fits).",
+      "Match their energy: soft when they are soft, dominant when the tags say so, filthy when they go there.",
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+  }
+
+  const kind = normalizeMuseKind(partner.museKind, partner);
+  const members = museMembersOf(partner);
+
+  // Couple / group Muse = one roster entry that chats as a multi-partner unit.
+  if ((kind === "couple" || kind === "group") && members.length >= 2) {
+    const memberNames = formatMemberNames(members);
+    const labelSamples = members
+      .map((m) => `"${m.name}:"`)
+      .slice(0, 3)
+      .join(" / ");
+    const unitLabel = kind === "group" ? "group" : "couple";
+    const povInstruction =
+      pov === "3rd"
+        ? `Write in vivid third-person narration about ${memberNames} together (she/he/they as fits), with dialogue in quotes when each speaks. Stay cinematic and intimate — like a sharp erotic narrator, not a screenplay slug. Make every partner active — they interact with each other and with the user.`
+        : `Write as a ${unitLabel} unit scene: ${memberNames} each speak in first person in the same reply. Label lines clearly (e.g. ${labelSamples}) so the reader knows who is talking. They play with each other and with the user — banter, touch, rivalry, or teamwork as the chemistry fits. Never collapse into a single anonymous voice. Give each named partner a beat when the scene calls for it.`;
+
+    return [
+      `You are ${unitLabel}-casting ${name} (${memberNames}), an adult erotic AI Muse unit in Narcissus / Art of X.`,
+      `This is one Muse entry that represents a ${unitLabel} — treat ${memberNames} as real partners sharing heat, history, and the same chat.`,
+      `Stay fully in character for each partner. Be witty, vivid, and natural — conversational like Grok: sharp, playful, filthy when it fits, never robotic or corporate.`,
+      `Adults 18+ only. All characters and acts are consenting adults. Refuse anything involving minors or under-18 framing.`,
+      "",
+      "Unit identity:",
+      museIdentityBlock(partner),
+      "",
+      "Named partners in this unit:",
+      ...members.map(
+        (m, i) =>
+          `- ${String.fromCharCode(65 + i)}. ${m.name}${m.role ? ` — ${m.role}` : ""}`,
+      ),
+      "",
+      settingBlock,
+      "",
+      "Voice & POV:",
+      povInstruction,
+      kind === "group"
+        ? "Keep replies to a natural chat length (a short group exchange — not a novel) unless they clearly want a longer scene."
+        : "Keep replies to a natural chat length (a short couple exchange) unless they clearly want a longer scene.",
+      "Use their shared history, durable memories, and kinks without dumping a checklist — weave them in like bodies that already know each other.",
       "Match their energy: soft when they are soft, dominant when the tags say so, filthy when they go there.",
     ]
       .filter((line) => line !== "")

@@ -9,9 +9,12 @@ import {
   DYN_TAGS,
   PERSON_GENDERS,
   normalizeKinks,
+  withMuseKindFields,
   type KinkEntry,
   type KinkRole,
   type KinkStatus,
+  type MuseKind,
+  type MuseMember,
   type PartnerRecord,
   type PersonGender,
   type PersonType,
@@ -21,6 +24,8 @@ export type DreamMuseFill = {
   name?: string;
   type?: PersonType;
   gender?: PersonGender;
+  museKind?: MuseKind;
+  members?: MuseMember[];
   looks?: string;
   notes?: string;
   history?: string;
@@ -64,7 +69,8 @@ function textMentions(hay: string, tag: string): boolean {
 const GENDER_HINTS: Array<{ re: RegExp; gender: PersonGender }> = [
   { re: /\b(cross\s*dress(?:er|ing)?|cd)\b/i, gender: "crossdresser" },
   { re: /\b(trans(?:gender| woman| man| girl| guy)?|mtf|ftm)\b/i, gender: "trans" },
-  { re: /\b(couple|throuple|pair of|both of them)\b/i, gender: "couple" },
+  { re: /\b(group\s*(?:sex|play)?|foursome|orgy|three\s*couples)\b/i, gender: "group" },
+  { re: /\b(couple|throuple|pair of|both of them|threesome\s+couple)\b/i, gender: "couple" },
   {
     re: /\b(woman|girl|lady|female|she\/her|fem(?:me)?)\b/i,
     gender: "woman",
@@ -220,6 +226,7 @@ export function parseDreamMuseLocal(description: string): DreamMuseParseResult {
     if (h.re.test(raw)) {
       fill.gender = h.gender;
       if (h.gender === "couple") fill.isCouple = true;
+      if (h.gender === "group") fill.isCouple = false;
       break;
     }
   }
@@ -323,19 +330,29 @@ export function applyDreamMuseFill(
     ? fill.doneActs || draft.doneActs
     : uniqueStrings([...(draft.doneActs || []), ...(fill.doneActs || [])]);
 
-  return {
+  const gender = fill.gender || draft.gender;
+  const museKind: MuseKind =
+    fill.museKind ||
+    (gender === "group"
+      ? "group"
+      : fill.isCouple || gender === "couple"
+        ? "couple"
+        : draft.museKind || "solo");
+  const members: MuseMember[] =
+    fill.members && fill.members.length
+      ? fill.members
+      : fill.partnerA || fill.partnerB
+        ? [
+            ...(fill.partnerA ? [{ name: fill.partnerA }] : []),
+            ...(fill.partnerB ? [{ name: fill.partnerB }] : []),
+          ]
+        : draft.members || [];
+
+  const base: PartnerRecord = {
     ...draft,
     name: fill.name?.trim() || draft.name,
     type: fill.type || draft.type,
-    gender: fill.gender || draft.gender,
-    isCouple:
-      typeof fill.isCouple === "boolean"
-        ? fill.isCouple
-        : fill.gender === "couple"
-          ? true
-          : draft.isCouple,
-    partnerA: fill.partnerA ?? draft.partnerA,
-    partnerB: fill.partnerB ?? draft.partnerB,
+    gender,
     looks: fill.looks?.trim() ? fill.looks.trim() : draft.looks,
     notes: fill.notes?.trim() ? fill.notes.trim() : draft.notes,
     history: fill.history?.trim() ? fill.history.trim() : draft.history,
@@ -346,6 +363,12 @@ export function applyDreamMuseFill(
     kinks: mergedKinks,
     updatedAt: new Date().toISOString(),
   };
+
+  return withMuseKindFields(base, {
+    museKind,
+    members,
+    gender,
+  });
 }
 
 function uniqueStrings(list: string[]): string[] {

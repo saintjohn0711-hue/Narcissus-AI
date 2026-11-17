@@ -20,6 +20,8 @@ import {
   DYN_TAGS,
   KINK_GROUPS,
   MAX_MUSE_CAST_MATES,
+  MUSE_KIND_MEMBER_LIMITS,
+  MUSE_KINDS,
   MUSE_SORT_OPTIONS,
   PARTNER_PHOTO_LIMITS,
   PERSON_GENDERS,
@@ -32,8 +34,11 @@ import {
   genderLabel,
   loadMuseOrder,
   mainPhoto,
+  museKindLabel,
+  museMembersOf,
   normalizeDoneActs,
   normalizeKinks,
+  normalizeMuseKind,
   normalizePairedWith,
   pairedMusesFor,
   samePartnerId,
@@ -41,8 +46,12 @@ import {
   sortMuses,
   toggleMusePairing,
   withMainPhoto,
+  withMuseKindFields,
+  type MuseKind,
+  type MuseMember,
   type MuseSortMode,
   type PartnerRecord,
+  type PersonGender,
   type PersonType,
 } from "@/lib/artOfX";
 import {
@@ -277,16 +286,23 @@ function PartnersPageInner() {
 
   function openEdit(p: PartnerRecord) {
     const main = p.mainPhotoIndex ?? 0;
-    setEditing({
-      ...p,
-      id: Number(p.id),
-      kinks: normalizeKinks(p.kinks),
-      photos: [...(p.photos || [])],
-      mainPhotoIndex: main,
-      doneActs: [...(p.doneActs || [])],
-      dynTags: [...(p.dynTags || [])],
-      pairedWith: normalizePairedWith(p.pairedWith, p.id),
-    });
+    const kind = normalizeMuseKind(p.museKind, p);
+    const members = museMembersOf(p);
+    setEditing(
+      withMuseKindFields(
+        {
+          ...p,
+          id: Number(p.id),
+          kinks: normalizeKinks(p.kinks),
+          photos: [...(p.photos || [])],
+          mainPhotoIndex: main,
+          doneActs: [...(p.doneActs || [])],
+          dynTags: [...(p.dynTags || [])],
+          pairedWith: normalizePairedWith(p.pairedWith, p.id),
+        },
+        { museKind: kind, members },
+      ),
+    );
     setLooksFromIdx(p.photos?.length ? [main] : []);
     setLooksNote(null);
     setDreamDesc("");
@@ -422,16 +438,30 @@ function PartnersPageInner() {
   function persistEditor(e: FormEvent) {
     e.preventDefault();
     if (!editing || !editing.name.trim()) return;
-    const next = {
-      ...editing,
-      id: Number(editing.id),
-      name: editing.name.trim(),
-      pairedWith: normalizePairedWith(editing.pairedWith, editing.id).slice(
-        0,
-        MAX_MUSE_CAST_MATES,
-      ),
-      updatedAt: new Date().toISOString(),
-    };
+    const kind = normalizeMuseKind(editing.museKind, editing);
+    const members = museMembersOf(editing);
+    if (kind === "couple" && members.filter((m) => m.name.trim()).length < 2) {
+      setSaveError("Couple Muses need two partner names.");
+      return;
+    }
+    if (kind === "group" && members.filter((m) => m.name.trim()).length < 3) {
+      setSaveError("Group Muses need at least three partner names.");
+      return;
+    }
+    const synced = withMuseKindFields(
+      {
+        ...editing,
+        id: Number(editing.id),
+        name: editing.name.trim(),
+        pairedWith: normalizePairedWith(editing.pairedWith, editing.id).slice(
+          0,
+          MAX_MUSE_CAST_MATES,
+        ),
+        updatedAt: new Date().toISOString(),
+      },
+      { museKind: kind, members },
+    );
+    const next = synced;
     const desiredPairs = new Set(next.pairedWith.map((id) => Number(id)));
     setPartners((prev) => {
       const i = prev.findIndex((p) => samePartnerId(p.id, next.id));
@@ -733,7 +763,7 @@ function PartnersPageInner() {
     if (
       partners.length &&
       !confirm(
-        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, and Jaxx?`,
+        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, Jaxx, and Heat (couple)?`,
       )
     ) {
       return;
@@ -744,6 +774,54 @@ function PartnersPageInner() {
     const ids = demo.map((p) => Number(p.id));
     setManualOrder(ids);
     saveMuseOrder(ids);
+  }
+
+  function setEditingKind(kind: MuseKind) {
+    if (!editing) return;
+    const current = museMembersOf(editing);
+    const { min, max } = MUSE_KIND_MEMBER_LIMITS[kind];
+    let members: MuseMember[] = current.slice(0, max);
+    while (members.length < min) {
+      members = [
+        ...members,
+        { name: kind === "couple" ? (members.length === 0 ? "Partner A" : "Partner B") : `Partner ${members.length + 1}` },
+      ];
+    }
+    if (kind === "solo") members = [];
+    setEditing(
+      withMuseKindFields(editing, {
+        museKind: kind,
+        members,
+        gender:
+          kind === "couple"
+            ? "couple"
+            : kind === "group"
+              ? "group"
+              : editing.gender === "couple" || editing.gender === "group"
+                ? "woman"
+                : editing.gender,
+      }),
+    );
+  }
+
+  function updateMember(index: number, patch: Partial<MuseMember>) {
+    if (!editing) return;
+    const kind = normalizeMuseKind(editing.museKind, editing);
+    const { max } = MUSE_KIND_MEMBER_LIMITS[kind];
+    const members = museMembersOf(editing).slice(0, max);
+    while (members.length <= index && members.length < max) {
+      members.push({ name: "" });
+    }
+    if (index < 0 || index >= max) return;
+    const prev = members[index] || { name: "" };
+    members[index] = {
+      name: patch.name !== undefined ? patch.name : prev.name,
+      role:
+        patch.role !== undefined
+          ? patch.role.trim() || undefined
+          : prev.role,
+    };
+    setEditing(withMuseKindFields(editing, { museKind: kind, members }));
   }
 
   return (
@@ -1083,42 +1161,208 @@ function PartnersPageInner() {
                 ))}
               </div>
             </fieldset>
-            <fieldset className="space-y-2">
+            <fieldset className="space-y-2" data-testid="muse-kind">
               <legend className="text-sm uppercase tracking-[0.16em]">
-                Gender
+                Kind
               </legend>
+              <p className="text-xs text-[var(--muted)]">
+                Couple or group = one Muse for multi-partner sex chats — no cast
+                wiring needed.
+              </p>
               <div className="flex flex-wrap gap-2">
-                {PERSON_GENDERS.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => {
-                      const nextVoice = defaultVoiceGender(g);
-                      const keepVoice =
-                        editing.voiceGender ===
-                        defaultVoiceGender(editing.gender);
-                      setEditing({
+                {MUSE_KINDS.map((k) => {
+                  const on =
+                    normalizeMuseKind(editing.museKind, editing) === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setEditingKind(k)}
+                      className={`rounded-sm border px-3 py-1.5 text-sm ${
+                        on
+                          ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                          : "border-[var(--line)] text-[#c4b7a8]"
+                      }`}
+                      data-testid={`muse-kind-${k}`}
+                      aria-pressed={on}
+                    >
+                      {museKindLabel(k)}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </div>
+
+          {normalizeMuseKind(editing.museKind, editing) !== "solo" && (
+            <fieldset
+              className="space-y-3 border border-[var(--line)] bg-[#0f0d0b]/40 p-4"
+              data-testid="muse-members"
+            >
+              <legend className="px-1 text-sm uppercase tracking-[0.16em]">
+                {normalizeMuseKind(editing.museKind, editing) === "group"
+                  ? "Group partners"
+                  : "Couple partners"}
+              </legend>
+              <p className="text-xs text-[var(--muted)]">
+                Named people in this unit. Chat labels each voice (e.g. Lexi: /
+                Dom:). Photos on this Muse cover the whole unit.
+              </p>
+              {Array.from({
+                length: MUSE_KIND_MEMBER_LIMITS[
+                  normalizeMuseKind(editing.museKind, editing)
+                ].max,
+              }).map((_, i) => {
+                const member = museMembersOf(editing)[i] || { name: "" };
+                const required =
+                  i <
+                  MUSE_KIND_MEMBER_LIMITS[
+                    normalizeMuseKind(editing.museKind, editing)
+                  ].min;
+                return (
+                  <div
+                    key={`member-${i}`}
+                    className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]"
+                  >
+                    <label className="grid gap-1 text-xs">
+                      <span className="uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Name {i + 1}
+                        {required ? "" : " (optional)"}
+                      </span>
+                      <input
+                        value={member.name}
+                        required={required}
+                        onChange={(e) =>
+                          updateMember(i, { name: e.target.value })
+                        }
+                        placeholder={
+                          i === 0
+                            ? "Lexi"
+                            : i === 1
+                              ? "Dom"
+                              : `Partner ${i + 1}`
+                        }
+                        className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+                        data-testid={`muse-member-name-${i}`}
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      <span className="uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Role
+                      </span>
+                      <input
+                        value={member.role || ""}
+                        onChange={(e) =>
+                          updateMember(i, { role: e.target.value })
+                        }
+                        placeholder="e.g. Dom, Switch…"
+                        className="prompt-field rounded-sm border border-[var(--line)] bg-[#1c1814] px-3 py-2 text-sm"
+                        data-testid={`muse-member-role-${i}`}
+                      />
+                    </label>
+                    {i >=
+                      MUSE_KIND_MEMBER_LIMITS[
+                        normalizeMuseKind(editing.museKind, editing)
+                      ].min && member.name ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const kind = normalizeMuseKind(
+                            editing.museKind,
+                            editing,
+                          );
+                          const next = museMembersOf(editing).filter(
+                            (_, j) => j !== i,
+                          );
+                          setEditing(
+                            withMuseKindFields(editing, {
+                              museKind: kind,
+                              members: next,
+                            }),
+                          );
+                        }}
+                        className="self-end text-[11px] uppercase tracking-[0.14em] text-[var(--danger)] underline-offset-2 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    ) : (
+                      <span className="hidden sm:block" />
+                    )}
+                  </div>
+                );
+              })}
+            </fieldset>
+          )}
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm uppercase tracking-[0.16em]">
+              Presentation
+            </legend>
+            <p className="text-xs text-[var(--muted)]">
+              Outlet filter for solo Muses. Couple / group stay on All.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {PERSON_GENDERS.filter((g) => {
+                const kind = normalizeMuseKind(editing.museKind, editing);
+                if (kind === "couple") return g === "couple";
+                if (kind === "group") return g === "group";
+                return g !== "couple" && g !== "group";
+              }).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => {
+                    const nextVoice = defaultVoiceGender(g);
+                    const keepVoice =
+                      editing.voiceGender ===
+                      defaultVoiceGender(editing.gender);
+                    const kind =
+                      g === "couple"
+                        ? "couple"
+                        : g === "group"
+                          ? "group"
+                          : "solo";
+                    const patched = withMuseKindFields(
+                      {
                         ...editing,
-                        gender: g,
-                        isCouple: g === "couple",
                         voiceGender: keepVoice
                           ? nextVoice
                           : editing.voiceGender,
                         voicePreset: keepVoice ? "auto" : editing.voicePreset,
-                      });
-                    }}
-                    className={`rounded-sm border px-3 py-1.5 text-sm ${
-                      editing.gender === g
-                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
-                        : "border-[var(--line)] text-[#c4b7a8]"
-                    }`}
-                  >
-                    {genderLabel(g)}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          </div>
+                      },
+                      {
+                        museKind: kind as MuseKind,
+                        gender: g as PersonGender,
+                        members:
+                          kind === "solo"
+                            ? []
+                            : museMembersOf(editing).length
+                              ? museMembersOf(editing)
+                              : kind === "couple"
+                                ? [
+                                    { name: "Partner A" },
+                                    { name: "Partner B" },
+                                  ]
+                                : [
+                                    { name: "Partner 1" },
+                                    { name: "Partner 2" },
+                                    { name: "Partner 3" },
+                                  ],
+                      },
+                    );
+                    setEditing(patched);
+                  }}
+                  className={`rounded-sm border px-3 py-1.5 text-sm ${
+                    editing.gender === g
+                      ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                      : "border-[var(--line)] text-[#c4b7a8]"
+                  }`}
+                >
+                  {genderLabel(g)}
+                </button>
+              ))}
+            </div>
+          </fieldset>
 
           <fieldset className="space-y-3" data-testid="muse-voice-settings">
             <legend className="text-sm uppercase tracking-[0.16em]">
