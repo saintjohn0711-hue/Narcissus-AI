@@ -71,6 +71,11 @@ type MusePresenceProps = {
   onSelectMuse?: (id: number) => void;
   /** When true, collapse Look/Customize/Actions so the open chat panel owns the chrome. */
   chatOpen?: boolean;
+  /**
+   * Bump to request opening stage menus (Look / Customize / Actions) while
+   * chat stays in the split — used by the chat-rail Menus control.
+   */
+  menusOpenRequest?: number;
   /** Persist Muse photos after in-dock likeness upload. */
   onPartnerPhotosChange?: (
     photos: string[],
@@ -107,6 +112,7 @@ export function MusePresence({
   museOptions,
   onSelectMuse,
   chatOpen,
+  menusOpenRequest = 0,
   onPartnerPhotosChange,
 }: MusePresenceProps) {
   const sceneCast = (() => {
@@ -948,6 +954,12 @@ export function MusePresence({
     if (chatOpen) setDockSection(null);
   }, [chatOpen]);
 
+  /** Chat-rail Menus control can reopen the stage panel without leaving the split. */
+  useEffect(() => {
+    if (!menusOpenRequest) return;
+    setDockSection("look");
+  }, [menusOpenRequest]);
+
   const chipClass = (selected: boolean, danger = false) =>
     `rounded-sm border px-2.5 py-1.5 text-left text-[11px] transition disabled:opacity-50 ${
       selected
@@ -1227,9 +1239,9 @@ export function MusePresence({
         <div className="muse-companion-dock">
           <div className="muse-companion-dock-head">
             <div className="min-w-0 flex-1">
-              {!chatOpen && (
-                <p className="muse-companion-dock-kicker">Stage</p>
-              )}
+              <p className="muse-companion-dock-kicker">
+                {chatOpen ? "Stage · menus" : "Stage"}
+              </p>
               {museOptions && museOptions.length > 0 && onSelectMuse ? (
                 <label className="mt-0.5 block min-w-0">
                   <span className="sr-only">Switch Muse</span>
@@ -1254,7 +1266,7 @@ export function MusePresence({
                   {displayName(partner)}
                 </p>
               )}
-              {!chatOpen && (
+              {(dockSection !== null || !chatOpen) && (
                 <p className="truncate text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                   {hasCast
                     ? sceneCast.length === 1
@@ -1331,21 +1343,23 @@ export function MusePresence({
           </div>
 
           {/*
-            Builder (Look / Customize / Generate) only when chat is closed AND the
-            user opens a section — never as a default popup over chat.
+            Stage menus (Look / Customize / Actions) stay available in split chat —
+            they open over the media half only, never abandon the 50/50 layout.
           */}
-          {!chatOpen && dockSection === null && (
+          {dockSection === null && (
             <button
               type="button"
               className="muse-companion-dock-expand"
               onClick={() => setDockSection("look")}
               data-testid="muse-companion-open-looks"
+              aria-expanded={false}
+              title="Open Muse picker, Look, Customize, and Actions on the stage"
             >
-              Look &amp; customize
+              {chatOpen ? "Menus" : "Look & customize"}
             </button>
           )}
 
-          {!chatOpen && dockSection !== null && (
+          {dockSection !== null && (
             <>
           <div className="muse-companion-dock-builder-bar">
           <div className="muse-companion-dock-tabs" role="tablist" aria-label="Companion controls">
@@ -1373,7 +1387,7 @@ export function MusePresence({
               className="muse-companion-dock-done"
               onClick={() => setDockSection(null)}
               data-testid="muse-companion-close-looks"
-              aria-label="Close look panel"
+              aria-label="Close stage menus"
             >
               Done
             </button>
