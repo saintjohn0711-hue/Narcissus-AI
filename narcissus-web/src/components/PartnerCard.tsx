@@ -15,6 +15,8 @@ import {
   formatMemberNames,
   genderLabel,
   mainPhoto,
+  memberGuestsOf,
+  memberPartnersOf,
   museKindLabel,
   museMembersOf,
   normalizeDoneActs,
@@ -264,11 +266,16 @@ export function PartnerCard({
 
   const kind = normalizeMuseKind(p.museKind, p);
   const unitMembers = museMembersOf(p);
+  const unitPartners = memberPartnersOf(unitMembers);
+  const unitGuests = memberGuestsOf(unitMembers);
   const metaBits = [
     p.type,
     kind !== "solo" ? museKindLabel(kind) : genderLabel(p.gender),
-    kind !== "solo" && unitMembers.length
-      ? formatMemberNames(unitMembers)
+    kind !== "solo" && unitPartners.length
+      ? formatMemberNames(unitPartners)
+      : null,
+    unitGuests.length
+      ? `Guest${unitGuests.length === 1 ? "" : "s"}: ${formatMemberNames(unitGuests)}`
       : null,
     photos.length
       ? `${photos.length} photo${photos.length === 1 ? "" : "s"}`

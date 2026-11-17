@@ -4,8 +4,10 @@
  */
 
 import {
+  emptyMuseMember,
   normalizeDoneActs,
   normalizeKinks,
+  syncUnitLinkedSolos,
   type MuseKind,
   type MuseMember,
   type PartnerRecord,
@@ -204,15 +206,33 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     gender: "couple",
     museKind: "couple",
     members: [
-      { name: "Lexi", role: "Bratty switch" },
-      { name: "Dom", role: "Hung dominant" },
+      {
+        name: "Lexi",
+        role: "Bratty switch",
+        gender: "woman",
+        photos: ["/demo-muses/woman-muse-1.jpg", "/demo-muses/woman-muse-2.jpg"],
+        voiceGender: "female",
+        voicePreset: "sultry",
+        voiceId: "accent:en-IE",
+        linkedPartnerId: 900005,
+      },
+      {
+        name: "Dom",
+        role: "Hung dominant",
+        gender: "man",
+        photos: ["/demo-muses/rocky-muse-1.jpg", "/demo-muses/rocky-muse-2.jpg"],
+        voiceGender: "male",
+        voicePreset: "deep",
+        voiceId: "accent:en-US",
+        linkedPartnerId: 900006,
+      },
     ],
     looks:
       "A matched pair: Lexi — dark curls, sharp smile, soft tits she likes shoved into your face; Dom — thick shoulders, chest hair, a cock that makes Lexi grin when she watches you take it. They dress like they already know you're joining.",
     notes:
-      "Couple Muse — one chat entry for Lexi and Dom together. They flirt as a unit, finish each other's filth, and love making you the third without you having to cast two solo Muses. Threesome energy, spit trade, and ownership shared between them.",
+      "Couple Muse — Lexi and Dom together. Open Heat for both; open Lexi or Dom Solo for separate chats. Same people, no retyping.",
     history:
-      "Dreamed-up onboarding Couple Muse. Built so couple/group sex chats start easy — pick Heat, talk to both.",
+      "Dreamed-up onboarding Couple Muse with linked Solo Muses (Lexi · Dom).",
     dynamics:
       "Tag-team. Lexi teases and directs; Dom pins and fills. They compete to ruin you, then kiss over you.",
     dynTags: ["Free-use", "Rough", "Ongoing", "Dominant", "Owns me"],
@@ -250,50 +270,119 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
   },
 ] as const;
 
+/** Linked Solo seeds for Heat — same people, separate chat. */
+const DEMO_LINKED_SOLO_SEEDS: readonly DemoMuseSeed[] = [
+  {
+    id: 900005,
+    name: "Lexi",
+    type: "Dream",
+    gender: "woman",
+    looks:
+      "Dark curls, sharp smile, soft tits she likes shoved into your face. Free-use energy when Dom is watching.",
+    notes: "Linked from couple Muse “Heat” · Bratty switch. Chat solo here; open Heat for both.",
+    history: "Linked Solo for Heat couple onboarding.",
+    dynamics: "Bratty switch — teases and directs.",
+    dynTags: ["Free-use", "Rough", "Ongoing"],
+    kinks: [
+      { tag: "Threesome", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Oral", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Face-fucking", role: "Receive", status: "Favorite", intensity: 9 },
+    ],
+    doneActs: [],
+    photos: ["/demo-muses/woman-muse-1.jpg", "/demo-muses/woman-muse-2.jpg"],
+    voiceGender: "female",
+    voicePreset: "sultry",
+    voiceAccent: "en-IE",
+    tryNewThings: true,
+    favorite: false,
+  },
+  {
+    id: 900006,
+    name: "Dom",
+    type: "Dream",
+    gender: "man",
+    looks:
+      "Thick shoulders, chest hair, a cock that makes Lexi grin when she watches you take it.",
+    notes: "Linked from couple Muse “Heat” · Hung dominant. Chat solo here; open Heat for both.",
+    history: "Linked Solo for Heat couple onboarding.",
+    dynamics: "Controlling dominant — pins and fills.",
+    dynTags: ["Dominant", "Rough", "Owns me"],
+    kinks: [
+      { tag: "Threesome", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Face-fucking", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Breeding", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 10 },
+    ],
+    doneActs: [],
+    photos: ["/demo-muses/rocky-muse-1.jpg", "/demo-muses/rocky-muse-2.jpg"],
+    voiceGender: "male",
+    voicePreset: "deep",
+    voiceAccent: "en-US",
+    tryNewThings: true,
+    favorite: false,
+  },
+] as const;
+
+function seedToPartner(
+  s: DemoMuseSeed,
+  now: string,
+): PartnerRecord {
+  const museKind = (s.museKind ?? "solo") as MuseKind;
+  const members = (s.members || []).map((m) => emptyMuseMember(m));
+  return {
+    id: s.id,
+    name: s.name,
+    type: s.type,
+    gender: s.gender,
+    looks: s.looks,
+    notes: s.notes,
+    history: s.history,
+    dynamics: s.dynamics,
+    dynTags: [...s.dynTags],
+    kinks: normalizeKinks(
+      s.kinks.map((k) => ({
+        tag: k.tag,
+        role: k.role ?? "Both",
+        status: k.status ?? "Like",
+        intensity: k.intensity ?? 6,
+      })),
+    ),
+    doneActs: normalizeDoneActs(s.doneActs),
+    photos: [...s.photos],
+    mainPhotoIndex: 0,
+    favorite: s.favorite,
+    museKind,
+    members,
+    isCouple: museKind === "couple",
+    partnerA: members[0]?.name || "",
+    partnerB: members[1]?.name || "",
+    locations: "",
+    pairedWith: [],
+    memories: [],
+    tryNewThings: s.tryNewThings,
+    sexRibbons: [],
+    voiceGender: s.voiceGender,
+    voicePreset: s.voicePreset,
+    voiceId: encodeAccentVoiceId(s.voiceAccent),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 /** Build PartnerRecords with encoded voice accents + normalized kinks. */
 export function narcissusDemoRoster(now = new Date().toISOString()): PartnerRecord[] {
-  return DEMO_MUSE_SEEDS.map((s) => {
-    const museKind = (s.museKind ?? "solo") as MuseKind;
-    const members = (s.members ? [...s.members] : []) as MuseMember[];
-    return {
-      id: s.id,
-      name: s.name,
-      type: s.type,
-      gender: s.gender,
-      looks: s.looks,
-      notes: s.notes,
-      history: s.history,
-      dynamics: s.dynamics,
-      dynTags: [...s.dynTags],
-      kinks: normalizeKinks(
-        s.kinks.map((k) => ({
-          tag: k.tag,
-          role: k.role ?? "Both",
-          status: k.status ?? "Like",
-          intensity: k.intensity ?? 6,
-        })),
-      ),
-      doneActs: normalizeDoneActs(s.doneActs),
-      photos: [...s.photos],
-      mainPhotoIndex: 0,
-      favorite: s.favorite,
-      museKind,
-      members,
-      isCouple: museKind === "couple",
-      partnerA: members[0]?.name || "",
-      partnerB: members[1]?.name || "",
-      locations: "",
-      pairedWith: [],
-      memories: [],
-      tryNewThings: s.tryNewThings,
-      sexRibbons: [],
-      voiceGender: s.voiceGender,
-      voicePreset: s.voicePreset,
-      voiceId: encodeAccentVoiceId(s.voiceAccent),
-      createdAt: now,
-      updatedAt: now,
-    };
-  });
+  const primary = DEMO_MUSE_SEEDS.map((s) => seedToPartner(s, now));
+  const linked = DEMO_LINKED_SOLO_SEEDS.map((s) => seedToPartner(s, now));
+  const heat = primary.find((p) => p.id === 900004);
+  if (!heat) return [...primary, ...linked];
+  // Pair Heat ↔ Lexi ↔ Dom via the same sync used on save.
+  const { roster } = syncUnitLinkedSolos([...linked, ...primary.filter((p) => p.id !== 900004)], heat);
+  // Stable starter order: Woman · Rocky · Jaxx · Heat · Lexi · Dom
+  const order = [900001, 900002, 900003, 900004, 900005, 900006];
+  return order
+    .map((id) => roster.find((p) => p.id === id))
+    .filter((p): p is PartnerRecord => Boolean(p));
 }
 
 export function hasDemoMusesSeededFlag(): boolean {
@@ -327,21 +416,65 @@ export function demoMusesIfNeeded(
 }
 
 const DEMO_COUPLE_ID = 900004;
+const DEMO_LINKED_IDS = [900005, 900006] as const;
 
 /**
- * Soft-upgrade: if the classic trio is present but Heat (couple) is missing,
- * append the couple Muse without wiping the roster.
+ * Soft-upgrade: ensure Heat + linked Lexi/Dom Solos exist when the classic
+ * trio is present — without wiping the roster.
  */
 export function ensureDemoCoupleMuse(
   list: PartnerRecord[] | null | undefined,
 ): PartnerRecord[] | null {
   if (!list || list.length === 0) return null;
   const ids = new Set(list.map((p) => Number(p.id)));
-  if (ids.has(DEMO_COUPLE_ID)) return null;
   const hasClassic =
     ids.has(900001) || ids.has(900002) || ids.has(900003);
   if (!hasClassic) return null;
-  const heat = narcissusDemoRoster().find((p) => p.id === DEMO_COUPLE_ID);
-  if (!heat) return null;
-  return [...list, heat];
+
+  const full = narcissusDemoRoster();
+  const heatSeed = full.find((p) => p.id === DEMO_COUPLE_ID);
+  if (!heatSeed) return null;
+
+  let next = [...list];
+  let changed = false;
+
+  if (!ids.has(DEMO_COUPLE_ID)) {
+    next = [...next, heatSeed];
+    changed = true;
+  }
+
+  for (const id of DEMO_LINKED_IDS) {
+    if (ids.has(id) || next.some((p) => p.id === id)) continue;
+    const solo = full.find((p) => p.id === id);
+    if (solo) {
+      next = [...next, solo];
+      changed = true;
+    }
+  }
+
+  // If Heat exists but members lack linkedPartnerId / photos, re-sync.
+  const heatIdx = next.findIndex((p) => p.id === DEMO_COUPLE_ID);
+  if (heatIdx >= 0) {
+    const heat = next[heatIdx]!;
+    const needsSync =
+      !heat.members?.every((m) => m.linkedPartnerId) ||
+      !heat.members?.every((m) => (m.photos?.length || 0) > 0);
+    if (needsSync) {
+      const seededMembers = heatSeed.members.map((m) => emptyMuseMember(m));
+      const { roster, unit } = syncUnitLinkedSolos(
+        next.map((p) =>
+          p.id === DEMO_COUPLE_ID
+            ? { ...p, members: seededMembers }
+            : p,
+        ),
+        { ...heat, members: seededMembers },
+      );
+      next = roster.map((p) =>
+        p.id === DEMO_COUPLE_ID ? unit : p,
+      );
+      changed = true;
+    }
+  }
+
+  return changed ? next : null;
 }

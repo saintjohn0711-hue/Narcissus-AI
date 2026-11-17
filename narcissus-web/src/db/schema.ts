@@ -114,9 +114,23 @@ export const partners = pgTable("partners", {
   favorite: boolean("favorite").notNull().default(false),
   /** solo | couple | group — couple/group chat as one Muse unit */
   museKind: text("muse_kind").notNull().default("solo"),
-  /** Named partners for couple (2) or group (3–4) Muses */
+  /** Named partners/guests for couple/group Muses — may link Solo ids */
   members: jsonb("members")
-    .$type<Array<{ name: string; role?: string }>>()
+    .$type<
+      Array<{
+        name: string;
+        role?: string;
+        /** partner | guest — guest = present, acts with me not required */
+        presence?: string;
+        gender?: string;
+        photos?: string[];
+        mainPhotoIndex?: number;
+        voiceGender?: string;
+        voicePreset?: string;
+        voiceId?: string;
+        linkedPartnerId?: number | null;
+      }>
+    >()
     .notNull()
     .default([]),
   isCouple: boolean("is_couple").notNull().default(false),
