@@ -68,6 +68,8 @@ type MusePresenceProps = {
   chatCollapsed?: boolean;
   /** Companion dock: Muse list for a calm in-dock switcher (replaces top strip). */
   museOptions?: PartnerRecord[];
+  /** Optional act-rank map (Muse id → 1-based rank) for the dock switcher. */
+  museActRanks?: Map<number, number> | Record<number, number>;
   onSelectMuse?: (id: number) => void;
   /** When true, collapse Look/Customize/Actions so the open chat panel owns the chrome. */
   chatOpen?: boolean;
@@ -110,6 +112,7 @@ export function MusePresence({
   lastPartnerReply = null,
   chatCollapsed = false,
   museOptions,
+  museActRanks,
   onSelectMuse,
   chatOpen,
   menusOpenRequest = 0,
@@ -1251,11 +1254,19 @@ export function MusePresence({
                     onChange={(e) => onSelectMuse(Number(e.target.value))}
                     aria-label="Switch Muse"
                   >
-                    {museOptions.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {displayName(p)}
-                      </option>
-                    ))}
+                    {museOptions.map((p) => {
+                      const rank =
+                        museActRanks instanceof Map
+                          ? museActRanks.get(Number(p.id))
+                          : museActRanks?.[Number(p.id)];
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {typeof rank === "number"
+                            ? `#${rank} ${displayName(p)}`
+                            : displayName(p)}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
               ) : (

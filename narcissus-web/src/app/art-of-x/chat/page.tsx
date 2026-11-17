@@ -65,6 +65,7 @@ import {
   persistChats,
   persistPartners,
 } from "@/lib/artOfXStore";
+import { museActRankMap, sortMusesByActRank } from "@/lib/museActStats";
 import {
   detectTryNewThingsConsent,
   extractExplicitRemember,
@@ -276,18 +277,19 @@ function ChatPageInner() {
       try {
         const [list, map] = await Promise.all([fetchPartners(), fetchChats()]);
         if (cancelled) return;
-        setPartners(list);
+        const ranked = sortMusesByActRank(list);
+        setPartners(ranked);
         setChats(map);
         const fromUrl = museParam ? Number(museParam) : NaN;
-        if (Number.isFinite(fromUrl) && list.some((p) => p.id === fromUrl)) {
+        if (Number.isFinite(fromUrl) && ranked.some((p) => p.id === fromUrl)) {
           setActiveId(fromUrl);
           pickedFromUrl.current = true;
-        } else if (list[0]) {
-          setActiveId(list[0].id);
+        } else if (ranked[0]) {
+          setActiveId(ranked[0].id);
         }
         const primary = Number.isFinite(fromUrl) ? fromUrl : undefined;
         const fromWith = parseCastWithParam(withParam, primary).filter((id) =>
-          list.some((p) => samePartnerId(p.id, id)),
+          ranked.some((p) => samePartnerId(p.id, id)),
         );
         if (fromWith.length > 0) {
           setCastIds(fromWith);
@@ -415,12 +417,19 @@ function ChatPageInner() {
     if (!partner) return [] as PartnerRecord[];
     const paired = pairedOptions;
     const pairedSet = new Set(paired.map((p) => Number(p.id)));
-    const rest = partners.filter(
-      (p) =>
-        !samePartnerId(p.id, partner.id) && !pairedSet.has(Number(p.id)),
+    const rest = sortMusesByActRank(
+      partners.filter(
+        (p) =>
+          !samePartnerId(p.id, partner.id) && !pairedSet.has(Number(p.id)),
+      ),
     );
     return [...paired, ...rest];
   }, [partner, partners, pairedOptions]);
+  const actRanks = useMemo(() => museActRankMap(partners), [partners]);
+  const partnersByActRank = useMemo(
+    () => sortMusesByActRank(partners),
+    [partners],
+  );
   const companionFull = Boolean(partner) && presenceStyle === "cartoon";
   const threadKey =
     activeId != null
@@ -1256,62 +1265,70 @@ function ChatPageInner() {
               className="flex gap-2 overflow-x-auto pb-1"
               aria-label={`${PERSON_LABEL.singular} picker`}
             >
-              {partners.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveId(p.id);
-                    setCastIds((cur) => {
-                      if (cur.length === 0) return [];
-                      const paired = new Set(
-                        pairedMusesFor(p, partners).map((x) => Number(x.id)),
-                      );
-                      return normalizeCastMateIds(
-                        cur.filter((id) => paired.has(Number(id))),
-                        p.id,
-                      );
-                    });
-                    setError(null);
-                  }}
-                  className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm backdrop-blur-sm ${
-                    activeId === p.id
-                      ? "border-[var(--glow)]/50 bg-[var(--glow)]/10"
-                      : "border-[var(--line)] bg-[#080b14]/55"
-                  }`}
-                >
-                  {mainPhoto(p) ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={mainPhoto(p)!}
-                      alt=""
-                      className="h-9 w-9 object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-9 w-9 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8]">
-                      {p.name.slice(0, 1)}
+              {partnersByActRank.map((p) => {
+                const rank = actRanks.get(Number(p.id))?.rank;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setActiveId(p.id);
+                      setCastIds((cur) => {
+                        if (cur.length === 0) return [];
+                        const paired = new Set(
+                          pairedMusesFor(p, partners).map((x) => Number(x.id)),
+                        );
+                        return normalizeCastMateIds(
+                          cur.filter((id) => paired.has(Number(id))),
+                          p.id,
+                        );
+                      });
+                      setError(null);
+                    }}
+                    className={`flex min-w-[9.25rem] shrink-0 items-center gap-2.5 border px-2.5 py-2 text-left text-sm backdrop-blur-sm ${
+                      activeId === p.id
+                        ? "border-[var(--glow)]/50 bg-[var(--glow)]/10"
+                        : "border-[var(--line)] bg-[#080b14]/55"
+                    }`}
+                  >
+                    {mainPhoto(p) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={mainPhoto(p)!}
+                        alt=""
+                        className="h-9 w-9 object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-9 w-9 items-center justify-center bg-[#12182a] text-xs text-[#c4b7a8]">
+                        {p.name.slice(0, 1)}
+                      </span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="flex items-baseline gap-1.5">
+                        {typeof rank === "number" ? (
+                          <span className="muse-row-rank shrink-0">#{rank}</span>
+                        ) : null}
+                        <span className="block truncate text-[var(--ink)]">
+                          {p.name}
+                        </span>
+                      </span>
+                      <span className="block truncate text-[10px] text-[var(--muted)]">
+                        {p.type} ·{" "}
+                        {p.museKind === "couple" ||
+                        p.museKind === "group" ||
+                        p.gender === "couple" ||
+                        p.gender === "group"
+                          ? genderLabel(
+                              p.museKind === "group" || p.gender === "group"
+                                ? "group"
+                                : "couple",
+                            )
+                          : genderLabel(p.gender)}
+                      </span>
                     </span>
-                  )}
-                  <span className="min-w-0">
-                    <span className="block truncate text-[var(--ink)]">
-                      {p.name}
-                    </span>
-                    <span className="block truncate text-[10px] text-[var(--muted)]">
-                      {p.type} ·{" "}
-                      {p.museKind === "couple" ||
-                      p.museKind === "group" ||
-                      p.gender === "couple" ||
-                      p.gender === "group"
-                        ? genderLabel(
-                            p.museKind === "group" || p.gender === "group"
-                              ? "group"
-                              : "couple",
-                          )
-                        : genderLabel(p.gender)}
-                    </span>
-                  </span>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </aside>
           )}
 
@@ -1339,7 +1356,19 @@ function ChatPageInner() {
                   onStyleChange={setPresenceStyle}
                   lastPartnerReply={reactionReply}
                   chatCollapsed={companionFull && !chatOpen}
-                  museOptions={companionFull ? partners : undefined}
+                  museOptions={
+                    companionFull ? partnersByActRank : undefined
+                  }
+                  museActRanks={
+                    companionFull
+                      ? new Map(
+                          [...actRanks.entries()].map(([id, info]) => [
+                            id,
+                            info.rank,
+                          ]),
+                        )
+                      : undefined
+                  }
                   onSelectMuse={
                     companionFull
                       ? (id) => {

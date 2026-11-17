@@ -33,6 +33,10 @@ type PartnerCardProps = {
   partner: PartnerRecord;
   /** Full roster — resolve paired Muse names + pairing picker */
   roster?: PartnerRecord[];
+  /** 1-based act rank across the roster (Echo-aligned contribution). */
+  actRank?: number;
+  /** Weighted act contribution used for ranking / Echo top Muses. */
+  actContribution?: number;
   pairingOpen?: boolean;
   onTogglePairing?: () => void;
   onPairWith?: (otherId: number) => void;
@@ -215,6 +219,8 @@ function PhotoLightbox({
 export function PartnerCard({
   partner: p,
   roster = [],
+  actRank,
+  actContribution,
   pairingOpen = false,
   onTogglePairing,
   onPairWith,
@@ -345,12 +351,32 @@ export function PartnerCard({
           {/* Row 1 — identity + actions */}
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <div className="min-w-0">
-              <h2
-                className="truncate text-[1.05rem] leading-tight text-[var(--ink)] sm:text-[1.15rem]"
-                style={{ fontFamily: "var(--font-display), serif" }}
-              >
-                {p.name}
-              </h2>
+              <div className="flex min-w-0 items-baseline gap-2">
+                {typeof actRank === "number" && actRank > 0 ? (
+                  <span
+                    className="muse-row-rank shrink-0"
+                    title={
+                      typeof actContribution === "number"
+                        ? `Act rank #${actRank} · score ${actContribution}`
+                        : `Act rank #${actRank}`
+                    }
+                    aria-label={
+                      typeof actContribution === "number"
+                        ? `Act rank ${actRank}, score ${actContribution}`
+                        : `Act rank ${actRank}`
+                    }
+                    data-testid="muse-row-rank"
+                  >
+                    #{actRank}
+                  </span>
+                ) : null}
+                <h2
+                  className="truncate text-[1.05rem] leading-tight text-[var(--ink)] sm:text-[1.15rem]"
+                  style={{ fontFamily: "var(--font-display), serif" }}
+                >
+                  {p.name}
+                </h2>
+              </div>
               <p className="mt-0.5 truncate text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
                 {metaBits.join(" · ")}
                 {hasPaired

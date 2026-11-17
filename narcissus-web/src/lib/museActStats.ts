@@ -275,6 +275,73 @@ export function tierProgressFor(score: number): TierProgress {
 }
 
 /**
+ * Per-Muse act rank score — same building block as Echo overscore:
+ * Σ (actWeight × typeMultiplier) for that Muse’s logged acts.
+ * Account-level distinct-act bonus stays on Echo only (not per Muse).
+ */
+export function museActContribution(p: PartnerRecord): number {
+  const acts = normalizeDoneActs(p.doneActs);
+  const mult = TYPE_MULT[p.type] ?? 1;
+  let contribution = 0;
+  for (const tag of acts) {
+    contribution += actMetaFor(tag).weight * mult;
+  }
+  return Math.round(contribution);
+}
+
+/** Highest act contribution first; ties → more acts, then name. */
+export function compareMusesByActRank(
+  a: PartnerRecord,
+  b: PartnerRecord,
+): number {
+  const ca = museActContribution(a);
+  const cb = museActContribution(b);
+  if (cb !== ca) return cb - ca;
+  const aa = normalizeDoneActs(a.doneActs).length;
+  const ba = normalizeDoneActs(b.doneActs).length;
+  if (ba !== aa) return ba - aa;
+  const byName = a.name.localeCompare(b.name, undefined, {
+    sensitivity: "base",
+  });
+  if (byName !== 0) return byName;
+  return Number(a.id) - Number(b.id);
+}
+
+export function sortMusesByActRank(
+  list: PartnerRecord[],
+): PartnerRecord[] {
+  return [...list].sort(compareMusesByActRank);
+}
+
+export type MuseActRankInfo = {
+  /** 1-based competition rank (tied scores share a rank). */
+  rank: number;
+  contribution: number;
+  actCount: number;
+};
+
+/** Map Muse id → act rank across the given roster. */
+export function museActRankMap(
+  partners: PartnerRecord[],
+): Map<number, MuseActRankInfo> {
+  const sorted = sortMusesByActRank(partners);
+  const map = new Map<number, MuseActRankInfo>();
+  let rank = 0;
+  let lastScore: number | null = null;
+  for (let i = 0; i < sorted.length; i++) {
+    const p = sorted[i]!;
+    const contribution = museActContribution(p);
+    const actCount = normalizeDoneActs(p.doneActs).length;
+    if (lastScore === null || contribution !== lastScore) {
+      rank = i + 1;
+      lastScore = contribution;
+    }
+    map.set(Number(p.id), { rank, contribution, actCount });
+  }
+  return map;
+}
+
+/**
  * Overscore = Σ (actWeight × typeMultiplier) for each Muse×act log
  * + 2 × distinct act labels in the filtered set.
  *
@@ -289,12 +356,10 @@ export function computeOverscore(
   const distinct = new Set<string>();
   for (const p of partners) {
     const acts = normalizeDoneActs(p.doneActs);
-    const mult = TYPE_MULT[p.type] ?? 1;
+    overscore += museActContribution(p);
+    actLogs += acts.length;
     for (const tag of acts) {
-      const meta = actMetaFor(tag);
-      overscore += meta.weight * mult;
-      actLogs += 1;
-      distinct.add(meta.tag);
+      distinct.add(actMetaFor(tag).tag);
     }
   }
   overscore += distinct.size * 2;
@@ -436,18 +501,13 @@ export function buildMuseActScoreboard(
   const topMuses: MuseLeaderRow[] = filtered
     .map((p) => {
       const acts = normalizeDoneActs(p.doneActs);
-      const mult = TYPE_MULT[p.type] ?? 1;
-      let contribution = 0;
-      for (const tag of acts) {
-        contribution += actMetaFor(tag).weight * mult;
-      }
       return {
         id: p.id,
         name: p.name,
         type: p.type,
         gender: p.gender,
         actCount: acts.length,
-        contribution: Math.round(contribution),
+        contribution: museActContribution(p),
       };
     })
     .filter((m) => m.actCount > 0)

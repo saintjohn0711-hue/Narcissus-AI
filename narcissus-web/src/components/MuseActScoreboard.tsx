@@ -507,7 +507,7 @@ export function MuseActScoreboard({ signedIn }: MuseActScoreboardProps) {
 
                 <div className="lg:col-span-2">
                   <p className="mb-3 text-[10px] uppercase tracking-[0.22em] text-[var(--accent-strong)]">
-                    Top Muses
+                    Top Muses by act rank
                   </p>
                   {board.topMuses.length === 0 ? (
                     <p className="text-sm text-[var(--muted)]">No ranked Muses.</p>

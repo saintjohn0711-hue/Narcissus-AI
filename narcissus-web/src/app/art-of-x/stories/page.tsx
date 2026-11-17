@@ -23,6 +23,7 @@ import {
 } from "@/lib/artOfX";
 import { partnerToSceneCard } from "@/lib/sceneCraft";
 import { fetchPartners, fetchScenes, persistScenes } from "@/lib/artOfXStore";
+import { sortMusesByActRank } from "@/lib/museActStats";
 
 type GenSource = "llm" | "local" | null;
 
@@ -64,7 +65,7 @@ export default function StoriesPage() {
       try {
         const [p, s] = await Promise.all([fetchPartners(), fetchScenes()]);
         if (cancelled) return;
-        setPartners(p);
+        setPartners(sortMusesByActRank(p));
         setScenes(s);
         setLoadError(null);
       } catch {
@@ -87,9 +88,13 @@ export default function StoriesPage() {
     void persistScenes(scenes).catch(() => {});
   }, [scenes, ready]);
 
+  const partnersByActRank = useMemo(
+    () => sortMusesByActRank(partners),
+    [partners],
+  );
   const cast = useMemo(
-    () => partners.filter((p) => selectedIds.includes(p.id)),
-    [partners, selectedIds],
+    () => partnersByActRank.filter((p) => selectedIds.includes(p.id)),
+    [partnersByActRank, selectedIds],
   );
   const loc = resolveSceneLocation(locId);
 
@@ -465,7 +470,7 @@ export default function StoriesPage() {
                 Cast (up to 3)
               </legend>
               <div className="flex flex-wrap gap-2">
-                {partners.map((p) => {
+                {partnersByActRank.map((p) => {
                   const on = selectedIds.includes(p.id);
                   return (
                     <button
