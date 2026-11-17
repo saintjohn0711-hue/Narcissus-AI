@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MuseActScoreboard } from "@/components/MuseActScoreboard";
 import { ShareCodePanel } from "@/components/ShareCodePanel";
 import { authClient } from "@/lib/auth-client";
 import { PERSON_LABEL } from "@/lib/artOfX";
@@ -175,8 +176,8 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
               Sign in to open your card
             </h2>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-[#c4b7a8]">
-              Highlights, Circle codes, cloud-save status, and linked viewers
-              live here once you’re on an 18+ Narcissus account.
+              Highlights, Muse overscore, Circle codes, and linked viewers live
+              here once you’re on an 18+ Narcissus account.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Link
@@ -373,7 +374,10 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
         )}
       </section>
 
-      {/* 3. Share code */}
+      {/* 3. Muse sexual-activity overscore / stats */}
+      <MuseActScoreboard signedIn={signedIn} />
+
+      {/* 4. Share code */}
       <section
         aria-labelledby="echo-share"
         className="border-b border-[var(--line)] px-5 py-6 sm:px-8"
@@ -387,7 +391,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
         <ShareCodePanel signedIn={signedIn} variant="embedded" />
       </section>
 
-      {/* 4. Linked viewers */}
+      {/* 5. Linked viewers */}
       <section
         aria-labelledby="echo-links"
         className="border-b border-[var(--line)] px-5 py-6 sm:px-8"

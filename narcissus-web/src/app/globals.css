@@ -570,6 +570,19 @@ body {
   animation: echo-pulse 2.4s ease-in-out infinite;
 }
 
+.echo-overscore {
+  animation: echo-rise 480ms ease-out both;
+  border-radius: 2px;
+}
+
+.echo-muse-stats [data-testid^="echo-stats-pair-"] {
+  transition: background-color 160ms ease;
+}
+
+.echo-muse-stats [data-testid^="echo-stats-pair-"]:hover {
+  background: color-mix(in srgb, var(--glow) 5%, transparent);
+}
+
 .partner-card {
   animation: echo-rise 420ms ease-out both;
 }

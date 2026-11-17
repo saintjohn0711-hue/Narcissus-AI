@@ -4,6 +4,7 @@
  */
 
 import {
+  normalizeDoneActs,
   normalizeKinks,
   type PartnerRecord,
   type PersonGender,
@@ -128,7 +129,7 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
       "Domination",
       "Blowjob received",
       "Face-fucking",
-      "Anal sex (gave)",
+      "Anal sex given",
       "Dirty talk",
       "Creampie",
     ],
@@ -176,7 +177,7 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
       "Face-fucking",
       "Dirty talk",
       "Roleplay",
-      "Anal sex (gave)",
+      "Anal sex given",
     ],
     photos: [
       "/demo-muses/jaxx-muse-1.jpg",
@@ -210,7 +211,7 @@ export function narcissusDemoRoster(now = new Date().toISOString()): PartnerReco
         intensity: k.intensity ?? 6,
       })),
     ),
-    doneActs: [...s.doneActs],
+    doneActs: normalizeDoneActs(s.doneActs),
     photos: [...s.photos],
     mainPhotoIndex: 0,
     favorite: s.favorite,

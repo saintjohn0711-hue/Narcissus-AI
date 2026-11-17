@@ -24,12 +24,14 @@ import {
   PERSON_GENDERS,
   PERSON_LABEL,
   arkDemoRoster,
+  canonicalizeAct,
   displayName,
   emptyPartner,
   fileToPartnerPhoto,
   genderLabel,
   loadMuseOrder,
   mainPhoto,
+  normalizeDoneActs,
   normalizeKinks,
   normalizePairedWith,
   pairedMusesFor,
@@ -443,27 +445,30 @@ function PartnersPageInner() {
 
   /** Inline Muse-row act toggle — persists without opening the full editor. */
   function togglePartnerAct(partnerId: number, act: string) {
+    const tag = canonicalizeAct(act);
     setPartners((prev) =>
       prev.map((p) => {
         if (!samePartnerId(p.id, partnerId)) return p;
-        const has = (p.doneActs || []).includes(act);
+        const current = normalizeDoneActs(p.doneActs);
+        const has = current.includes(tag);
         return {
           ...p,
           doneActs: has
-            ? (p.doneActs || []).filter((a) => a !== act)
-            : [...(p.doneActs || []), act],
+            ? current.filter((a) => a !== tag)
+            : [...current, tag],
           updatedAt: new Date().toISOString(),
         };
       }),
     );
     setEditing((ed) => {
       if (!ed || !samePartnerId(ed.id, partnerId)) return ed;
-      const has = (ed.doneActs || []).includes(act);
+      const current = normalizeDoneActs(ed.doneActs);
+      const has = current.includes(tag);
       return {
         ...ed,
         doneActs: has
-          ? (ed.doneActs || []).filter((a) => a !== act)
-          : [...(ed.doneActs || []), act],
+          ? current.filter((a) => a !== tag)
+          : [...current, tag],
       };
     });
   }
@@ -1179,7 +1184,7 @@ function PartnersPageInner() {
               groups={ACT_GROUPS}
               selected={editing.doneActs}
               onToggle={toggleAct}
-              searchPlaceholder="Search acts — oral, toys, public…"
+              searchPlaceholder="Search acts — blowjob, given, anal…"
             />
           </fieldset>
 
