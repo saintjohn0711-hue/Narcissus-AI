@@ -441,6 +441,33 @@ function PartnersPageInner() {
     });
   }
 
+  /** Inline Muse-row act toggle — persists without opening the full editor. */
+  function togglePartnerAct(partnerId: number, act: string) {
+    setPartners((prev) =>
+      prev.map((p) => {
+        if (!samePartnerId(p.id, partnerId)) return p;
+        const has = (p.doneActs || []).includes(act);
+        return {
+          ...p,
+          doneActs: has
+            ? (p.doneActs || []).filter((a) => a !== act)
+            : [...(p.doneActs || []), act],
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    );
+    setEditing((ed) => {
+      if (!ed || !samePartnerId(ed.id, partnerId)) return ed;
+      const has = (ed.doneActs || []).includes(act);
+      return {
+        ...ed,
+        doneActs: has
+          ? (ed.doneActs || []).filter((a) => a !== act)
+          : [...(ed.doneActs || []), act],
+      };
+    });
+  }
+
   function toggleKink(tag: string) {
     if (!editing) return;
     const has = editing.kinks.some((k) => k.tag === tag);
@@ -662,7 +689,8 @@ function PartnersPageInner() {
         title={outlet ? `${outletTitle}` : PERSON_LABEL.plural}
         lede={
           <>
-            Desire ledger — who, what you&apos;ve done, kinks, dynamics, photos.
+            Dense ledger — scan every Muse, log sexual acts inline, expand for
+            details.
             {storeMode === "database"
               ? " Saved to your Narcissus account."
               : " Stored on this device — "}
@@ -1290,7 +1318,7 @@ function PartnersPageInner() {
         </section>
       )}
 
-      <div className="space-y-5">
+      <div className="muse-ledger" data-testid="muse-ledger">
         {visible.length === 0 && (
           <p className="text-sm text-[#c4b7a8]">
             No {PERSON_LABEL.pluralLower} yet
@@ -1313,6 +1341,7 @@ function PartnersPageInner() {
             onEdit={() => openEdit(p)}
             onRemove={() => remove(p.id)}
             onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}
+            onToggleAct={(act) => togglePartnerAct(p.id, act)}
             onMoveUp={
               sortMode === "manual" ? () => moveMuse(p.id, -1) : undefined
             }

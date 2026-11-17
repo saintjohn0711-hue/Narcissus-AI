@@ -18,6 +18,7 @@ import {
   useMuseVoicePreview,
 } from "@/components/MuseVoicePreview";
 import {
+  DEFAULT_LOCS,
   displayName,
   emptyPartner,
   ensureMuseGroupPairings,
@@ -30,6 +31,7 @@ import {
   pairedMusesFor,
   parseCastWithParam,
   PERSON_LABEL,
+  resolveSceneLocation,
   savePartners,
   samePartnerId,
   withMainPhoto,
@@ -164,6 +166,7 @@ function ChatPageInner() {
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
   const [pov, setPov] = useState<ChatPov>("1st");
+  const [locId, setLocId] = useState(DEFAULT_LOCS[0]!.id);
   const [sending, setSending] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -392,6 +395,7 @@ function ChatPageInner() {
     () => partners.find((p) => p.id === activeId) || null,
     [partners, activeId],
   );
+  const loc = useMemo(() => resolveSceneLocation(locId), [locId]);
   const castPartners = useMemo(() => {
     if (!partner) return [] as PartnerRecord[];
     const ids = normalizeCastMateIds(castIds, partner.id);
@@ -1066,6 +1070,7 @@ function ChatPageInner() {
             text: m.text,
           })),
           pov,
+          location: loc,
           stream: true,
         }),
       });
@@ -1510,6 +1515,25 @@ function ChatPageInner() {
                       </button>
                     </div>
                     <div className="muse-chat-toolbar-meta">
+                      <label
+                        className="muse-chat-tool muse-chat-tool--pov muse-chat-tool--scene"
+                        title={loc.desc}
+                      >
+                        <span>Scene</span>
+                        <select
+                          value={locId}
+                          onChange={(e) => setLocId(e.target.value)}
+                          className="muse-chat-pov-select muse-chat-scene-select"
+                          aria-label="Scene location"
+                          data-testid="muse-chat-scene-location"
+                        >
+                          {DEFAULT_LOCS.map((l) => (
+                            <option key={l.id} value={l.id}>
+                              {l.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
                       <label className="muse-chat-tool muse-chat-tool--pov">
                         <span>POV</span>
                         <select
