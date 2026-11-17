@@ -385,7 +385,7 @@ export function buildMuseActScoreboard(
     {
       outlet: "other",
       label: "Other",
-      genders: ["crossdresser", "couple"],
+      genders: ["crossdresser", "couple", "group"],
     },
   ];
   const byOutlet = outletBuckets.map((b) => {

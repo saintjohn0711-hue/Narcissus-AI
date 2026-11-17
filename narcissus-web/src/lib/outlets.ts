@@ -1,6 +1,6 @@
 /**
  * Primary visitor outlets — who you want (Men / Women / Trans).
- * Deep-links into Muses with ?outlet=; couples / cross dresser stay on All.
+ * Deep-links into Muses with ?outlet=; couples / groups / cross dresser stay on All.
  */
 
 import type { PersonGender } from "@/lib/artOfX";

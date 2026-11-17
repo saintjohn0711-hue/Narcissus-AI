@@ -12,10 +12,14 @@ import {
 import {
   ACT_GROUPS,
   displayName,
+  formatMemberNames,
   genderLabel,
   mainPhoto,
+  museKindLabel,
+  museMembersOf,
   normalizeDoneActs,
   normalizeKinks,
+  normalizeMuseKind,
   normalizePairedWith,
   pairedMusesFor,
   PERSON_LABEL,
@@ -252,9 +256,14 @@ export function PartnerCard({
   const doneActs = normalizeDoneActs(p.doneActs);
   const actCount = doneActs.length;
 
+  const kind = normalizeMuseKind(p.museKind, p);
+  const unitMembers = museMembersOf(p);
   const metaBits = [
     p.type,
-    genderLabel(p.gender),
+    kind !== "solo" ? museKindLabel(kind) : genderLabel(p.gender),
+    kind !== "solo" && unitMembers.length
+      ? formatMemberNames(unitMembers)
+      : null,
     photos.length
       ? `${photos.length} photo${photos.length === 1 ? "" : "s"}`
       : null,

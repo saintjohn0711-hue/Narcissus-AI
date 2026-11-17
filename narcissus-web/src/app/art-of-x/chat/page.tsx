@@ -1295,7 +1295,17 @@ function ChatPageInner() {
                       {p.name}
                     </span>
                     <span className="block truncate text-[10px] text-[var(--muted)]">
-                      {p.type} · {genderLabel(p.gender)}
+                      {p.type} ·{" "}
+                      {p.museKind === "couple" ||
+                      p.museKind === "group" ||
+                      p.gender === "couple" ||
+                      p.gender === "group"
+                        ? genderLabel(
+                            p.museKind === "group" || p.gender === "group"
+                              ? "group"
+                              : "couple",
+                          )
+                        : genderLabel(p.gender)}
                     </span>
                   </span>
                 </button>

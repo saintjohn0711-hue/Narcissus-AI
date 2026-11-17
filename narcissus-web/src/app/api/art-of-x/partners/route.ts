@@ -4,7 +4,10 @@ import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
 import {
   PG_INT4_MAX,
+  museMembersOf,
   normalizeDoneActs,
+  normalizeMembers,
+  normalizeMuseKind,
   normalizePairedWith,
   type PartnerRecord,
 } from "@/lib/artOfX";
@@ -56,6 +59,21 @@ function allocatePartnerIds(
 function rowToPartner(
   row: typeof schema.partners.$inferSelect,
 ): PartnerRecord {
+  const museKind = normalizeMuseKind(row.museKind, {
+    isCouple: row.isCouple,
+    gender: row.gender,
+    members: row.members,
+    partnerA: row.partnerA,
+    partnerB: row.partnerB,
+  });
+  const members = museMembersOf({
+    museKind,
+    members: row.members,
+    isCouple: row.isCouple,
+    gender: row.gender,
+    partnerA: row.partnerA,
+    partnerB: row.partnerB,
+  });
   return {
     id: row.id,
     name: row.name,
@@ -71,9 +89,11 @@ function rowToPartner(
     photos: row.photos || [],
     mainPhotoIndex: row.mainPhotoIndex ?? 0,
     favorite: row.favorite,
-    isCouple: row.isCouple,
-    partnerA: row.partnerA,
-    partnerB: row.partnerB,
+    museKind,
+    members,
+    isCouple: museKind === "couple" || row.isCouple,
+    partnerA: row.partnerA || members[0]?.name || "",
+    partnerB: row.partnerB || members[1]?.name || "",
     locations: row.locations,
     pairedWith: normalizePairedWith(row.pairedWith, row.id),
     memories: normalizeMemories(row.memories),
@@ -245,9 +265,12 @@ export async function PUT(req: NextRequest) {
         photos: p.photos || [],
         mainPhotoIndex: p.mainPhotoIndex ?? 0,
         favorite: Boolean(p.favorite),
-        isCouple: Boolean(p.isCouple),
-        partnerA: p.partnerA || "",
-        partnerB: p.partnerB || "",
+        museKind: normalizeMuseKind(p.museKind, p),
+        members: normalizeMembers(p.members?.length ? p.members : museMembersOf(p)),
+        isCouple:
+          normalizeMuseKind(p.museKind, p) === "couple" || Boolean(p.isCouple),
+        partnerA: p.partnerA || museMembersOf(p)[0]?.name || "",
+        partnerB: p.partnerB || museMembersOf(p)[1]?.name || "",
         locations: p.locations || "",
         pairedWith: normalizePairedWith(p.pairedWith, ids[i]),
         memories: normalizeMemories(p.memories),

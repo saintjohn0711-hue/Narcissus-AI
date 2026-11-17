@@ -21,12 +21,30 @@ import {
 
 export type PersonType = "Real" | "Dream" | "Wanted";
 export type { MuseMemory };
+
+/**
+ * How this Muse is cast in chat:
+ * - solo — one person (default)
+ * - couple — one Muse entry for two named partners (unit chat)
+ * - group — one Muse entry for 3–4 named partners (unit chat)
+ */
+export type MuseKind = "solo" | "couple" | "group";
+
+export const MUSE_KINDS: MuseKind[] = ["solo", "couple", "group"];
+
+export type MuseMember = {
+  name: string;
+  /** Optional beat — e.g. Dom, Switch, Watcher */
+  role?: string;
+};
+
 export type PersonGender =
   | "woman"
   | "man"
   | "trans"
   | "crossdresser"
-  | "couple";
+  | "couple"
+  | "group";
 
 export const PERSON_GENDERS: PersonGender[] = [
   "woman",
@@ -34,6 +52,7 @@ export const PERSON_GENDERS: PersonGender[] = [
   "trans",
   "crossdresser",
   "couple",
+  "group",
 ];
 
 export function genderLabel(g: PersonGender | string): string {
@@ -48,9 +67,170 @@ export function genderLabel(g: PersonGender | string): string {
       return "Cross dresser";
     case "couple":
       return "Couple";
+    case "group":
+      return "Group";
     default:
       return g;
   }
+}
+
+export function museKindLabel(k: MuseKind | string): string {
+  switch (k) {
+    case "solo":
+      return "Solo";
+    case "couple":
+      return "Couple";
+    case "group":
+      return "Group";
+    default:
+      return k;
+  }
+}
+
+/** Couple = 2 named partners; group = 3–4 (aligned with max cast). */
+export const MUSE_KIND_MEMBER_LIMITS: Record<
+  MuseKind,
+  { min: number; max: number }
+> = {
+  solo: { min: 0, max: 0 },
+  couple: { min: 2, max: 2 },
+  group: { min: 3, max: 4 },
+};
+
+export function isMuseKind(v: unknown): v is MuseKind {
+  return v === "solo" || v === "couple" || v === "group";
+}
+
+export function normalizeMuseKind(
+  raw: unknown,
+  fallback?: {
+    isCouple?: boolean;
+    gender?: string;
+    members?: unknown;
+    partnerA?: string;
+    partnerB?: string;
+  },
+): MuseKind {
+  if (isMuseKind(raw)) return raw;
+  const gender = String(fallback?.gender || "").toLowerCase();
+  if (gender === "group") return "group";
+  if (gender === "couple" || fallback?.isCouple) return "couple";
+  const members = normalizeMembers(fallback?.members);
+  if (members.length >= 3) return "group";
+  if (
+    members.length === 2 ||
+    (String(fallback?.partnerA || "").trim() &&
+      String(fallback?.partnerB || "").trim())
+  ) {
+    return "couple";
+  }
+  return "solo";
+}
+
+export function normalizeMembers(list: unknown): MuseMember[] {
+  if (!Array.isArray(list)) return [];
+  const out: MuseMember[] = [];
+  const seen = new Set<string>();
+  for (const raw of list) {
+    if (!raw || typeof raw !== "object") {
+      if (typeof raw === "string" && raw.trim()) {
+        const name = raw.trim().slice(0, 80);
+        const key = name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({ name });
+      }
+      continue;
+    }
+    const o = raw as { name?: unknown; role?: unknown };
+    const name = typeof o.name === "string" ? o.name.trim().slice(0, 80) : "";
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const role =
+      typeof o.role === "string" && o.role.trim()
+        ? o.role.trim().slice(0, 40)
+        : undefined;
+    out.push(role ? { name, role } : { name });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+
+/**
+ * Resolve named partners for couple/group Muses.
+ * Prefers `members`; falls back to partnerA/partnerB for legacy couple rows.
+ */
+export function museMembersOf(p: {
+  museKind?: MuseKind | string;
+  members?: MuseMember[] | unknown;
+  isCouple?: boolean;
+  gender?: string;
+  partnerA?: string;
+  partnerB?: string;
+}): MuseMember[] {
+  const kind = normalizeMuseKind(p.museKind, p);
+  if (kind === "solo") return [];
+  const fromMembers = normalizeMembers(p.members);
+  if (fromMembers.length > 0) {
+    const { max } = MUSE_KIND_MEMBER_LIMITS[kind];
+    return fromMembers.slice(0, max);
+  }
+  const a = String(p.partnerA || "").trim();
+  const b = String(p.partnerB || "").trim();
+  if (a && b) return [{ name: a }, { name: b }];
+  if (a) return [{ name: a }];
+  if (b) return [{ name: b }];
+  return [];
+}
+
+/** Keep partnerA/B + isCouple + gender in sync with museKind/members. */
+export function withMuseKindFields(
+  p: PartnerRecord,
+  next: {
+    museKind?: MuseKind;
+    members?: MuseMember[];
+    gender?: PersonGender;
+  },
+): PartnerRecord {
+  const museKind = normalizeMuseKind(next.museKind ?? p.museKind, {
+    ...p,
+    ...next,
+  });
+  let members = normalizeMembers(next.members ?? p.members);
+  const limits = MUSE_KIND_MEMBER_LIMITS[museKind];
+  if (museKind === "solo") {
+    members = [];
+  } else {
+    members = members.slice(0, limits.max);
+  }
+  const gender =
+    next.gender ??
+    (museKind === "couple"
+      ? "couple"
+      : museKind === "group"
+        ? "group"
+        : p.gender === "couple" || p.gender === "group"
+          ? "woman"
+          : p.gender);
+  return {
+    ...p,
+    museKind,
+    members,
+    gender,
+    isCouple: museKind === "couple",
+    partnerA: museKind === "solo" ? "" : members[0]?.name || "",
+    partnerB: museKind === "solo" ? "" : members[1]?.name || "",
+  };
+}
+
+export function formatMemberNames(members: MuseMember[]): string {
+  const names = members.map((m) => m.name).filter(Boolean);
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
 export type KinkRole = "Both" | "Receive" | "Give" | "Watch";
@@ -85,6 +265,13 @@ export type PartnerRecord = {
   /** Index into photos for the primary/top image */
   mainPhotoIndex: number;
   favorite: boolean;
+  /**
+   * Cast shape for this Muse entry.
+   * Couple/group = one ledger row that chats as a multi-partner unit.
+   */
+  museKind: MuseKind;
+  /** Named partners when museKind is couple or group. */
+  members: MuseMember[];
   isCouple: boolean;
   partnerA: string;
   partnerB: string;
@@ -746,6 +933,8 @@ export function emptyPartner(
     photos: [],
     mainPhotoIndex: 0,
     favorite: false,
+    museKind: "solo",
+    members: [],
     isCouple: false,
     partnerA: "",
     partnerB: "",
@@ -1006,8 +1195,23 @@ export function emptySelf(): SelfProfile {
 }
 
 export function displayName(p: PartnerRecord): string {
-  if (p.isCouple || p.gender === "couple") {
-    if (p.partnerA && p.partnerB) return `${p.partnerA} and ${p.partnerB}`;
+  const kind = normalizeMuseKind(p.museKind, p);
+  if (kind === "couple" || kind === "group") {
+    const members = museMembersOf(p);
+    const joined = formatMemberNames(members);
+    if (joined) {
+      // Prefer the unit name when the user set one that isn't just "Couple".
+      const unit = (p.name || "").trim();
+      if (
+        unit &&
+        !/^couple$/i.test(unit) &&
+        !/^group$/i.test(unit) &&
+        unit.toLowerCase() !== joined.toLowerCase()
+      ) {
+        return unit;
+      }
+      return joined;
+    }
   }
   return p.name;
 }
@@ -1642,6 +1846,8 @@ export function arkDemoRoster(): PartnerRecord[] {
     photos: [],
     mainPhotoIndex: 0,
     favorite: false,
+    museKind: "solo" as MuseKind,
+    members: [] as MuseMember[],
     isCouple: false,
     partnerA: "",
     partnerB: "",
@@ -1680,6 +1886,22 @@ export function loadPartners(): PartnerRecord[] {
             if (/cross\s*dresser/i.test(raw)) return "crossdresser";
             return "woman";
           })(),
+          museKind: normalizeMuseKind((p as PartnerRecord).museKind, p),
+          members: (() => {
+            const kind = normalizeMuseKind((p as PartnerRecord).museKind, p);
+            const members = museMembersOf({
+              ...p,
+              museKind: kind,
+              members: (p as PartnerRecord).members,
+            });
+            return members;
+          })(),
+          isCouple:
+            normalizeMuseKind((p as PartnerRecord).museKind, p) === "couple" ||
+            Boolean((p as PartnerRecord).isCouple) ||
+            String(p.gender || "") === "couple",
+          partnerA: String((p as PartnerRecord).partnerA || ""),
+          partnerB: String((p as PartnerRecord).partnerB || ""),
           doneActs: normalizeDoneActs(p.doneActs),
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
           pairedWith: normalizePairedWith(
@@ -1712,10 +1934,20 @@ export function loadPartners(): PartnerRecord[] {
               : "",
         })).map((p) => {
           const id = Number(p.id);
+          const kinded = withMuseKindFields(
+            {
+              ...p,
+              id: Number.isFinite(id) && id > 0 ? id : nextPartnerId([]),
+              pairedWith: normalizePairedWith(p.pairedWith, Number(p.id)),
+            },
+            {
+              museKind: normalizeMuseKind(p.museKind, p),
+              members: museMembersOf(p),
+            },
+          );
           const base = {
-            ...p,
-            id: Number.isFinite(id) && id > 0 ? id : nextPartnerId([]),
-            pairedWith: normalizePairedWith(p.pairedWith, Number(p.id)),
+            ...kinded,
+            pairedWith: normalizePairedWith(kinded.pairedWith, Number(kinded.id)),
           };
           return base.photos.length
             ? {

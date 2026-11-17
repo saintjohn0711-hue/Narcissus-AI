@@ -251,6 +251,7 @@ export function defaultVoiceGender(
     case "trans":
     case "crossdresser":
     case "couple":
+    case "group":
     default:
       return "female";
   }
