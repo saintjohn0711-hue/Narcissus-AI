@@ -468,7 +468,8 @@ export function PartnerCard({
                 Sexual activity with {p.name}
               </p>
               <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                Tap to log what you&apos;ve done — saved with this Muse.
+                Tap labeled boxes to log what you&apos;ve done — saved with this
+                Muse.
               </p>
             </div>
             {onToggleAct ? null : (
@@ -488,9 +489,9 @@ export function PartnerCard({
               selected={doneActs}
               onToggle={onToggleAct}
               compact
-              label="Add act"
-              searchPlaceholder="Type an act — blowjob, given, anal…"
-              emptySelectedHint="Nothing logged yet — type below to add."
+              label="Filter acts"
+              searchPlaceholder="Filter boxes — blowjob, given, anal…"
+              emptySelectedHint="Nothing logged yet — tap a box below."
               allowCustom
               customPlaceholder="Add custom act…"
               removeLabel="Undo"

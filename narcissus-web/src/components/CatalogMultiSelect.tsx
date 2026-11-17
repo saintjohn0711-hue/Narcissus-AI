@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { useId, useMemo, useState, type KeyboardEvent } from "react";
 
 export type CatalogGroup = { cat: string; tags: string[] };
 
@@ -22,76 +15,75 @@ type CatalogMultiSelectProps = {
   customPlaceholder?: string;
   /** Tighter chrome for Muse card inline acts panel */
   compact?: boolean;
-  /** Accessible name for the type-in select */
+  /** Accessible name for the filter field */
   label?: string;
   removeLabel?: string;
 };
 
-type FlatOption = { tag: string; cat: string };
-
 /**
- * Type-in select / combobox for large acts & kinks catalogs.
- * Matches Muse chat select chrome: one field you type into, dropdown results,
- * selected list easy to scan — not a dense checkbox wall.
+ * Labeled pick boxes for large acts & kinks catalogs.
+ * Primary interaction matches Muse voice / Dynamics / Stories chips:
+ * tap a box with the label inside to add or remove. Optional type-to-filter
+ * narrows long lists; custom entries stay available when allowCustom.
  */
 export function CatalogMultiSelect({
   groups,
   selected,
   onToggle,
-  searchPlaceholder = "Type to find and add…",
-  emptySelectedHint = "Nothing selected yet — type below to add.",
+  searchPlaceholder = "Filter boxes…",
+  emptySelectedHint = "Nothing selected yet — tap a box below.",
   allowCustom = false,
   customPlaceholder = "Add custom…",
   compact = false,
-  label = "Add from catalog",
+  label = "Filter catalog",
   removeLabel = "Remove",
 }: CatalogMultiSelectProps) {
-  const listId = useId();
   const inputId = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(0);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const q = query.trim().toLowerCase();
 
-  const available = useMemo(() => {
-    const out: FlatOption[] = [];
+  const catalogTags = useMemo(() => {
+    const set = new Set<string>();
     for (const g of groups) {
-      for (const tag of g.tags) {
-        if (!selectedSet.has(tag)) out.push({ tag, cat: g.cat });
-      }
+      for (const tag of g.tags) set.add(tag);
     }
-    return out;
-  }, [groups, selectedSet]);
+    return set;
+  }, [groups]);
 
-  const filtered = useMemo(() => {
-    if (!q) return available.slice(0, compact ? 12 : 24);
-    return available.filter(
-      (o) =>
-        o.tag.toLowerCase().includes(q) || o.cat.toLowerCase().includes(q),
-    );
-  }, [available, q, compact]);
+  /** Selected tags that aren't in the catalog (customs + legacy) */
+  const customSelected = useMemo(
+    () => selected.filter((t) => !catalogTags.has(t)),
+    [selected, catalogTags],
+  );
 
   const filteredGroups = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const o of filtered) {
-      const list = map.get(o.cat) || [];
-      list.push(o.tag);
-      map.set(o.cat, list);
-    }
-    return [...map.entries()].map(([cat, tags]) => ({ cat, tags }));
-  }, [filtered]);
+    if (!q) return groups;
+    return groups
+      .map((g) => ({
+        cat: g.cat,
+        tags: g.tags.filter(
+          (tag) =>
+            tag.toLowerCase().includes(q) || g.cat.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((g) => g.tags.length > 0);
+  }, [groups, q]);
+
+  const visibleCustomSelected = useMemo(() => {
+    if (!q) return customSelected;
+    return customSelected.filter((t) => t.toLowerCase().includes(q));
+  }, [customSelected, q]);
 
   const exactMatch = useMemo(() => {
     if (!query.trim()) return false;
     const needle = query.trim().toLowerCase();
-    return groups.some((g) =>
-      g.tags.some((t) => t.toLowerCase() === needle),
+    return (
+      groups.some((g) => g.tags.some((t) => t.toLowerCase() === needle)) ||
+      selected.some((t) => t.toLowerCase() === needle)
     );
-  }, [groups, query]);
+  }, [groups, query, selected]);
 
   const canAddCustom =
     allowCustom &&
@@ -99,228 +91,152 @@ export function CatalogMultiSelect({
     !exactMatch &&
     !selectedSet.has(query.trim().replace(/\s+/g, " ").slice(0, 80));
 
-  const optionCount = filtered.length + (canAddCustom ? 1 : 0);
-
-  useEffect(() => {
-    setActiveIdx(0);
-  }, [query, open, filtered.length, canAddCustom]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onDoc(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  function addTag(tag: string) {
-    const clean = tag.trim().replace(/\s+/g, " ").slice(0, 80);
-    if (!clean) return;
-    if (!selectedSet.has(clean)) onToggle(clean);
-    setQuery("");
-    setOpen(false);
-    inputRef.current?.focus();
-  }
+  const boxCount =
+    filteredGroups.reduce((n, g) => n + g.tags.length, 0) +
+    visibleCustomSelected.length;
 
   function addCustom() {
     if (!canAddCustom) return;
-    addTag(query);
+    const clean = query.trim().replace(/\s+/g, " ").slice(0, 80);
+    if (!clean) return;
+    onToggle(clean);
+    setQuery("");
   }
 
-  function pickByIndex(idx: number) {
-    if (canAddCustom && idx === 0) {
-      addCustom();
-      return;
-    }
-    const offset = canAddCustom ? 1 : 0;
-    const opt = filtered[idx - offset];
-    if (opt) addTag(opt.tag);
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setOpen(true);
-      setActiveIdx((i) => Math.min(i + 1, Math.max(0, optionCount - 1)));
-      return;
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setOpen(true);
-      setActiveIdx((i) => Math.max(i - 1, 0));
-      return;
-    }
+  function onFilterKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (open && optionCount > 0) {
-        pickByIndex(activeIdx);
-      } else if (canAddCustom) {
+      if (canAddCustom) {
         addCustom();
-      } else if (filtered[0]) {
-        addTag(filtered[0].tag);
+        return;
       }
-      return;
+      const first = filteredGroups[0]?.tags[0];
+      if (first && !selectedSet.has(first)) onToggle(first);
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      setOpen(false);
-      return;
+      setQuery("");
     }
   }
 
-  let flatIdx = 0;
-
   return (
     <div
-      ref={rootRef}
-      className={`catalog-select ${compact ? "catalog-select--compact" : ""}`}
+      className={`catalog-picks ${compact ? "catalog-picks--compact" : ""}`}
       data-testid="catalog-multi-select"
     >
-      <div className="catalog-select-chosen">
-        <p className="catalog-select-chosen-label">
+      <div className="catalog-picks-summary">
+        <p className="catalog-picks-summary-label">
           Selected · {selected.length}
         </p>
         {selected.length === 0 ? (
-          <p className="catalog-select-empty">{emptySelectedHint}</p>
+          <p className="catalog-picks-empty">{emptySelectedHint}</p>
         ) : (
-          <ul className="catalog-select-chosen-list">
-            {selected.map((tag) => (
-              <li key={tag} className="catalog-select-chosen-row">
-                <span>{tag}</span>
-                <button
-                  type="button"
-                  onClick={() => onToggle(tag)}
-                  className="catalog-select-remove"
-                  data-testid="catalog-remove"
-                >
-                  {removeLabel}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="catalog-select-field">
-        <label className="catalog-select-field-label" htmlFor={inputId}>
-          {label}
-        </label>
-        <div
-          className={`catalog-select-control ${open ? "catalog-select-control--open" : ""}`}
-        >
-          <input
-            ref={inputRef}
-            id={inputId}
-            type="text"
-            role="combobox"
-            aria-expanded={open}
-            aria-controls={listId}
-            aria-autocomplete="list"
-            aria-activedescendant={
-              open && optionCount > 0
-                ? `${listId}-opt-${activeIdx}`
-                : undefined
-            }
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setOpen(true);
-            }}
-            onFocus={() => setOpen(true)}
-            onKeyDown={onKeyDown}
-            placeholder={
-              allowCustom
-                ? searchPlaceholder || customPlaceholder
-                : searchPlaceholder
-            }
-            className="catalog-select-input"
-            data-testid="catalog-select-input"
-            autoComplete="off"
-          />
-          <button
-            type="button"
-            className="catalog-select-chevron"
-            tabIndex={-1}
-            aria-label={open ? "Close options" : "Open options"}
-            onClick={() => {
-              setOpen((v) => !v);
-              inputRef.current?.focus();
-            }}
-          >
-            <span aria-hidden>{open ? "▴" : "▾"}</span>
-          </button>
-        </div>
-
-        {open && (
           <div
-            id={listId}
-            role="listbox"
-            className="catalog-select-menu"
-            data-testid="catalog-select-menu"
+            className="catalog-picks-selected-row"
+            data-testid="catalog-selected-chips"
           >
-            {optionCount === 0 ? (
-              <p className="catalog-select-menu-empty">
-                {q
-                  ? allowCustom
-                    ? "No catalog match — press Enter to add custom."
-                    : "No matches."
-                  : "Everything here is already selected."}
-              </p>
-            ) : (
-              <>
-                {canAddCustom && (
-                  <button
-                    type="button"
-                    id={`${listId}-opt-0`}
-                    role="option"
-                    aria-selected={activeIdx === 0}
-                    className={`catalog-select-option catalog-select-option--custom ${
-                      activeIdx === 0 ? "catalog-select-option--active" : ""
-                    }`}
-                    onMouseEnter={() => setActiveIdx(0)}
-                    onClick={addCustom}
-                    data-testid="catalog-custom-add"
-                  >
-                    <span className="catalog-select-option-cat">Custom</span>
-                    <span>
-                      Add “{query.trim().replace(/\s+/g, " ").slice(0, 80)}”
-                    </span>
-                  </button>
-                )}
-                {filteredGroups.map((g) => (
-                  <div key={g.cat} className="catalog-select-group">
-                    <p className="catalog-select-group-label">{g.cat}</p>
-                    {g.tags.map((tag) => {
-                      const idx = (canAddCustom ? 1 : 0) + flatIdx;
-                      flatIdx += 1;
-                      return (
-                        <button
-                          key={tag}
-                          type="button"
-                          id={`${listId}-opt-${idx}`}
-                          role="option"
-                          aria-selected={activeIdx === idx}
-                          className={`catalog-select-option ${
-                            activeIdx === idx
-                              ? "catalog-select-option--active"
-                              : ""
-                          }`}
-                          onMouseEnter={() => setActiveIdx(idx)}
-                          onClick={() => addTag(tag)}
-                        >
-                          <span>{tag}</span>
-                          <span className="catalog-select-option-hint">Add</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
-              </>
-            )}
+            {selected.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => onToggle(tag)}
+                className="catalog-pick-box catalog-pick-box--on catalog-pick-box--selected"
+                aria-pressed="true"
+                title={`${removeLabel} ${tag}`}
+                data-testid="catalog-remove"
+              >
+                <span className="catalog-pick-box-label">{tag}</span>
+                <span className="catalog-pick-box-x" aria-hidden>
+                  ×
+                </span>
+              </button>
+            ))}
           </div>
         )}
       </div>
+
+      <div className="catalog-picks-filter">
+        <label className="catalog-picks-filter-label" htmlFor={inputId}>
+          {label}
+        </label>
+        <div className="catalog-picks-filter-control">
+          <input
+            id={inputId}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onFilterKeyDown}
+            placeholder={
+              allowCustom
+                ? `${searchPlaceholder} · Enter adds custom`
+                : searchPlaceholder
+            }
+            className="catalog-picks-filter-input"
+            data-testid="catalog-select-input"
+            autoComplete="off"
+          />
+          {canAddCustom && (
+            <button
+              type="button"
+              className="catalog-picks-custom-add"
+              onClick={addCustom}
+              data-testid="catalog-custom-add"
+            >
+              Add “{query.trim().replace(/\s+/g, " ").slice(0, 40)}”
+            </button>
+          )}
+        </div>
+      </div>
+
+      {boxCount === 0 && !canAddCustom ? (
+        <p className="catalog-picks-none">
+          {q ? "No matching boxes." : "Catalog is empty."}
+        </p>
+      ) : (
+        <div className="catalog-picks-groups" data-testid="catalog-pick-boxes">
+          {visibleCustomSelected.length > 0 && (
+            <div className="catalog-picks-group">
+              <p className="catalog-picks-group-label">Yours</p>
+              <div className="catalog-picks-grid">
+                {visibleCustomSelected.map((tag) => (
+                  <button
+                    key={`custom-${tag}`}
+                    type="button"
+                    onClick={() => onToggle(tag)}
+                    className="catalog-pick-box catalog-pick-box--on"
+                    aria-pressed="true"
+                    data-testid="catalog-pick-box"
+                  >
+                    <span className="catalog-pick-box-label">{tag}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {filteredGroups.map((g) => (
+            <div key={g.cat} className="catalog-picks-group">
+              <p className="catalog-picks-group-label">{g.cat}</p>
+              <div className="catalog-picks-grid">
+                {g.tags.map((tag) => {
+                  const on = selectedSet.has(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => onToggle(tag)}
+                      className={`catalog-pick-box ${on ? "catalog-pick-box--on" : ""}`}
+                      aria-pressed={on}
+                      data-testid="catalog-pick-box"
+                    >
+                      <span className="catalog-pick-box-label">{tag}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

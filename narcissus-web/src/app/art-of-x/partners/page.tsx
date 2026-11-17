@@ -1266,16 +1266,16 @@ function PartnersPageInner() {
               Acts logged
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Type in the select to find and add — same pattern as chat scene
-              picks. Selected list stays easy to scan; Remove deletes from this
-              Muse.
+              Tap a labeled box to log or undo — same pick style as voice and
+              Dynamics. Filter when the list is long; selected glow shows what
+              counts for this Muse.
             </p>
             <CatalogMultiSelect
               groups={ACT_GROUPS}
               selected={normalizeDoneActs(editing.doneActs)}
               onToggle={toggleAct}
-              label="Add act"
-              searchPlaceholder="Type an act — blowjob, given, anal…"
+              label="Filter acts"
+              searchPlaceholder="Filter boxes — blowjob, given, anal…"
               allowCustom
               customPlaceholder="Add custom act…"
             />
@@ -1286,15 +1286,15 @@ function PartnersPageInner() {
               Kinks
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Type to find desires — oral, toys, power, and more. Add custom or
-              Remove from the selected list.
+              Tap boxes for desires — oral, toys, power, and more. Glow means
+              on; tap again to clear. Filter or add custom when you need it.
             </p>
             <CatalogMultiSelect
               groups={KINK_GROUPS}
               selected={normalizeKinks(editing.kinks).map((k) => k.tag)}
               onToggle={toggleKink}
-              label="Add kink"
-              searchPlaceholder="Type a kink — bondage, free-use…"
+              label="Filter kinks"
+              searchPlaceholder="Filter boxes — bondage, free-use…"
               allowCustom
               customPlaceholder="Add custom kink…"
             />
