@@ -175,7 +175,12 @@ function PartnersPageInner() {
       saveMuseOrder(merged);
       setReady(true);
     })().catch(() => {
-      if (!cancelled) setReady(true);
+      if (cancelled) return;
+      // Never mark an empty roster as "loaded" after a failed fetch —
+      // that used to fire persistPartners([]) and wipe Neon.
+      syncingFromServer.current = true;
+      setSaveError("Failed to load Muses from your account. Refresh to retry.");
+      setReady(true);
     });
     return () => {
       cancelled = true;

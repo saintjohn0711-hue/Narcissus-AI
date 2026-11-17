@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { eq, ne } from "drizzle-orm";
+import { and, eq, ne, notInArray, sql } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
 import { requireUserId } from "@/lib/session";
 import {
@@ -19,6 +19,21 @@ import {
 import { normalizeSexRibbons } from "@/lib/sexRibbons";
 
 export const runtime = "nodejs";
+
+/**
+ * Ensure #93 columns exist before any partners read/write.
+ * Missing muse_kind previously broke GET and let PUT delete-then-fail wipe rows.
+ */
+async function ensurePartnersKindColumns(
+  db: ReturnType<typeof getDb>,
+): Promise<void> {
+  await db.execute(sql`
+    ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "muse_kind" text DEFAULT 'solo' NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "members" jsonb DEFAULT '[]'::jsonb NOT NULL
+  `);
+}
 
 /** Accept only ids that fit Postgres int4. */
 function safePartnerId(id: unknown): number | undefined {
@@ -120,13 +135,31 @@ export async function GET() {
   }
 
   const db = getDb();
-  const rows = await db
-    .select()
-    .from(schema.partners)
-    .where(eq(schema.partners.userId, auth.userId));
-  return NextResponse.json({
-    partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
-  });
+  try {
+    await ensurePartnersKindColumns(db);
+    const rows = await db
+      .select()
+      .from(schema.partners)
+      .where(eq(schema.partners.userId, auth.userId));
+    return NextResponse.json({
+      partners: rows.map(rowToPartner).sort((a, b) => b.id - a.id),
+    });
+  } catch (err) {
+    console.error("partners GET failed", err);
+    const cause =
+      err && typeof err === "object" && "cause" in err
+        ? (err as { cause?: { message?: string } }).cause
+        : undefined;
+    return NextResponse.json(
+      {
+        error: "load_failed",
+        message:
+          cause?.message ||
+          (err instanceof Error ? err.message : "Failed to load partners"),
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function PUT(req: NextRequest) {
@@ -235,6 +268,9 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
+    // Fail closed on missing #93 columns before any delete/upsert.
+    await ensurePartnersKindColumns(db);
+
     // Ids already held by other accounts (global PK) — must not reuse.
     const otherRows = await db
       .select({ id: schema.partners.id })
@@ -243,14 +279,18 @@ export async function PUT(req: NextRequest) {
     const taken = new Set(otherRows.map((r) => r.id));
     const ids = allocatePartnerIds(list, taken);
 
-    // Replace-all for this user (simple sync model for MVP).
-    // neon-http has no interactive transactions — size-guard above runs before delete.
-    await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
-
+    // Upsert-first replace-all (neon-http has no interactive transactions).
+    // Never delete before inserts succeed — a failed insert used to wipe the roster.
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
-      await db.insert(schema.partners).values({
-        id: ids[i],
+      const id = ids[i]!;
+      const museKind = normalizeMuseKind(p.museKind, p);
+      const members = normalizeMembers(
+        p.members?.length ? p.members : museMembersOf(p),
+      );
+      const voiceGender = normalizeVoiceGender(p.voiceGender, p.gender);
+      const row = {
+        id,
         userId,
         name: p.name || "",
         type: p.type || "Real",
@@ -265,27 +305,74 @@ export async function PUT(req: NextRequest) {
         photos: p.photos || [],
         mainPhotoIndex: p.mainPhotoIndex ?? 0,
         favorite: Boolean(p.favorite),
-        museKind: normalizeMuseKind(p.museKind, p),
-        members: normalizeMembers(p.members?.length ? p.members : museMembersOf(p)),
-        isCouple:
-          normalizeMuseKind(p.museKind, p) === "couple" || Boolean(p.isCouple),
-        partnerA: p.partnerA || museMembersOf(p)[0]?.name || "",
-        partnerB: p.partnerB || museMembersOf(p)[1]?.name || "",
+        museKind,
+        members,
+        isCouple: museKind === "couple" || Boolean(p.isCouple),
+        partnerA: p.partnerA || members[0]?.name || "",
+        partnerB: p.partnerB || members[1]?.name || "",
         locations: p.locations || "",
-        pairedWith: normalizePairedWith(p.pairedWith, ids[i]),
+        pairedWith: normalizePairedWith(p.pairedWith, id),
         memories: normalizeMemories(p.memories),
         tryNewThings: Boolean(p.tryNewThings),
         sexRibbons: normalizeSexRibbons(p.sexRibbons),
-        voiceGender: normalizeVoiceGender(p.voiceGender, p.gender),
-        voicePreset: normalizeVoicePreset(
-          p.voicePreset,
-          normalizeVoiceGender(p.voiceGender, p.gender),
-        ),
+        voiceGender,
+        voicePreset: normalizeVoicePreset(p.voicePreset, voiceGender),
         voiceId:
           typeof p.voiceId === "string" ? p.voiceId.trim().slice(0, 200) : "",
         createdAt: p.createdAt ? new Date(p.createdAt) : now,
         updatedAt: p.updatedAt ? new Date(p.updatedAt) : now,
-      });
+      };
+      await db
+        .insert(schema.partners)
+        .values(row)
+        .onConflictDoUpdate({
+          target: schema.partners.id,
+          set: {
+            userId: row.userId,
+            name: row.name,
+            type: row.type,
+            gender: row.gender,
+            looks: row.looks,
+            notes: row.notes,
+            history: row.history,
+            dynamics: row.dynamics,
+            dynTags: row.dynTags,
+            kinks: row.kinks,
+            doneActs: row.doneActs,
+            photos: row.photos,
+            mainPhotoIndex: row.mainPhotoIndex,
+            favorite: row.favorite,
+            museKind: row.museKind,
+            members: row.members,
+            isCouple: row.isCouple,
+            partnerA: row.partnerA,
+            partnerB: row.partnerB,
+            locations: row.locations,
+            pairedWith: row.pairedWith,
+            memories: row.memories,
+            tryNewThings: row.tryNewThings,
+            sexRibbons: row.sexRibbons,
+            voiceGender: row.voiceGender,
+            voicePreset: row.voicePreset,
+            voiceId: row.voiceId,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+          },
+        });
+    }
+
+    // Drop orphans only after every upsert succeeded.
+    if (ids.length === 0) {
+      await db.delete(schema.partners).where(eq(schema.partners.userId, userId));
+    } else {
+      await db
+        .delete(schema.partners)
+        .where(
+          and(
+            eq(schema.partners.userId, userId),
+            notInArray(schema.partners.id, ids),
+          ),
+        );
     }
 
     const rows = await db
