@@ -21,14 +21,14 @@ export default function AccountPage() {
         <div className="echo-atmosphere-ripple" />
       </div>
 
-      <PageShell width="md" outerClassName="relative z-10">
+      <PageShell width="lg" outerClassName="relative z-10">
         <AppNav />
 
         <PageHeader
           className="echo-hero-title"
           kicker="Adults only · Account & settings"
           title="Echo"
-          lede="Your profile across Narcissus — identity, Muse overscore and act stats, cloud save, Circle share codes, and linked viewers. Muse voice and chat options stay on each Muse / chat panel."
+          lede="Your reflection across Narcissus — identity, Muse overscore, act heat, cloud save, Circle codes, and linked viewers. Muse voice stays on each Muse / chat panel."
         />
 
         {isPending ? (

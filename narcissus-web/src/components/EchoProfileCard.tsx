@@ -155,47 +155,53 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
 
   if (!signedIn) {
     return (
-      <article className="echo-card overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/55">
-        <div className="relative px-6 py-12 sm:px-8">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 opacity-90"
-            style={{
-              background:
-                "radial-gradient(620px 240px at 0% 0%, rgba(232,168,124,0.18), transparent 60%), linear-gradient(135deg, rgba(22,19,16,0.25), transparent)",
-            }}
-          />
-          <div className="relative">
-            <p className="echo-section-label text-[10px] uppercase text-[var(--muted)]">
-              Echo
-            </p>
-            <h2
-              className="mt-3 text-3xl text-[var(--ink)] sm:text-4xl"
-              style={{ fontFamily: "var(--font-display), serif" }}
-            >
-              Sign in to open your card
-            </h2>
-            <p className="mt-3 max-w-md text-sm leading-relaxed text-[#c4b7a8]">
-              Highlights, Muse overscore, Circle codes, and linked viewers live
-              here once you’re on an 18+ Narcissus account.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <Link
-                href="/sign-in"
-                className="rounded-sm bg-[var(--accent)]/90 px-5 py-2.5 text-sm font-medium text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
+      <div className="flex flex-col gap-0">
+        <article className="echo-card overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/55">
+          <div className="relative px-6 py-12 sm:px-8">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 opacity-90"
+              style={{
+                background:
+                  "radial-gradient(620px 240px at 0% 0%, rgba(0,229,255,0.14), transparent 60%), radial-gradient(420px 180px at 100% 0%, rgba(229,195,178,0.12), transparent 55%), linear-gradient(135deg, rgba(8,14,28,0.35), transparent)",
+              }}
+            />
+            <div className="relative">
+              <p className="echo-section-label text-[10px] uppercase text-[var(--muted)]">
+                Echo
+              </p>
+              <h2
+                className="mt-3 text-3xl text-[var(--ink)] sm:text-4xl"
+                style={{ fontFamily: "var(--font-display), serif" }}
               >
-                Sign in
-              </Link>
-              <Link
-                href="/sign-up"
-                className="rounded-sm border border-[var(--line)] px-5 py-2.5 text-sm text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
-              >
-                Create account
-              </Link>
+                Sign in to open your card
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-[#c4b7a8]">
+                Highlights, Circle codes, and linked viewers sync on an 18+
+                Narcissus account. Muse overscore below reads your local ledger
+                now — sign in to keep it in the cloud.
+              </p>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Link
+                  href="/sign-in"
+                  className="rounded-sm bg-[var(--accent)]/90 px-5 py-2.5 text-sm font-medium text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="rounded-sm border border-[var(--line)] px-5 py-2.5 text-sm text-[#c4b7a8] transition hover:border-[var(--accent)]/40 hover:text-[var(--ink)]"
+                >
+                  Create account
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </article>
+        </article>
+        <article className="echo-card mt-4 overflow-hidden border border-[var(--line)] bg-[var(--bg-elevated)]/60">
+          <MuseActScoreboard signedIn={false} />
+        </article>
+      </div>
     );
   }
 
@@ -239,7 +245,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(720px 260px at 6% -25%, rgba(232,168,124,0.24), transparent 55%), radial-gradient(420px 180px at 100% 0%, rgba(90,70,50,0.3), transparent 50%)",
+              "radial-gradient(720px 260px at 6% -25%, rgba(0,229,255,0.18), transparent 55%), radial-gradient(420px 180px at 100% 0%, rgba(229,195,178,0.14), transparent 50%)",
           }}
         />
         <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
