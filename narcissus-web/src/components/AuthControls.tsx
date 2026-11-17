@@ -43,7 +43,7 @@ export function AuthControls({ className }: AuthControlsProps) {
         <button
           type="button"
           onClick={() => void signOut()}
-          className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
+          className="ui-btn ui-btn--ghost"
         >
           Sign out
         </button>
@@ -53,16 +53,10 @@ export function AuthControls({ className }: AuthControlsProps) {
 
   return (
     <div className={rootClass}>
-      <Link
-        href="/sign-in"
-        className="rounded-sm border border-[var(--accent)]/50 bg-[var(--accent)] px-3 py-1.5 font-semibold text-[#1a120c] transition hover:bg-[var(--accent-strong)]"
-      >
+      <Link href="/sign-in" className="ui-btn ui-btn--primary">
         Log in
       </Link>
-      <Link
-        href="/sign-up"
-        className="rounded-sm border border-[var(--line)] px-2.5 py-1 text-[#c4b7a8] transition hover:border-[var(--accent)]/50 hover:text-[var(--ink)]"
-      >
+      <Link href="/sign-up" className="ui-btn ui-btn--ghost">
         Sign up
       </Link>
     </div>

@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { AppNav } from "@/components/AppNav";
+import { PageHeader } from "@/components/PageHeader";
+import { PageShell } from "@/components/PageShell";
 import {
   BODY_TYPES,
   COCK_SIZES,
@@ -267,24 +269,14 @@ export default function StudioPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 py-10 sm:px-10">
+    <PageShell width="lg">
       <AppNav />
-      <header className="mb-12 border-b border-[var(--line)] pb-8">
-        <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-          Studio
-        </p>
-        <h1
-          className="text-5xl font-semibold tracking-tight text-[var(--ink)] sm:text-6xl"
-          style={{ fontFamily: "var(--font-display), serif" }}
-        >
-          Narcissus
-        </h1>
-        <p className="mt-3 max-w-xl text-base font-light leading-relaxed text-[#c4b7a8]">
-          Face swap still + video, scene acts, undress with gender/cock options,
-          and 5s clips (natural, sex acts, say-this). Your face stays yours —
-          Muses live in the menu above.
-        </p>
-      </header>
+      <PageHeader
+        className="border-b border-[var(--line)] pb-8"
+        kicker="Studio"
+        title="Narcissus"
+        lede="Face swap still + video, scene acts, undress with gender/cock options, and 5s clips (natural, sex acts, say-this). Your face stays yours — Muses live in Menu / More."
+      />
 
       <form onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-6">
@@ -760,6 +752,6 @@ export default function StudioPage() {
           )}
         </aside>
       </form>
-    </div>
+    </PageShell>
   );
 }

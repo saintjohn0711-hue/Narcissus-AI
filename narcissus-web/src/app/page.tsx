@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { AuthControls } from "@/components/AuthControls";
+import { AppNav } from "@/components/AppNav";
 import { OutletStrip } from "@/components/OutletStrip";
 
 export const metadata: Metadata = {
@@ -39,64 +39,9 @@ const HOUSE = [
 
 export default function HomePage() {
   return (
-    <div className="home-root min-h-screen">
-      <header className="home-topnav absolute inset-x-0 top-0 z-20 flex items-center justify-between px-6 py-5 sm:px-10">
-        <Link
-          href="/"
-          className="flex items-center gap-3 text-[var(--ink)] no-underline"
-          aria-label="Narcissus AI home"
-        >
-          <span className="relative inline-flex h-9 w-9 shrink-0 overflow-hidden rounded-sm ring-1 ring-[var(--line)]">
-            <Image
-              src="/brand/narcissus-logo.jpg"
-              alt=""
-              width={36}
-              height={36}
-              priority
-              className="h-9 w-9 object-cover object-[center_30%]"
-            />
-          </span>
-          <span
-            className="text-lg tracking-[0.06em] text-[var(--accent-strong)]"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
-            Narcissus AI
-          </span>
-        </Link>
-        <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--soft)]">
-          <Link
-            href="/art-of-x/partners?outlet=women"
-            className="transition hover:text-[var(--glow)]"
-          >
-            Women
-          </Link>
-          <Link
-            href="/art-of-x/partners?outlet=men"
-            className="transition hover:text-[var(--glow)]"
-          >
-            Men
-          </Link>
-          <Link
-            href="/art-of-x/partners?outlet=trans"
-            className="transition hover:text-[var(--glow)]"
-          >
-            Trans
-          </Link>
-          <Link
-            href="/studio"
-            className="hidden transition hover:text-[var(--ink)] sm:inline"
-          >
-            Studio
-          </Link>
-          <Link
-            href="/art-of-x"
-            className="hidden transition hover:text-[var(--ink)] sm:inline"
-          >
-            Art of X
-          </Link>
-          <AuthControls />
-        </nav>
-      </header>
+    <div className="home-root relative min-h-screen">
+      {/* One chrome system with the rest of the app — Menu/More + outlets */}
+      <AppNav variant="overlay" />
 
       <section className="home-hero relative flex min-h-[100svh] flex-col justify-end overflow-hidden px-6 pb-16 pt-28 sm:px-10 sm:pb-20">
         <div className="home-hero-atmosphere" aria-hidden="true">
@@ -168,9 +113,7 @@ export default function HomePage() {
 
       <section className="relative border-t border-[var(--line)] px-6 py-20 sm:px-10">
         <div className="mx-auto max-w-4xl">
-          <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-            House
-          </p>
+          <p className="page-kicker">House</p>
           <h2
             className="max-w-lg text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl"
             style={{ fontFamily: "var(--font-display), serif" }}
@@ -206,9 +149,7 @@ export default function HomePage() {
 
       <section className="relative border-t border-[var(--line)] px-6 py-20 sm:px-10">
         <div className="mx-auto max-w-4xl">
-          <p className="mb-3 text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-            Adults only
-          </p>
+          <p className="page-kicker">Adults only</p>
           <h2
             className="max-w-lg text-3xl font-semibold tracking-tight text-[var(--ink)] sm:text-4xl"
             style={{ fontFamily: "var(--font-display), serif" }}
