@@ -1085,6 +1085,7 @@ function ChatPageInner() {
       const res = await fetch("/api/art-of-x/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           partner: partnerForChatApi(partner),
           cast:
@@ -1116,7 +1117,9 @@ function ChatPageInner() {
             data.message ||
             (data.error === "xai_not_configured"
               ? "Add XAI_API_KEY"
-              : data.detail || data.error || message);
+              : data.error === "empty_reply"
+                ? "Muse returned an empty reply — try again."
+                : data.detail || data.error || message);
         } catch {
           // keep default
         }

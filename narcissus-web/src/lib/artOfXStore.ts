@@ -30,6 +30,13 @@ import {
 /** Cleared by consumePartnersPersistNotice() after a successful persist. */
 let lastPartnersPersistNotice: string | null = null;
 
+/**
+ * Soft-add Power Muses at most once per browser tab session. A failed persist
+ * (payload / transient auth) used to re-PUT the full roster on every Muses /
+ * chat load and thrash the session cookie cache into looking signed-out.
+ */
+let powerSoftAddPersistAttempted = false;
+
 export function consumePartnersPersistNotice(): string | null {
   const n = lastPartnersPersistNotice;
   lastPartnersPersistNotice = null;
@@ -53,9 +60,19 @@ let cachedMode: StoreMode | null = null;
 export async function getStoreMode(): Promise<StoreMode> {
   if (cachedMode) return cachedMode;
   try {
-    const res = await fetch("/api/art-of-x/status", { cache: "no-store" });
+    const res = await fetch("/api/art-of-x/status", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
     if (res.ok) {
-      const data = (await res.json()) as { cloud?: boolean };
+      const data = (await res.json()) as {
+        cloud?: boolean;
+        sessionCheckFailed?: boolean;
+      };
+      // Transient auth DB errors must not pin the tab to local/unsigned.
+      if (data.sessionCheckFailed) {
+        return "database";
+      }
       cachedMode = data.cloud ? "database" : "local";
       return cachedMode;
     }
@@ -69,6 +86,31 @@ export async function getStoreMode(): Promise<StoreMode> {
 /** Clear cached mode after login/logout so the next read re-probes status. */
 export function resetStoreMode() {
   cachedMode = null;
+}
+
+/**
+ * Only drop cloud mode when status confirms the user is not signed in.
+ * A lone 401/503 on partners/chats can be a Neon blip during Power soft-add.
+ */
+async function downgradeToLocalIfSignedOut(): Promise<boolean> {
+  resetStoreMode();
+  try {
+    const res = await fetch("/api/art-of-x/status", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      cloud?: boolean;
+      signedIn?: boolean;
+      sessionCheckFailed?: boolean;
+    };
+    if (data.sessionCheckFailed) return false;
+    cachedMode = data.cloud ? "database" : "local";
+    return cachedMode === "local";
+  } catch {
+    return false;
+  }
 }
 
 /** Peek browser-local Art of X counts without mutating anything. */
@@ -110,10 +152,20 @@ export async function fetchPartners(): Promise<PartnerRecord[]> {
   if (mode === "local") {
     list = loadPartnersLocal();
   } else {
-    const res = await fetch("/api/art-of-x/partners", { cache: "no-store" });
+    const res = await fetch("/api/art-of-x/partners", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
     if (res.status === 401) {
-      resetStoreMode();
-      list = loadPartnersLocal();
+      const signedOut = await downgradeToLocalIfSignedOut();
+      if (signedOut) {
+        list = loadPartnersLocal();
+      } else {
+        // Still signed in — transient auth blip; don't wipe to localStorage.
+        throw new Error("Failed to load partners (session blip — retry)");
+      }
+    } else if (res.status === 503) {
+      throw new Error("Failed to load partners (server busy — retry)");
     } else {
       if (!res.ok) throw new Error("Failed to load partners");
       const data = (await res.json()) as { partners: PartnerRecord[] };
@@ -130,14 +182,23 @@ export async function ensureDemoMuses(
   const demos = demoMusesIfNeeded(list);
   let next = demos ?? ensureDemoCoupleMuse(list) ?? list;
   const withPower = ensurePowerMuses(next);
+  const powerAdded = Boolean(withPower);
   if (withPower) next = withPower;
   if (next === list) return list;
+
+  // Soft-add Power at most once per tab — avoid PUT storms that knock auth.
+  if (powerAdded && powerSoftAddPersistAttempted && !demos) {
+    markDemoMusesSeeded();
+    return next;
+  }
+  if (powerAdded) powerSoftAddPersistAttempted = true;
+
   try {
     const saved = await persistPartners(next);
     markDemoMusesSeeded();
     return saved;
   } catch {
-    // Persist failed (offline / session) — still show demos in-memory once.
+    // Persist failed (offline / session / payload) — still show demos in-memory.
     markDemoMusesSeeded();
     return next;
   }
@@ -176,9 +237,15 @@ async function putPartnersCloud(
     body: JSON.stringify({ partners }),
   });
   if (res.status === 401) {
-    resetStoreMode();
-    // Do not silently write account edits to localStorage while signed-out mid-session.
-    throw new Error("Session expired — sign in to save to your account");
+    const signedOut = await downgradeToLocalIfSignedOut();
+    if (signedOut) {
+      // Do not silently write account edits to localStorage while signed-out.
+      throw new Error("Session expired — sign in to save to your account");
+    }
+    throw new Error("Couldn’t verify session — retry save");
+  }
+  if (res.status === 503) {
+    throw new Error("Server busy verifying session — retry save");
   }
   if (!res.ok) {
     let detail = "";
@@ -253,10 +320,14 @@ export async function persistPartners(
 
 export async function fetchScenes(): Promise<SavedScene[]> {
   if ((await getStoreMode()) === "local") return loadScenesLocal();
-  const res = await fetch("/api/art-of-x/scenes", { cache: "no-store" });
+  const res = await fetch("/api/art-of-x/scenes", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
   if (res.status === 401) {
-    resetStoreMode();
-    return loadScenesLocal();
+    const signedOut = await downgradeToLocalIfSignedOut();
+    if (signedOut) return loadScenesLocal();
+    throw new Error("Failed to load scenes (session blip — retry)");
   }
   if (!res.ok) throw new Error("Failed to load scenes");
   const data = (await res.json()) as { scenes: SavedScene[] };
@@ -271,21 +342,29 @@ export async function persistScenes(scenes: SavedScene[]): Promise<void> {
   const res = await fetch("/api/art-of-x/scenes", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ scenes }),
   });
   if (res.status === 401) {
-    resetStoreMode();
-    throw new Error("Session expired — sign in to save to your account");
+    const signedOut = await downgradeToLocalIfSignedOut();
+    if (signedOut) {
+      throw new Error("Session expired — sign in to save to your account");
+    }
+    throw new Error("Couldn’t verify session — retry save");
   }
   if (!res.ok) throw new Error("Failed to save scenes");
 }
 
 export async function fetchChats(): Promise<Record<string, ChatMessage[]>> {
   if ((await getStoreMode()) === "local") return loadChatsLocal();
-  const res = await fetch("/api/art-of-x/chats", { cache: "no-store" });
+  const res = await fetch("/api/art-of-x/chats", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
   if (res.status === 401) {
-    resetStoreMode();
-    return loadChatsLocal();
+    const signedOut = await downgradeToLocalIfSignedOut();
+    if (signedOut) return loadChatsLocal();
+    throw new Error("Failed to load chats (session blip — retry)");
   }
   if (!res.ok) throw new Error("Failed to load chats");
   const data = (await res.json()) as { chats: Record<string, ChatMessage[]> };
@@ -302,11 +381,15 @@ export async function persistChats(
   const res = await fetch("/api/art-of-x/chats", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({ chats }),
   });
   if (res.status === 401) {
-    resetStoreMode();
-    throw new Error("Session expired — sign in to save to your account");
+    const signedOut = await downgradeToLocalIfSignedOut();
+    if (signedOut) {
+      throw new Error("Session expired — sign in to save to your account");
+    }
+    throw new Error("Couldn’t verify session — retry save");
   }
   if (!res.ok) throw new Error("Failed to save chats");
 }
@@ -332,9 +415,12 @@ export async function clearChatForPartner(
     { method: "DELETE", credentials: "same-origin" },
   );
   if (res.status === 401) {
-    resetStoreMode();
-    saveChatsLocal(next);
-    return next;
+    const signedOut = await downgradeToLocalIfSignedOut();
+    if (signedOut) {
+      saveChatsLocal(next);
+      return next;
+    }
+    // Still signed in — fall through to PUT fallback below.
   }
   if (!res.ok) {
     // Fallback: full PUT of remaining threads so the wipe still sticks.

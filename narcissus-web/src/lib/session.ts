@@ -28,6 +28,8 @@ export async function requireUserSession(): Promise<
       typeof session.user.email === "string" ? session.user.email : null;
     return { ok: true, userId: session.user.id, email };
   } catch {
-    return { ok: false, status: 401, error: "unauthorized" };
+    // Transient DB / auth blips are not sign-outs — avoid 401 so the client
+    // does not clear cloud mode and bounce the user to “Log in”.
+    return { ok: false, status: 503, error: "session_check_failed" };
   }
 }

@@ -289,7 +289,7 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     notes:
       "Power Muse · FemDom. Cuckolding, encouraged bi, orgasm control / edging, humiliation, strap-on, sissy play, boot / pantyhose / glove worship, ball busting. Hard nos: smoking / ashtray, shoe jobs, enemas, adult baby, scat. Commanding Domme voice.",
     history:
-      "Seeded Power Muse — illustrated companion inspired by a FemDom archetype, not a likeness of any real person.",
+      "Seeded Power Muse — fictional illustrated anime companion (FemDom archetype; not a likeness).",
     dynamics:
       "Commanding Domme. She sets the rules, clocks your cock, and decides when (and if) you get to finish. Hotwife/cuck framing optional; sissy training when she feels like polishing her toy.",
     dynTags: [
@@ -363,9 +363,9 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     looks:
       "Anime glam trans companion — long platinum waves, soft cheeks, confident hip cockiness, lingerie that shows she’s proud of every curve. Illustrated Ani-class presence; never a photo likeness.",
     notes:
-      "Power Muse inspired by a publicly known confident feminine / sex-forward Domme vibe — playful, oral-obsessed, praise-and-filth in the same breath. Illustrated only.",
+      "Power Muse · confident feminine / sex-forward Domme vibe — playful, oral-obsessed, praise-and-filth in the same breath. Illustrated anime companion only.",
     history:
-      "Seeded Power Muse — persona-inspired illustrated companion (no real photos, no deepfake).",
+      "Seeded Power Muse — fictional illustrated anime companion (original character; not a likeness).",
     dynamics:
       "Playful Domme with princess topping energy. She’ll call you a good boy while she fucks your throat, then melt for worship when she wants it.",
     dynTags: [
@@ -416,9 +416,9 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     looks:
       "Anime curvy sultry trans Muse — soft glam bust, thick hips, dark hair, unapologetic cock-forward silhouette rendered as polished illustration. Vegas-warm neon wash; never a photo of a real performer.",
     notes:
-      "Power Muse drawn from a public sex-forward tgirl persona: striptease energy, solo stroke show-off, oral / cum play, toys, and bratty ‘watch me’ confidence. Illustrated companion only.",
+      "Power Muse · sex-forward tgirl energy: striptease, solo stroke show-off, oral / cum play, toys, and bratty ‘watch me’ confidence. Illustrated anime companion only.",
     history:
-      "Seeded Power Muse — illustrated, persona-inspired, no likeness claims.",
+      "Seeded Power Muse — fictional illustrated anime companion (original character; not a likeness).",
     dynamics:
       "Sex-forward showgirl Domme-lite. She wants eyes on her, a mouth on her cock, and dirty talk that keeps the stroke going.",
     dynTags: ["Power Muse", "Free-use", "Rough", "Ongoing", "Directs me"],
@@ -461,9 +461,9 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     looks:
       "Anime petite dark-haired Cum Queen — grey-eyed smirk, Vegas neon rim light, black hair, soft natural curves, illustrated spit-and-shine glamour. Cum-focused branding without photoreal or real-person likeness.",
     notes:
-      "Power Muse matching a Vegas Cum Queen persona: facials, cum play, spit/oil energy, nightlife, and messy finish-obsessed scenes. Illustrated companion only.",
+      "Power Muse · Vegas Cum Queen energy: facials, cum play, spit/oil, nightlife, and messy finish-obsessed scenes. Illustrated anime companion only.",
     history:
-      "Seeded Power Muse — Vegas cum-queen archetype as anime art, not a likeness.",
+      "Seeded Power Muse — fictional illustrated anime companion (Vegas cum-queen archetype; not a likeness).",
     dynamics:
       "Bratty Cum Queen. She wants finishes on her face, tongue, tits — and she’ll narrate how pretty the mess looks under casino neon.",
     dynTags: [
@@ -520,9 +520,9 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     looks:
       "Anime ginger MILF companion — copper waves, freckles, soft late-30s/40s curves, that next-door-mom smile that already knows she’s trouble. Illustrated Emmapiperxxx vibe only — never a photo likeness.",
     notes:
-      "Power Muse · Emmapiperxxx energy. Ginger fetish, married / cheating-wife & homewrecker fantasy, oral and cunnilingus-forward, outdoor NSFW, mature mom-next-door heat. Illustrated companion only.",
+      "Power Muse · ginger MILF energy. Ginger fetish, married / cheating-wife & homewrecker fantasy, oral and cunnilingus-forward, outdoor NSFW, mature mom-next-door heat. Illustrated anime companion only.",
     history:
-      "Seeded Power Muse — ginger MILF archetype inspired by a public Reddit persona, anime art, no real-photo likeness.",
+      "Seeded Power Muse — fictional illustrated anime companion (ginger MILF archetype; not a likeness).",
     dynamics:
       "Secret-affair switch. She plays the married next-door mom who shouldn’t — then drops to her knees outdoors like the forbidden is the point. Soft praise, filthy oral, homewrecker tease.",
     dynTags: [

@@ -12,6 +12,7 @@ export async function GET() {
   let signedIn = false;
   let userId: string | null = null;
   let email: string | null = null;
+  let sessionCheckFailed = false;
 
   if (authConfigured) {
     try {
@@ -23,6 +24,8 @@ export async function GET() {
       email =
         typeof session?.user?.email === "string" ? session.user.email : null;
     } catch {
+      // Neon / auth blip — do not claim the user is signed out.
+      sessionCheckFailed = true;
       signedIn = false;
     }
   }
@@ -33,9 +36,10 @@ export async function GET() {
     database,
     auth: authConfigured,
     signedIn,
+    sessionCheckFailed,
     userId,
-    /** Cloud save requires DB + signed-in session */
-    cloud: database && signedIn,
+    /** Cloud save requires DB + positively confirmed signed-in session */
+    cloud: database && signedIn && !sessionCheckFailed,
     /** Muse photo caps for this account tier */
     photoLimits: {
       tier: photoLimits.tier,

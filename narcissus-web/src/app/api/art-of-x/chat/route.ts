@@ -8,6 +8,7 @@ import {
   buildPartnerChatSystemPrompt,
   extractXaiText,
   getXaiConfig,
+  isPowerMuse,
   isXaiConfigured,
   partnerThreadToXaiMessages,
   xaiChatCompletion,
@@ -76,6 +77,67 @@ function parsePov(raw: unknown): ChatPov {
   return raw === "3rd" ? "3rd" : "1st";
 }
 
+function buildMessages(
+  partner: PartnerRecord,
+  castList: PartnerRecord[],
+  pov: ChatPov,
+  location: SceneLocation,
+  thread: Array<{ who: "You" | "Partner"; text: string }>,
+  aggressivePowerSanitize = false,
+): XaiChatMessage[] {
+  return [
+    {
+      role: "system",
+      content: buildPartnerChatSystemPrompt(
+        partner,
+        pov,
+        castList,
+        location,
+        { aggressivePowerSanitize },
+      ),
+    },
+    ...partnerThreadToXaiMessages(thread),
+  ];
+}
+
+/** True when model returned a refusal / blank that we should fictionalize-retry. */
+function looksLikeEmptyOrRefusal(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  // Short policy refusals — retry as pure fiction rather than show to user.
+  if (t.length < 280) {
+    if (
+      /\b(can't|cannot|won't|unable to)\b.*\b(real (person|people|performer)|celebrity|public figure)\b/i.test(
+        t,
+      ) ||
+      /\b(impersonat|real.person|public figure)\b/i.test(t)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function completeOnce(
+  messages: XaiChatMessage[],
+): Promise<
+  | { ok: true; text: string }
+  | { ok: false; status: number; detail: string }
+> {
+  const upstream = await xaiChatCompletion({
+    messages,
+    temperature: 0.95,
+    maxTokens: 1200,
+    stream: false,
+  });
+  if (!upstream.ok) {
+    const detail = await upstream.text().catch(() => "");
+    return { ok: false, status: upstream.status, detail: detail.slice(0, 500) };
+  }
+  const data = await upstream.json();
+  return { ok: true, text: extractXaiText(data) };
+}
+
 export async function POST(req: NextRequest) {
   if (!isXaiConfigured()) {
     return NextResponse.json(xaiMissingKeyPayload(), { status: 503 });
@@ -112,54 +174,82 @@ export async function POST(req: NextRequest) {
   }
 
   const castList = normalizeCastBody(partner, body.cast, body.casts);
-
-  const messages: XaiChatMessage[] = [
-    {
-      role: "system",
-      content: buildPartnerChatSystemPrompt(partner, pov, castList, location),
-    },
-    ...partnerThreadToXaiMessages(thread),
-  ];
-
-  const wantStream = body.stream !== false;
+  const powerScene =
+    isPowerMuse(partner) || castList.some((c) => isPowerMuse(c));
+  // Power Muses need empty-reply retry with stronger fiction framing.
+  // Buffer via non-stream so we can retry instead of piping a blank SSE.
+  const wantStream = body.stream !== false && !powerScene;
   const cfg = getXaiConfig()!;
 
-  try {
-    const upstream = await xaiChatCompletion({
-      messages,
-      temperature: 0.95,
-      maxTokens: 1200,
-      stream: wantStream,
-    });
+  const messages = buildMessages(partner, castList, pov, location, thread);
 
-    if (!upstream.ok) {
-      const detail = await upstream.text().catch(() => "");
+  try {
+    if (wantStream) {
+      const upstream = await xaiChatCompletion({
+        messages,
+        temperature: 0.95,
+        maxTokens: 1200,
+        stream: true,
+      });
+
+      if (!upstream.ok) {
+        const detail = await upstream.text().catch(() => "");
+        return NextResponse.json(
+          {
+            error: "xai_failed",
+            status: upstream.status,
+            detail: detail.slice(0, 500),
+            model: cfg.model,
+          },
+          { status: 502 },
+        );
+      }
+
+      if (upstream.body) {
+        return new Response(upstream.body, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+            "X-XAI-Model": cfg.model,
+          },
+        });
+      }
+    }
+
+    let result = await completeOnce(messages);
+    if (!result.ok) {
       return NextResponse.json(
         {
           error: "xai_failed",
-          status: upstream.status,
-          detail: detail.slice(0, 500),
+          status: result.status,
+          detail: result.detail,
           model: cfg.model,
         },
         { status: 502 },
       );
     }
 
-    if (wantStream && upstream.body) {
-      return new Response(upstream.body, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/event-stream; charset=utf-8",
-          "Cache-Control": "no-cache, no-transform",
-          Connection: "keep-alive",
-          "X-XAI-Model": cfg.model,
-        },
-      });
+    if (looksLikeEmptyOrRefusal(result.text) && powerScene) {
+      const retryMessages = buildMessages(
+        partner,
+        castList,
+        pov,
+        location,
+        thread,
+        true,
+      );
+      const retry = await completeOnce(retryMessages);
+      if (retry.ok && !looksLikeEmptyOrRefusal(retry.text)) {
+        result = retry;
+      } else if (retry.ok) {
+        result = retry;
+      }
     }
 
-    const data = await upstream.json();
-    const text = extractXaiText(data);
-    if (!text) {
+    const text = result.text.trim();
+    if (!text || looksLikeEmptyOrRefusal(text)) {
       return NextResponse.json(
         { error: "empty_reply", model: cfg.model },
         { status: 502 },
