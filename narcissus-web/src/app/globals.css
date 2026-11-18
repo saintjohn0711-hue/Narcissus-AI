@@ -329,165 +329,6 @@ body {
   pointer-events: auto;
 }
 
-.app-nav-drawer {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.app-nav-drawer-backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background:
-    radial-gradient(ellipse 60% 40% at 80% 20%, rgba(0, 163, 255, 0.12), transparent 55%),
-    rgba(3, 5, 10, 0.72);
-  cursor: pointer;
-}
-
-.app-nav-drawer-panel {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  width: min(22.5rem, 92vw);
-  height: 100%;
-  max-height: 100dvh;
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  border-left: 1px solid rgba(0, 229, 255, 0.28);
-  background:
-    radial-gradient(ellipse 95% 42% at 100% -4%, rgba(0, 229, 255, 0.16), transparent 52%),
-    radial-gradient(ellipse 70% 40% at 0% 100%, rgba(59, 89, 152, 0.28), transparent 55%),
-    linear-gradient(185deg, #10182a 0%, #0a0f1c 42%, #060910 100%);
-  box-shadow:
-    -22px 0 56px rgba(0, 0, 0, 0.58),
-    -2px 0 36px rgba(0, 229, 255, 0.12);
-  animation: app-nav-drawer-in 0.22s ease-out;
-}
-
-.app-nav-drawer-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 229, 255, 0.7) 16%,
-    rgba(0, 163, 255, 0.45) 52%,
-    rgba(196, 160, 140, 0.3) 82%,
-    transparent 100%
-  );
-  box-shadow: 0 0 18px rgba(0, 229, 255, 0.35);
-  pointer-events: none;
-}
-
-.app-nav-drawer-atmosphere {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 80% 40% at 100% -5%, rgba(0, 229, 255, 0.14), transparent 55%),
-    radial-gradient(ellipse 55% 35% at 0% 70%, rgba(59, 89, 152, 0.18), transparent 60%);
-  opacity: 0.9;
-}
-
-.app-nav-drawer-panel > *:not(.app-nav-drawer-atmosphere) {
-  position: relative;
-  z-index: 1;
-}
-
-.app-nav-drawer-panel--aox {
-  background:
-    radial-gradient(ellipse 95% 42% at 100% -4%, rgba(0, 229, 255, 0.2), transparent 52%),
-    radial-gradient(ellipse 70% 40% at 0% 100%, rgba(59, 89, 152, 0.32), transparent 55%),
-    linear-gradient(185deg, #121c32 0%, #0a1222 42%, #060910 100%);
-}
-
-.app-nav-drawer-mark {
-  animation: home-logo-breathe 6.5s ease-in-out infinite;
-  filter: drop-shadow(0 0 14px rgba(0, 229, 255, 0.28));
-}
-
-.app-nav-drawer-face {
-  flex-shrink: 0;
-}
-
-.app-nav-drawer-face .brand-face-portrait {
-  border-width: 1px;
-}
-
-.app-nav-drawer-kicker {
-  text-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
-}
-
-.app-nav-drawer-header {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1.15rem 1.25rem 1.05rem;
-  background:
-    linear-gradient(180deg, rgba(0, 229, 255, 0.14) 0%, rgba(0, 163, 255, 0.05) 55%, transparent 100%),
-    linear-gradient(90deg, rgba(14, 22, 40, 0.95), rgba(10, 14, 24, 0.9));
-}
-
-.app-nav-drawer-header::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(0, 229, 255, 0.55) 18%,
-    rgba(0, 163, 255, 0.28) 62%,
-    transparent 100%
-  );
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
-}
-
-.app-nav-drawer-title {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--glow);
-  text-shadow: 0 0 22px rgba(0, 229, 255, 0.35);
-}
-
-.app-nav-drawer-footer {
-  position: relative;
-  margin-top: auto;
-  padding: 1rem 1.25rem 1.15rem;
-  background:
-    linear-gradient(0deg, rgba(0, 163, 255, 0.08) 0%, transparent 70%),
-    rgba(8, 12, 22, 0.85);
-}
-
-.app-nav-drawer-footer::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(0, 229, 255, 0.4) 22%,
-    rgba(196, 160, 140, 0.2) 70%,
-    transparent 100%
-  );
-}
-
 .app-nav-menu-btn {
   border-color: rgba(0, 229, 255, 0.5) !important;
   color: #e8fbff !important;
@@ -507,38 +348,6 @@ body {
   box-shadow:
     0 0 26px rgba(0, 229, 255, 0.22),
     inset 0 1px 0 rgba(0, 229, 255, 0.28);
-}
-
-.app-nav-drawer-link {
-  border: 1px solid transparent;
-  border-radius: 3px;
-}
-
-.app-nav-drawer-link:hover {
-  border-color: rgba(0, 229, 255, 0.14);
-  background:
-    linear-gradient(90deg, rgba(0, 163, 255, 0.1), rgba(0, 163, 255, 0.03)) !important;
-}
-
-.app-nav-drawer-link.is-active {
-  border-color: rgba(0, 229, 255, 0.4);
-  background:
-    linear-gradient(90deg, rgba(0, 229, 255, 0.24), rgba(0, 163, 255, 0.1) 55%, rgba(12, 18, 32, 0.4)) !important;
-  color: var(--glow) !important;
-  box-shadow:
-    inset 3px 0 0 rgba(0, 229, 255, 0.75),
-    0 0 22px rgba(0, 229, 255, 0.14);
-}
-
-@keyframes app-nav-drawer-in {
-  from {
-    transform: translateX(12%);
-    opacity: 0.6;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
 }
 
 @keyframes echo-rise {
@@ -1575,318 +1384,6 @@ body {
   }
 }
 
-.app-nav-drawer-link--outlet {
-  font-family: var(--font-display), serif;
-  font-size: 1.15rem;
-  letter-spacing: 0.04em;
-}
-
-/* —— Couple dial menu —— */
-.couple-dial {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-  padding-bottom: 0.35rem;
-  animation: couple-dial-in 0.42s ease-out;
-}
-
-.couple-dial--more {
-  gap: 0.65rem;
-  padding-top: 0.25rem;
-}
-
-.couple-dial--more .couple-dial-more-row {
-  gap: 0.5rem;
-}
-
-.couple-dial--more .couple-dial-chip {
-  padding: 0.55rem 0.85rem;
-  font-size: 0.78rem;
-}
-
-.couple-dial-kicker {
-  margin: 0;
-  padding-inline: 0.35rem;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: var(--glow);
-  text-shadow: 0 0 14px rgba(0, 229, 255, 0.28);
-}
-
-.couple-dial-stage {
-  position: relative;
-  width: min(100%, 19.5rem);
-  aspect-ratio: 1;
-  margin-inline: auto;
-  isolation: isolate;
-}
-
-.couple-dial-ring {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  animation: couple-dial-spin-in 0.85s cubic-bezier(0.2, 0.85, 0.25, 1) both;
-}
-
-.couple-dial-ring-svg {
-  width: 100%;
-  height: 100%;
-  filter: drop-shadow(0 0 18px rgba(0, 229, 255, 0.16));
-}
-
-.couple-dial-wedge {
-  transition:
-    fill 0.2s ease,
-    stroke 0.2s ease,
-    stroke-width 0.2s ease;
-}
-
-.couple-dial-wedge.is-lit {
-  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.35));
-}
-
-.couple-dial-hub {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 38%;
-  aspect-ratio: 1;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.couple-dial-ornament {
-  width: 100%;
-  height: 100%;
-  animation: couple-dial-breathe 5.5s ease-in-out infinite;
-}
-
-.couple-dial-ornament-ring {
-  animation: couple-dial-ring-pulse 3.4s ease-in-out infinite;
-}
-
-.couple-dial-hub-label {
-  position: absolute;
-  bottom: 14%;
-  font-size: 0.55rem;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(229, 195, 178, 0.72);
-}
-
-.couple-dial-spoke {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 4.35rem;
-  height: 4.35rem;
-  margin: 0;
-  padding: 0.35rem;
-  border: 1px solid rgba(0, 229, 255, 0.28);
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-  text-decoration: none;
-  background:
-    radial-gradient(circle at 35% 25%, rgba(0, 229, 255, 0.16), transparent 55%),
-    linear-gradient(165deg, rgba(16, 24, 40, 0.96), rgba(6, 10, 18, 0.98));
-  box-shadow:
-    0 0 16px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(0, 229, 255, 0.12);
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s ease,
-    background 0.18s ease;
-}
-
-.couple-dial-spoke:hover,
-.couple-dial-spoke:focus-visible,
-.couple-dial-spoke.is-focus {
-  border-color: rgba(0, 229, 255, 0.7);
-  outline: none;
-  transform: translate(-50%, -50%) scale(1.06);
-  box-shadow:
-    0 0 22px rgba(0, 229, 255, 0.28),
-    inset 0 1px 0 rgba(0, 229, 255, 0.28);
-}
-
-.couple-dial-spoke.is-active {
-  border-color: rgba(0, 229, 255, 0.85);
-  background:
-    radial-gradient(circle at 40% 30%, rgba(0, 229, 255, 0.28), transparent 60%),
-    linear-gradient(165deg, rgba(0, 163, 255, 0.22), rgba(8, 14, 26, 0.98));
-  box-shadow:
-    0 0 26px rgba(0, 229, 255, 0.32),
-    inset 0 1px 0 rgba(0, 229, 255, 0.35);
-}
-
-.couple-dial-spoke.is-outlet .couple-dial-spoke-label {
-  color: var(--ink);
-}
-
-.couple-dial-spoke.is-active .couple-dial-spoke-label,
-.couple-dial-spoke.is-focus .couple-dial-spoke-label {
-  color: var(--glow);
-}
-
-.couple-dial-spoke-label {
-  font-family: var(--font-display), serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  line-height: 1.1;
-  text-align: center;
-  color: var(--soft);
-}
-
-.couple-dial-readout {
-  text-align: center;
-  padding-inline: 0.5rem;
-  min-height: 2.6rem;
-}
-
-.couple-dial-readout-label {
-  margin: 0;
-  font-family: var(--font-display), serif;
-  font-size: 1.15rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--glow);
-  text-shadow: 0 0 18px rgba(0, 229, 255, 0.28);
-}
-
-.couple-dial-readout-hint {
-  margin: 0.2rem 0 0;
-  font-size: 0.78rem;
-  font-weight: 300;
-  color: var(--soft);
-}
-
-.couple-dial-more-kicker {
-  margin: 0 0 0.45rem;
-  padding-inline: 0.2rem;
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.couple-dial-more-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.couple-dial-chip {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid rgba(0, 229, 255, 0.22);
-  border-radius: 2px;
-  padding: 0.4rem 0.65rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--soft);
-  background: rgba(8, 12, 22, 0.65);
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.couple-dial-chip:hover,
-.couple-dial-chip:focus-visible {
-  border-color: rgba(0, 229, 255, 0.55);
-  color: var(--glow);
-  outline: none;
-}
-
-.couple-dial-chip.is-active {
-  border-color: rgba(0, 229, 255, 0.65);
-  color: var(--glow);
-  box-shadow: 0 0 14px rgba(0, 229, 255, 0.18);
-}
-
-.couple-dial-list-fallback {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-@keyframes couple-dial-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes couple-dial-spin-in {
-  from {
-    opacity: 0.35;
-    transform: rotate(-28deg) scale(0.92);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(0deg) scale(1);
-  }
-}
-
-@keyframes couple-dial-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.2));
-  }
-  50% {
-    transform: scale(1.04);
-    filter: drop-shadow(0 0 14px rgba(0, 229, 255, 0.38));
-  }
-}
-
-@keyframes couple-dial-ring-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .couple-dial,
-  .couple-dial-ring,
-  .couple-dial-ornament,
-  .couple-dial-ornament-ring {
-    animation: none !important;
-  }
-
-  .couple-dial-spoke:hover,
-  .couple-dial-spoke:focus-visible,
-  .couple-dial-spoke.is-focus {
-    transform: translate(-50%, -50%);
-  }
-}
-
 /* —— Outlets (Women / Men / Trans) —— */
 .outlet-strip-kicker {
   margin: 0 0 0.75rem;
@@ -2245,84 +1742,54 @@ body {
   mix-blend-mode: soft-light;
 }
 
-.menu-outlet-row {
+.menu-hub-doors {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: grid;
-  gap: 0;
-  border-top: 1px solid color-mix(in srgb, var(--glow) 18%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--glow) 18%, transparent);
-}
-
-@media (min-width: 768px) {
-  .menu-outlet-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-.menu-outlet-link {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 1.15rem 0.15rem 1.25rem;
+  gap: 0;
+  border-top: 1px solid color-mix(in srgb, var(--glow) 22%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--glow) 22%, transparent);
+}
+
+.menu-hub-door {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1.45rem 0.15rem 1.55rem;
   text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--glow) 12%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--glow) 14%, transparent);
   transition: background 0.2s ease, padding-left 0.2s ease;
 }
 
-@media (min-width: 768px) {
-  .menu-outlet-link {
-    border-bottom: none;
-    border-right: 1px solid color-mix(in srgb, var(--glow) 12%, transparent);
-    padding: 1.35rem 1.1rem 1.45rem 0.15rem;
-  }
-
-  .menu-outlet-row > li:last-child .menu-outlet-link {
-    border-right: none;
-    padding-right: 0.15rem;
-  }
-}
-
-.menu-outlet-row > li:last-child .menu-outlet-link {
+.menu-hub-doors > li:last-child .menu-hub-door {
   border-bottom: none;
 }
 
-.menu-outlet-link:hover {
+.menu-hub-door:hover {
   background: color-mix(in srgb, var(--glow) 5%, transparent);
   padding-left: 0.45rem;
 }
 
-.menu-outlet-label {
-  font-size: clamp(1.75rem, 4.5vw, 2.35rem);
+.menu-hub-door-name {
+  font-size: clamp(2.15rem, 7vw, 3.35rem);
   line-height: 1;
   color: var(--ink);
   transition: color 0.2s ease, text-shadow 0.2s ease;
 }
 
-.menu-outlet-link:hover .menu-outlet-label {
+.menu-hub-door:hover .menu-hub-door-name {
   color: var(--glow);
-  text-shadow: 0 0 18px rgba(0, 229, 255, 0.28);
+  text-shadow: 0 0 22px rgba(0, 229, 255, 0.28);
 }
 
-.menu-outlet-line {
-  max-width: 16rem;
-  font-size: 0.8125rem;
+.menu-hub-door-line {
+  max-width: 22rem;
+  font-size: 0.95rem;
   font-weight: 300;
   line-height: 1.45;
   color: var(--soft);
-}
-
-.menu-house-glow {
-  position: absolute;
-  inset: -8% 15% auto;
-  height: 55%;
-  pointer-events: none;
-  background: radial-gradient(
-    ellipse 50% 60% at 50% 0%,
-    rgba(196, 160, 140, 0.08),
-    transparent 70%
-  );
 }
 
 .menu-house-list {
@@ -4831,10 +4298,6 @@ body {
   .menu-hero-art img,
   .menu-hero-glow,
   .outlet-door,
-  .couple-dial,
-  .couple-dial-ring,
-  .couple-dial-ornament,
-  .couple-dial-ornament-ring,
   .echo-card,
   .echo-cloud-dot,
   .echo-overscore,

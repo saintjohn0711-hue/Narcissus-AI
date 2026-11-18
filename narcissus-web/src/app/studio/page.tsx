@@ -275,7 +275,7 @@ export default function StudioPage() {
         className="border-b border-[var(--line)] pb-8"
         kicker="Studio"
         title="Narcissus"
-        lede="Face swap still + video, scene acts, undress with gender/cock options, and 5s clips (natural, sex acts, say-this). Your face stays yours — Muses live in Menu / More."
+        lede="Face swap still + video, scene acts, undress with gender/cock options, and 5s clips (natural, sex acts, say-this). Your face stays yours — Muses live under Menu."
       />
 
       <form onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">

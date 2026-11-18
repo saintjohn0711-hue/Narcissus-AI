@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AppNav } from "@/components/AppNav";
 import { authClient } from "@/lib/auth-client";
+import { CIRCLE_LINE } from "@/lib/brandLabels";
 import {
   CIRCLE_LOOKING_FOR,
   CIRCLE_MAX_PHOTOS,
@@ -180,7 +181,7 @@ export default function CircleMePage() {
         <AppNav />
         <header className="mb-8">
           <p className="mb-3 text-[10px] uppercase tracking-[0.28em] text-[#c49a8e]">
-            Adults only · Circle
+            Adults only · {CIRCLE_LINE}
           </p>
           <h1
             className="text-4xl font-semibold tracking-tight text-[var(--ink)] sm:text-5xl"

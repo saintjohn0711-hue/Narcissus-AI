@@ -50,7 +50,6 @@ import {
   normalizeMemberPresence,
   normalizeMuseKind,
   normalizePairedWith,
-  pairedMusesFor,
   samePartnerId,
   saveMuseOrder,
   syncUnitLinkedSolos,
@@ -449,23 +448,6 @@ function PartnersPageInner() {
       });
     });
   }
-
-  const togetherPairs = useMemo(() => {
-    const pairs: Array<{ a: PartnerRecord; b: PartnerRecord; key: string }> =
-      [];
-    const seen = new Set<string>();
-    for (const p of partners) {
-      for (const other of pairedMusesFor(p, partners)) {
-        const lo = Math.min(Number(p.id), Number(other.id));
-        const hi = Math.max(Number(p.id), Number(other.id));
-        const key = `${lo}-${hi}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        pairs.push({ a: p, b: other, key });
-      }
-    }
-    return pairs;
-  }, [partners]);
 
   function persistEditor(e: FormEvent) {
     e.preventDefault();
@@ -2130,57 +2112,6 @@ function PartnersPageInner() {
             Save {PERSON_LABEL.singularLower}
           </button>
         </form>
-      )}
-
-      {togetherPairs.length > 0 && (
-        <section
-          className="mb-8 border border-[var(--line)] bg-[var(--bg-elevated)]/40 p-4 sm:p-5"
-          aria-label={`${PERSON_LABEL.plural} who've been together`}
-        >
-          <h2
-            className="text-xl text-[var(--ink)]"
-            style={{ fontFamily: "var(--font-display), serif" }}
-          >
-            Been together
-          </h2>
-          <p className="mt-1 text-xs text-[#c4b7a8]">
-            Muses who&apos;ve played with each other — open a pair in chat, or
-            add more from the cast picker (up to four).
-          </p>
-          <ul className="mt-4 flex flex-col gap-2">
-            {togetherPairs.map(({ a, b, key }) => (
-              <li
-                key={key}
-                className="flex flex-wrap items-center justify-between gap-2 border border-[var(--line)] bg-[#12101a]/55 px-3 py-2.5"
-              >
-                <p className="text-sm text-[var(--ink)]">
-                  <span style={{ fontFamily: "var(--font-display), serif" }}>
-                    {displayName(a)}
-                  </span>
-                  <span className="mx-2 text-[var(--muted)]">×</span>
-                  <span style={{ fontFamily: "var(--font-display), serif" }}>
-                    {displayName(b)}
-                  </span>
-                </p>
-                <div className="flex flex-wrap gap-3 text-xs">
-                  <a
-                    href={`/art-of-x/chat?muse=${a.id}&with=${b.id}`}
-                    className="text-[var(--glow-mid)] underline-offset-2 hover:text-[var(--glow)] hover:underline"
-                  >
-                    Chat together
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setPairWith(a.id, b.id)}
-                    className="text-[var(--danger)] underline-offset-2 hover:underline"
-                  >
-                    Unpair
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
 
       <div className="muse-ledger" data-testid="muse-ledger">
