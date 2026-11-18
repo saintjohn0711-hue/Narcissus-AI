@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { AppNav } from "@/components/AppNav";
-import { OUTLETS } from "@/lib/outlets";
 import { PERSON_LABEL } from "@/lib/artOfX";
 
 export const metadata: Metadata = {
   title: "Menu",
-  description:
-    "Women, Men, Trans — Muses, Studio, Stories, chat, Circle, Echo.",
+  description: "Muses, Studio, Stories, chat, Circle, Echo — Narcissus.",
 };
 
 const HOUSE = [
@@ -106,34 +104,8 @@ export default function MenuPage() {
 
           <nav
             className="home-fade-up home-fade-up-delay-1 mt-12"
-            aria-label="Outlets"
+            aria-label="House"
           >
-            <p className="mb-4 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--glow)]">
-              Who do you want
-            </p>
-            <ul className="menu-outlet-row">
-              {OUTLETS.map((o) => (
-                <li key={o.id}>
-                  <Link href={o.href} className="menu-outlet-link">
-                    <span
-                      className="menu-outlet-label"
-                      style={{ fontFamily: "var(--font-display), serif" }}
-                    >
-                      {o.label}
-                    </span>
-                    <span className="menu-outlet-line">{o.line}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </div>
-      </section>
-
-      <section className="relative border-t border-[var(--glow)]/15 px-6 py-16 sm:px-10 sm:py-20">
-        <div className="menu-house-glow" aria-hidden="true" />
-        <div className="relative z-10 mx-auto w-full max-w-4xl">
-          <nav aria-label="House">
             <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
               House
             </p>
@@ -154,7 +126,7 @@ export default function MenuPage() {
             </ul>
           </nav>
 
-          <div className="mt-12 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-8 text-sm">
+          <div className="home-fade-up home-fade-up-delay-2 mt-12 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-8 text-sm">
             <Link
               href="/sign-in"
               className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
