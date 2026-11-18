@@ -61,7 +61,7 @@ export type DemoMuseSeed = {
  * Extra-kinky onboarding roster with OpenAI TTS–friendly voice presets:
  * Woman → female/sultry/en-IE (coral), Rocky → male/deep/en-US (onyx),
  * Jaxx → female/soft/en-US (marin), Heat → couple unit (Lexi + Dom).
- * Natural audio needs OPENAI_API_KEY.
+ * Natural audio: OpenAI when OPENAI_API_KEY is set, else Edge neural (keyless).
  */
 export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
   {

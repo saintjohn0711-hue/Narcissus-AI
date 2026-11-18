@@ -15,6 +15,7 @@ import {
   planOpenAiTts,
   resolveOpenAiTtsKey,
 } from "@/lib/museOpenAiTts";
+import { synthesizeEdgeMp3 } from "@/lib/museEdgeTts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -45,57 +46,36 @@ function parseSettings(body: TtsBody): {
   return { gender, preset, accent };
 }
 
-/** Probe whether natural OpenAI TTS is configured (no audio). */
+/**
+ * Probe whether server TTS can return audio.
+ * OpenAI when `OPENAI_API_KEY` is set; otherwise keyless Edge neural.
+ */
 export async function GET() {
-  const available = isOpenAiTtsConfigured();
+  const openai = isOpenAiTtsConfigured();
   return NextResponse.json({
-    available,
-    provider: available ? "openai" : null,
+    available: true,
+    provider: openai ? "openai" : "edge",
+    openaiConfigured: openai,
+    edgeFallback: true,
     fallback: "web-speech",
     secret: "OPENAI_API_KEY",
-    model: process.env.OPENAI_TTS_MODEL?.trim() || OPENAI_TTS_DEFAULT_MODEL,
-    hint: available
+    model: openai
+      ? process.env.OPENAI_TTS_MODEL?.trim() || OPENAI_TTS_DEFAULT_MODEL
+      : "edge-neural",
+    hint: openai
       ? null
-      : "Add OPENAI_API_KEY on the Vercel project (Production + Preview), then redeploy. Do not invent a key.",
+      : "Server uses Microsoft Edge neural TTS (no key). Add OPENAI_API_KEY on Vercel (Production + Preview) and redeploy for OpenAI marin/cedar-class voices.",
   });
 }
 
-/**
- * Natural Muse chat TTS — OpenAI `gpt-4o-mini-tts` (+ marin/cedar-class voices)
- * → audio/mpeg. Client falls back to Web Speech when this returns 503 / errors.
- */
-export async function POST(req: NextRequest) {
+async function synthesizeOpenAi(
+  cleaned: string,
+  settings: ReturnType<typeof parseSettings>,
+): Promise<{ audio: Buffer; plan: ReturnType<typeof planOpenAiTts> } | null> {
   const key = resolveOpenAiTtsKey();
-  if (!key) {
-    return NextResponse.json(
-      {
-        error: "missing_openai_key",
-        message:
-          "Set OPENAI_API_KEY on the Vercel project (Production + Preview) for natural Muse chat TTS. Browser Web Speech remains the offline fallback.",
-        fallback: "web-speech",
-      },
-      { status: 503 },
-    );
-  }
+  if (!key) return null;
 
-  let body: TtsBody;
-  try {
-    body = (await req.json()) as TtsBody;
-  } catch {
-    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
-  }
-
-  const cleaned = textForSpeech(String(body.text || "")).slice(
-    0,
-    OPENAI_TTS_MAX_CHARS,
-  );
-  if (!cleaned) {
-    return NextResponse.json({ error: "text_required" }, { status: 400 });
-  }
-
-  const settings = parseSettings(body);
   const plan = planOpenAiTts(settings);
-
   const upstream = await fetch("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     headers: {
@@ -114,31 +94,90 @@ export async function POST(req: NextRequest) {
 
   if (!upstream.ok) {
     const detail = await upstream.text().catch(() => "");
-    return NextResponse.json(
-      {
-        error: "openai_tts_failed",
-        status: upstream.status,
-        detail: detail.slice(0, 400),
-        fallback: "web-speech",
-      },
-      { status: 502 },
+    throw new Error(
+      `openai_tts_failed ${upstream.status}: ${detail.slice(0, 200)}`,
     );
   }
 
   const audio = Buffer.from(await upstream.arrayBuffer());
-  return new NextResponse(audio, {
-    status: 200,
-    headers: {
-      "Content-Type": "audio/mpeg",
-      "Cache-Control": body.preview
-        ? "no-store"
-        : "private, max-age=60",
-      "X-Muse-TTS-Provider": "openai",
-      "X-Muse-TTS-Voice": plan.voice,
-      "X-Muse-TTS-Model": plan.model,
-      "X-Muse-TTS-Gender": plan.gender,
-      "X-Muse-TTS-Preset": plan.preset,
-      "X-Muse-TTS-Accent": plan.accent,
-    },
-  });
+  return { audio, plan };
+}
+
+/**
+ * Muse chat TTS → audio/mpeg.
+ * 1) OpenAI `gpt-4o-mini-tts` when `OPENAI_API_KEY` is set
+ * 2) Microsoft Edge neural (keyless) otherwise
+ * Client falls back to Web Speech only if this returns errors.
+ */
+export async function POST(req: NextRequest) {
+  let body: TtsBody;
+  try {
+    body = (await req.json()) as TtsBody;
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const cleaned = textForSpeech(String(body.text || "")).slice(
+    0,
+    OPENAI_TTS_MAX_CHARS,
+  );
+  if (!cleaned) {
+    return NextResponse.json({ error: "text_required" }, { status: 400 });
+  }
+
+  const settings = parseSettings(body);
+  const cacheControl = body.preview ? "no-store" : "private, max-age=60";
+
+  // Prefer OpenAI when configured.
+  if (isOpenAiTtsConfigured()) {
+    try {
+      const result = await synthesizeOpenAi(cleaned, settings);
+      if (result) {
+        return new NextResponse(new Uint8Array(result.audio), {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/mpeg",
+            "Cache-Control": cacheControl,
+            "X-Muse-TTS-Provider": "openai",
+            "X-Muse-TTS-Voice": result.plan.voice,
+            "X-Muse-TTS-Model": result.plan.model,
+            "X-Muse-TTS-Gender": result.plan.gender,
+            "X-Muse-TTS-Preset": result.plan.preset,
+            "X-Muse-TTS-Accent": result.plan.accent,
+          },
+        });
+      }
+    } catch {
+      // Soft-fall through to Edge so chat Play still works.
+    }
+  }
+
+  try {
+    const { audio, plan } = await synthesizeEdgeMp3(cleaned, settings);
+    return new NextResponse(new Uint8Array(audio), {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Cache-Control": cacheControl,
+        "X-Muse-TTS-Provider": "edge",
+        "X-Muse-TTS-Voice": plan.voice,
+        "X-Muse-TTS-Model": "edge-neural",
+        "X-Muse-TTS-Gender": plan.gender,
+        "X-Muse-TTS-Preset": plan.preset,
+        "X-Muse-TTS-Accent": plan.accent,
+      },
+    });
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message.slice(0, 400) : "edge_tts_failed";
+    return NextResponse.json(
+      {
+        error: "tts_failed",
+        detail,
+        fallback: "web-speech",
+        secret: isOpenAiTtsConfigured() ? null : "OPENAI_API_KEY",
+      },
+      { status: 502 },
+    );
+  }
 }

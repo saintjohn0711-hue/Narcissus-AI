@@ -17,6 +17,7 @@
     "better-auth": "^1.7.18",
     "drizzle-orm": "^0.45.4",
     "next": "^15.5.29",
+    "node-edge-tts": "^1.2.12",
     "pg": "^8.23.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
