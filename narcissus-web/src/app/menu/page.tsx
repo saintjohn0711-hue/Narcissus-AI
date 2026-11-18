@@ -1,149 +1,100 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { AppNav } from "@/components/AppNav";
-import { PERSON_LABEL } from "@/lib/artOfX";
+import { MenuHubShell } from "@/components/MenuHubShell";
 
 export const metadata: Metadata = {
   title: "Menu",
-  description:
-    "Muses, AI chat, Stories, Studio, Art of X, Circle, Echo — Narcissus.",
+  description: "Studio X and Art Of X — Your Reflection, Your Rules.",
 };
 
-/** Every live top-level destination — post-age-gate hub. No outlet picker. */
-const DESTINATIONS = [
+const HUBS = [
   {
-    id: "muses",
-    href: "/art-of-x/partners",
-    name: PERSON_LABEL.plural,
-    line: "Ledger, craft, desire — everyone you keep.",
+    id: "studio-x",
+    href: "/menu/studio-x",
+    name: "Studio X",
+    line: "Photo, video, design, AI creations.",
   },
   {
-    id: "chat",
-    href: "/art-of-x/chat",
-    name: "AI chat",
-    line: "Living companion conversation.",
-  },
-  {
-    id: "stories",
-    href: "/art-of-x/stories",
-    name: "Stories",
-    line: "Scene builder — places and heat.",
-  },
-  {
-    id: "studio",
-    href: "/studio",
-    name: "Studio",
-    line: "Likeness edits and short video.",
-  },
-  {
-    id: "aox",
-    href: "/art-of-x",
-    name: "Art of X",
-    line: "Desire craft hub.",
-  },
-  {
-    id: "circle",
-    href: "/circle",
-    name: "Circle",
-    line: "Discovery and share codes.",
-  },
-  {
-    id: "circle-me",
-    href: "/circle/me",
-    name: "My Circle",
-    line: "Your Circle profile.",
-  },
-  {
-    id: "echo",
-    href: "/account",
-    name: "Echo",
-    line: "Account, Muse stats, your trail.",
-  },
-  {
-    id: "sign-in",
-    href: "/sign-in",
-    name: "Sign in",
-    line: "Return to your cloud Muses.",
-  },
-  {
-    id: "sign-up",
-    href: "/sign-up",
-    name: "Create account",
-    line: "18+ account for saved Muses and Circle.",
+    id: "art-of-x",
+    href: "/menu/art-of-x",
+    name: "Art Of X",
+    line: "Muses, Stories, swinger, adult dating, AI chat.",
   },
 ] as const;
 
 export default function MenuPage() {
   return (
-    <div className="menu-root relative min-h-screen overflow-x-hidden">
-      <AppNav variant="overlay" />
+    <MenuHubShell>
+      <div className="home-fade-up">
+        <span className="home-brand-mark relative mb-5 inline-flex h-16 w-16 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25 sm:h-20 sm:w-20">
+          <Image
+            src="/brand/narcissus-logo.jpg"
+            alt="Narcissus AI"
+            width={80}
+            height={80}
+            priority
+            className="h-full w-full object-cover object-[center_28%]"
+          />
+        </span>
+        <h1
+          className="text-[clamp(2.75rem,10vw,5.5rem)] font-semibold leading-[0.92] tracking-tight text-[var(--accent-strong)]"
+          style={{ fontFamily: "var(--font-display), serif" }}
+        >
+          Narcissus
+        </h1>
+        <p
+          className="mt-4 max-w-md text-xl font-light leading-snug text-[var(--ink)] sm:text-2xl"
+          style={{ fontFamily: "var(--font-display), serif" }}
+        >
+          Your Reflection, Your Rules
+        </p>
+      </div>
 
-      <section className="menu-hero relative flex min-h-[100svh] flex-col justify-end overflow-hidden px-6 pb-14 pt-24 sm:px-10 sm:pb-20">
-        <div className="menu-hero-atmosphere" aria-hidden="true">
-          <div className="menu-hero-art">
-            <Image
-              src="/brand/narcissus-logo.jpg"
-              alt=""
-              fill
-              priority
-              sizes="100vw"
-              className="select-none"
-            />
-          </div>
-          <div className="menu-hero-glow" />
-          <div className="menu-hero-wash" />
-          <div className="menu-hero-grain" />
-        </div>
+      <nav className="home-fade-up home-fade-up-delay-1 mt-14" aria-label="Menu">
+        <ul className="menu-hub-doors">
+          {HUBS.map((hub) => (
+            <li key={hub.id}>
+              <Link href={hub.href} className="menu-hub-door group">
+                <span
+                  className="menu-hub-door-name"
+                  style={{ fontFamily: "var(--font-display), serif" }}
+                >
+                  {hub.name}
+                </span>
+                <span className="menu-hub-door-line">{hub.line}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
-        <div className="relative z-10 mx-auto w-full max-w-3xl">
-          <div className="home-fade-up">
-            <span className="home-brand-mark relative mb-5 inline-flex h-16 w-16 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25 sm:h-20 sm:w-20">
-              <Image
-                src="/brand/narcissus-logo.jpg"
-                alt="Narcissus AI"
-                width={80}
-                height={80}
-                priority
-                className="h-full w-full object-cover object-[center_28%]"
-              />
-            </span>
-            <h1
-              className="text-[clamp(2.75rem,10vw,5.5rem)] font-semibold leading-[0.92] tracking-tight text-[var(--accent-strong)]"
-              style={{ fontFamily: "var(--font-display), serif" }}
-            >
-              Narcissus
-            </h1>
-            <p
-              className="mt-4 max-w-md text-xl font-light leading-snug text-[var(--ink)] sm:text-2xl"
-              style={{ fontFamily: "var(--font-display), serif" }}
-            >
-              Your Reflection, Your Rules
-            </p>
-          </div>
-
-          <nav
-            className="home-fade-up home-fade-up-delay-1 mt-12"
-            aria-label="Menu"
-          >
-            <ul className="menu-house-list">
-              {DESTINATIONS.map((room) => (
-                <li key={room.id}>
-                  <Link href={room.href} className="menu-house-link group">
-                    <span
-                      className="menu-house-name"
-                      style={{ fontFamily: "var(--font-display), serif" }}
-                    >
-                      {room.name}
-                    </span>
-                    <span className="menu-house-line">{room.line}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        </div>
-      </section>
-    </div>
+      <div className="home-fade-up home-fade-up-delay-2 mt-14 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-8 text-sm">
+        <Link
+          href="/account"
+          className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
+        >
+          Echo
+        </Link>
+        <span className="text-[var(--muted)]" aria-hidden>
+          ·
+        </span>
+        <Link
+          href="/sign-in"
+          className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
+        >
+          Sign in
+        </Link>
+        <span className="text-[var(--muted)]" aria-hidden>
+          ·
+        </span>
+        <Link
+          href="/sign-up"
+          className="tracking-[0.12em] text-[var(--accent-strong)] transition hover:underline"
+        >
+          Create account
+        </Link>
+      </div>
+    </MenuHubShell>
   );
 }
