@@ -168,7 +168,7 @@ export function EchoProfileCard({ signedIn }: { signedIn: boolean }) {
             />
             <div className="relative">
               <p className="echo-section-label text-[10px] uppercase text-[var(--muted)]">
-                Echo
+                Echo · Image of you
               </p>
               <h2
                 className="mt-3 text-3xl text-[var(--ink)] sm:text-4xl"

@@ -5,6 +5,7 @@ import { EchoProfileCard } from "@/components/EchoProfileCard";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { authClient } from "@/lib/auth-client";
+import { ECHO_LABEL, ECHO_LINE } from "@/lib/brandLabels";
 
 /**
  * Echo — Narcissus account / settings surface.
@@ -26,8 +27,8 @@ export default function AccountPage() {
 
         <PageHeader
           className="echo-hero-title"
-          kicker="Adults only · Account & settings"
-          title="Echo"
+          kicker={`Adults only · ${ECHO_LINE}`}
+          title={ECHO_LABEL}
           lede="Your reflection across Narcissus — identity, Muse overscore, act heat, cloud save, Circle codes, and linked viewers. Muse voice stays on each Muse / chat panel."
         />
 

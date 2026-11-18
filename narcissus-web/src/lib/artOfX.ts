@@ -825,7 +825,7 @@ export const ART_OF_X_NAV = [
     id: "circle",
     href: "/circle",
     label: "Circle",
-    blurb: "Swingers discovery — profiles, photos, share codes (Echo).",
+    blurb: "Finding people that fit you.",
   },
 ] as const;
 

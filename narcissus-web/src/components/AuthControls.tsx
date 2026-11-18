@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import { resetStoreMode } from "@/lib/artOfXStore";
+import { ECHO_LABEL, ECHO_LINE } from "@/lib/brandLabels";
 
 type AuthControlsProps = {
   /** Override root layout classes (e.g. drawer stack without ml-auto). */
@@ -36,9 +37,9 @@ export function AuthControls({ className }: AuthControlsProps) {
         <Link
           href="/account"
           className="max-w-[10rem] truncate text-[var(--muted)] transition hover:text-[var(--ink)]"
-          title={session.user.email}
+          title={`${ECHO_LABEL} — ${ECHO_LINE}`}
         >
-          {session.user.name || session.user.email}
+          {ECHO_LABEL}
         </Link>
         <button
           type="button"

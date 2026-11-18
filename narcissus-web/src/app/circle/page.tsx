@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { UiButton } from "@/components/UiButton";
 import { authClient } from "@/lib/auth-client";
+import { CIRCLE_LABEL, CIRCLE_LINE } from "@/lib/brandLabels";
 import {
   CIRCLE_LOOKING_FOR,
   CIRCLE_VIBES,
@@ -100,9 +101,9 @@ export default function CircleDiscoverPage() {
         <AppNav />
 
         <PageHeader
-          kicker="Adults only · Swingers discovery"
-          title="Circle"
-          lede="Browse photo-forward profiles from swingers who opted in. Filter by vibe and what they’re looking for — then link via Circle code on Echo."
+          kicker={`Adults only · ${CIRCLE_LINE}`}
+          title={CIRCLE_LABEL}
+          lede="Browse photo-forward profiles from people who opted in. Filter by vibe and what they’re looking for — then link via Circle code on Echo."
           actions={
             <>
               <Link

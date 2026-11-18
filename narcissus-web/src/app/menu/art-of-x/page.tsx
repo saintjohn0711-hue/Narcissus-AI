@@ -2,16 +2,17 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MenuHubShell } from "@/components/MenuHubShell";
 import { PERSON_LABEL } from "@/lib/artOfX";
+import { CIRCLE_LABEL, CIRCLE_LINE } from "@/lib/brandLabels";
 
 export const metadata: Metadata = {
   title: "Art Of X",
   description:
-    "Muses, Stories, swinger, adult dating, AI chat — Narcissus Art Of X.",
+    "Muses, Stories, Circle, AI chat — Narcissus Art Of X.",
 };
 
 /**
  * Art Of X hub — real routes only.
- * Swinger + adult dating both map to Circle (no separate dating product yet).
+ * Swinger / adult dating live under Circle (`/circle`); no separate dating page.
  */
 const ART_LINKS = [
   {
@@ -33,22 +34,16 @@ const ART_LINKS = [
     line: "Living companion conversation.",
   },
   {
-    id: "swinger",
+    id: "circle",
     href: "/circle",
-    name: "Swinger",
-    line: "Circle discovery and share codes.",
-  },
-  {
-    id: "dating",
-    href: "/circle",
-    name: "Adult dating",
-    line: "Same Circle surface — profiles and links.",
+    name: CIRCLE_LABEL,
+    line: CIRCLE_LINE,
   },
   {
     id: "circle-me",
     href: "/circle/me",
     name: "My Circle",
-    line: "Your Circle profile.",
+    line: "Your profile in Circle.",
   },
   {
     id: "hub",
@@ -72,7 +67,7 @@ export default function ArtOfXMenuPage() {
           Desire
         </h1>
         <p className="mt-4 max-w-md text-base font-light leading-relaxed text-[var(--soft)]">
-          Muses, Stories, swinger, adult dating, and AI chat — one house of heat.
+          Muses, Stories, {CIRCLE_LABEL}, and AI chat — one house of heat.
         </p>
       </div>
 

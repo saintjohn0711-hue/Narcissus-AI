@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { MenuHubShell } from "@/components/MenuHubShell";
+import { ECHO_LABEL, ECHO_LINE } from "@/lib/brandLabels";
 
 export const metadata: Metadata = {
   title: "Menu",
@@ -19,7 +20,7 @@ const HUBS = [
     id: "art-of-x",
     href: "/menu/art-of-x",
     name: "Art Of X",
-    line: "Muses, Stories, swinger, adult dating, AI chat.",
+    line: "Muses, Stories, Circle, AI chat.",
   },
 ] as const;
 
@@ -69,31 +70,38 @@ export default function MenuPage() {
         </ul>
       </nav>
 
-      <div className="home-fade-up home-fade-up-delay-2 mt-14 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-8 text-sm">
+      <div className="home-fade-up home-fade-up-delay-2 mt-14 border-t border-[var(--line)] pt-8">
         <Link
           href="/account"
-          className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
+          className="menu-footer-echo group inline-flex flex-col gap-0.5 no-underline"
         >
-          Echo
+          <span
+            className="text-lg tracking-[0.04em] text-[var(--accent-strong)] transition group-hover:text-[var(--glow)]"
+            style={{ fontFamily: "var(--font-display), serif" }}
+          >
+            {ECHO_LABEL}
+          </span>
+          <span className="text-sm font-light tracking-[0.04em] text-[var(--soft)]">
+            {ECHO_LINE}
+          </span>
         </Link>
-        <span className="text-[var(--muted)]" aria-hidden>
-          ·
-        </span>
-        <Link
-          href="/sign-in"
-          className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
-        >
-          Sign in
-        </Link>
-        <span className="text-[var(--muted)]" aria-hidden>
-          ·
-        </span>
-        <Link
-          href="/sign-up"
-          className="tracking-[0.12em] text-[var(--accent-strong)] transition hover:underline"
-        >
-          Create account
-        </Link>
+        <div className="mt-5 flex flex-wrap items-center gap-4 text-sm">
+          <Link
+            href="/sign-in"
+            className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
+          >
+            Sign in
+          </Link>
+          <span className="text-[var(--muted)]" aria-hidden>
+            ·
+          </span>
+          <Link
+            href="/sign-up"
+            className="tracking-[0.12em] text-[var(--accent-strong)] transition hover:underline"
+          >
+            Create account
+          </Link>
+        </div>
       </div>
     </MenuHubShell>
   );
