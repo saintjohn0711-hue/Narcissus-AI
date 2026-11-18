@@ -73,7 +73,12 @@ function createAuth() {
       },
     },
     session: {
-      cookieCache: { enabled: true, maxAge: 5 * 60 },
+      // Keep signed-in across Muse chat / soft-add Power seeds without
+      // re-hitting the session table every few minutes (was 5m and felt like
+      // random sign-outs under Neon load).
+      expiresIn: 60 * 60 * 24 * 30, // 30 days
+      updateAge: 60 * 60 * 24, // refresh expiry at most once per day
+      cookieCache: { enabled: true, maxAge: 60 * 60 }, // 1 hour
     },
     plugins: [nextCookies()],
   });
