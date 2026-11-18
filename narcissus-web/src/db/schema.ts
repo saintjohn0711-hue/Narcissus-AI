@@ -129,6 +129,7 @@ export const partners = pgTable("partners", {
         mainPhotoIndex?: number;
         voiceGender?: string;
         voicePreset?: string;
+        voiceRate?: string;
         voiceId?: string;
         linkedPartnerId?: number | null;
       }>
@@ -172,8 +173,10 @@ export const partners = pgTable("partners", {
     .default([]),
   /** Chat TTS / Web Speech gender preference. */
   voiceGender: text("voice_gender").notNull().default("female"),
-  /** Named delivery preset (auto / sultry / deep / …). */
+  /** Named delivery preset (auto / sultry / sexy / dominant / …). */
   voicePreset: text("voice_preset").notNull().default("auto"),
+  /** Speech speed: normal / slow / slower. */
+  voiceRate: text("voice_rate").notNull().default("normal"),
   /** Accent as accent:<BCP47> or exact SpeechSynthesisVoice.voiceURI. */
   voiceId: text("voice_id").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true })

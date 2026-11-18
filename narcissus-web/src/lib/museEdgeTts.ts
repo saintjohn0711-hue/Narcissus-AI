@@ -8,12 +8,15 @@ import { EdgeTTS } from "node-edge-tts";
 import {
   getVoiceAccent,
   getVoicePreset,
+  getVoiceRate,
   normalizeVoiceAccent,
   normalizeVoiceGender,
   normalizeVoicePreset,
+  normalizeVoiceRate,
   type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
   type MuseVoiceSettings,
 } from "@/lib/museVoice";
 
@@ -24,6 +27,7 @@ export type EdgeTtsPlan = {
   pitch: string;
   gender: MuseVoiceGender;
   preset: MuseVoicePresetId;
+  rateId: MuseVoiceRateId;
   accent: MuseVoiceAccentId;
 };
 
@@ -119,6 +123,10 @@ function presetVoiceOverride(
         return "en-US-AvaNeural";
       case "bright":
         return "en-US-SaraNeural";
+      case "sexy":
+        return "en-US-MichelleNeural";
+      case "dominant":
+        return "en-US-AriaNeural";
       default:
         return null;
     }
@@ -130,15 +138,17 @@ function presetVoiceOverride(
       return "en-US-AndrewNeural";
     case "smooth":
       return "en-US-BrianNeural";
+    case "sexy":
+      return "en-US-ChristopherNeural";
+    case "dominant":
+      return "en-US-DavisNeural";
     default:
       return null;
   }
 }
 
-function rateToEdge(rate: number): string {
-  // Muse presets ~0.88–1.02 → Edge relative % from 1.0
-  const pct = Math.round((rate - 1) * 100);
-  const clamped = Math.max(-20, Math.min(15, pct));
+function ratePctToEdge(edgePct: number): string {
+  const clamped = Math.max(-35, Math.min(15, Math.round(edgePct)));
   if (clamped === 0) return "default";
   return clamped > 0 ? `+${clamped}%` : `${clamped}%`;
 }
@@ -151,29 +161,33 @@ function pitchToEdge(pitch: number): string {
 }
 
 export function planEdgeTts(
-  settings: Pick<MuseVoiceSettings, "gender" | "preset" | "accent"> & {
+  settings: Pick<MuseVoiceSettings, "gender" | "preset" | "accent" | "rate"> & {
     gender?: MuseVoiceGender | string;
     preset?: MuseVoicePresetId | string;
     accent?: MuseVoiceAccentId | string;
+    rate?: MuseVoiceRateId | string;
   },
 ): EdgeTtsPlan {
   const gender = normalizeVoiceGender(settings.gender);
   const preset = normalizeVoicePreset(settings.preset, gender);
   const accent = normalizeVoiceAccent(settings.accent);
+  const rateId = normalizeVoiceRate(settings.rate);
   const base = EDGE_VOICE_BY_ACCENT[accent] || EDGE_VOICE_BY_ACCENT.auto;
   const override = presetVoiceOverride(gender, preset, accent);
   const voice =
     override || (gender === "female" ? base.female : base.male);
   const presetDef = getVoicePreset(preset);
+  const rateDef = getVoiceRate(rateId);
   const accentDef = getVoiceAccent(accent);
 
   return {
     voice,
     lang: base.lang || accentDef.lang || "en-US",
-    rate: rateToEdge(presetDef.rate),
+    rate: ratePctToEdge(rateDef.edgePct),
     pitch: pitchToEdge(presetDef.pitch),
     gender,
     preset,
+    rateId,
     accent,
   };
 }
@@ -181,7 +195,7 @@ export function planEdgeTts(
 /** Synthesize MP3 bytes via Edge neural voices (no API key). */
 export async function synthesizeEdgeMp3(
   text: string,
-  settings: Pick<MuseVoiceSettings, "gender" | "preset" | "accent">,
+  settings: Pick<MuseVoiceSettings, "gender" | "preset" | "accent" | "rate">,
 ): Promise<{ audio: Buffer; plan: EdgeTtsPlan }> {
   const plan = planEdgeTts(settings);
   const tts = new EdgeTTS({

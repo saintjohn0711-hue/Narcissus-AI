@@ -19,6 +19,7 @@ import {
   encodeAccentVoiceId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
 } from "@/lib/museVoice";
 
 /** Browser flag — avoid re-seeding after the user clears the roster. */
@@ -50,6 +51,8 @@ export type DemoMuseSeed = {
   photos: string[];
   voiceGender: MuseVoiceGender;
   voicePreset: MuseVoicePresetId;
+  /** Speech speed — normal / slow / slower. */
+  voiceRate?: MuseVoiceRateId;
   /** Accent tag without prefix — encoded into voiceId. */
   voiceAccent: "en-US" | "en-GB" | "en-IE" | "en-AU";
   tryNewThings: boolean;
@@ -105,7 +108,8 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
       "/demo-muses/woman-muse-2.jpg",
     ],
     voiceGender: "female",
-    voicePreset: "sultry",
+    voicePreset: "sexy",
+    voiceRate: "slow",
     voiceAccent: "en-IE",
     tryNewThings: true,
     favorite: true,
@@ -350,7 +354,8 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     ],
     photos: ["/demo-muses/mistress-t-muse-1.jpg"],
     voiceGender: "female",
-    voicePreset: "sultry",
+    voicePreset: "dominant",
+    voiceRate: "slow",
     voiceAccent: "en-GB",
     tryNewThings: false,
     favorite: true,
@@ -679,6 +684,7 @@ function seedToPartner(
     sexRibbons: [],
     voiceGender: s.voiceGender,
     voicePreset: s.voicePreset,
+    voiceRate: s.voiceRate || "normal",
     voiceId: encodeAccentVoiceId(s.voiceAccent),
     createdAt: now,
     updatedAt: now,
