@@ -20,6 +20,7 @@ import { normalizeMemories } from "@/lib/museChatMemory";
 import {
   normalizeVoiceGender,
   normalizeVoicePreset,
+  normalizeVoiceRate,
 } from "@/lib/museVoice";
 import { normalizeSexRibbons } from "@/lib/sexRibbons";
 
@@ -40,6 +41,9 @@ async function ensurePartnersKindColumns(
   `);
   await db.execute(sql`
     ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "want_acts" jsonb DEFAULT '[]'::jsonb NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "voice_rate" text DEFAULT 'normal' NOT NULL
   `);
 }
 
@@ -127,6 +131,9 @@ function rowToPartner(
     voicePreset: normalizeVoicePreset(
       row.voicePreset,
       normalizeVoiceGender(row.voiceGender, row.gender),
+    ),
+    voiceRate: normalizeVoiceRate(
+      (row as { voiceRate?: string }).voiceRate,
     ),
     voiceId: typeof row.voiceId === "string" ? row.voiceId : "",
     createdAt: row.createdAt.toISOString(),
@@ -340,6 +347,7 @@ export async function PUT(req: NextRequest) {
         sexRibbons: normalizeSexRibbons(p.sexRibbons),
         voiceGender,
         voicePreset: normalizeVoicePreset(p.voicePreset, voiceGender),
+        voiceRate: normalizeVoiceRate(p.voiceRate),
         voiceId:
           typeof p.voiceId === "string" ? p.voiceId.trim().slice(0, 200) : "",
         createdAt: p.createdAt ? new Date(p.createdAt) : now,
@@ -378,6 +386,7 @@ export async function PUT(req: NextRequest) {
             sexRibbons: row.sexRibbons,
             voiceGender: row.voiceGender,
             voicePreset: row.voicePreset,
+            voiceRate: row.voiceRate,
             voiceId: row.voiceId,
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,

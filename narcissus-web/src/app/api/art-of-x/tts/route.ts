@@ -3,10 +3,12 @@ import {
   isMuseVoiceAccentId,
   isMuseVoiceGender,
   isMuseVoicePresetId,
+  isMuseVoiceRateId,
   textForSpeech,
   type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
 } from "@/lib/museVoice";
 import {
   isOpenAiTtsConfigured,
@@ -24,6 +26,7 @@ type TtsBody = {
   text?: string;
   gender?: string;
   preset?: string;
+  rate?: string;
   accent?: string;
   /** Optional preview flag — same engine, shorter cache hint. */
   preview?: boolean;
@@ -32,6 +35,7 @@ type TtsBody = {
 function parseSettings(body: TtsBody): {
   gender: MuseVoiceGender;
   preset: MuseVoicePresetId;
+  rate: MuseVoiceRateId;
   accent: MuseVoiceAccentId;
 } {
   const gender: MuseVoiceGender = isMuseVoiceGender(body.gender)
@@ -40,10 +44,13 @@ function parseSettings(body: TtsBody): {
   const preset: MuseVoicePresetId = isMuseVoicePresetId(body.preset)
     ? body.preset
     : "auto";
+  const rate: MuseVoiceRateId = isMuseVoiceRateId(body.rate)
+    ? body.rate
+    : "normal";
   const accent: MuseVoiceAccentId = isMuseVoiceAccentId(body.accent)
     ? body.accent
     : "auto";
-  return { gender, preset, accent };
+  return { gender, preset, rate, accent };
 }
 
 /**
@@ -143,6 +150,7 @@ export async function POST(req: NextRequest) {
             "X-Muse-TTS-Model": result.plan.model,
             "X-Muse-TTS-Gender": result.plan.gender,
             "X-Muse-TTS-Preset": result.plan.preset,
+            "X-Muse-TTS-Rate": result.plan.rate,
             "X-Muse-TTS-Accent": result.plan.accent,
           },
         });
@@ -164,6 +172,7 @@ export async function POST(req: NextRequest) {
         "X-Muse-TTS-Model": "edge-neural",
         "X-Muse-TTS-Gender": plan.gender,
         "X-Muse-TTS-Preset": plan.preset,
+        "X-Muse-TTS-Rate": plan.rateId,
         "X-Muse-TTS-Accent": plan.accent,
       },
     });

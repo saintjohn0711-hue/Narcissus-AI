@@ -103,11 +103,13 @@ import {
   defaultVoiceGender,
   encodeAccentVoiceId,
   MUSE_VOICE_ACCENTS,
+  MUSE_VOICE_RATES,
   presetsForGender,
   voiceSettingsFromPartner,
   type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
 } from "@/lib/museVoice";
 
 const TYPES: PersonType[] = ["Real", "Dream", "Wanted", "Power"];
@@ -1853,9 +1855,9 @@ function PartnersPageInner() {
               Sexy female or male narration for Companion chat. Server TTS uses
               OpenAI when{" "}
               <code className="text-[var(--soft)]">OPENAI_API_KEY</code> is set
-              on Vercel; otherwise Microsoft Edge neural (no key). Browser Web
-              Speech is last-resort only. Pick gender, accent, and delivery —
-              each selection plays a short preview.
+              on Vercel; otherwise Microsoft Edge neural (no key). Pick gender,
+              accent, delivery (incl. Sexy / Dominant), and speed (Normal /
+              Slow / Slower) — each selection plays a short preview.
             </p>
             <div className="flex flex-wrap gap-2">
               {VOICE_GENDERS.map((g) => (
@@ -1946,6 +1948,36 @@ function PartnersPageInner() {
                     data-testid={`muse-voice-preset-${p.id}`}
                   >
                     {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                Speed
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {MUSE_VOICE_RATES.map((r) => (
+                  <button
+                    key={r.id}
+                    type="button"
+                    title={r.blurb}
+                    onClick={() => {
+                      const next = {
+                        ...editing,
+                        voiceRate: r.id as MuseVoiceRateId,
+                      };
+                      setEditing(next);
+                      voicePreview.preview(voiceSettingsFromPartner(next));
+                    }}
+                    className={`rounded-sm border px-3 py-1.5 text-sm ${
+                      (editing.voiceRate || "normal") === r.id
+                        ? "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
+                        : "border-[var(--line)] text-[#c4b7a8]"
+                    }`}
+                    data-testid={`muse-voice-rate-${r.id}`}
+                  >
+                    {r.label}
                   </button>
                 ))}
               </div>

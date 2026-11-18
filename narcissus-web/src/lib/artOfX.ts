@@ -11,8 +11,10 @@ import {
   defaultVoiceGender,
   normalizeVoiceGender,
   normalizeVoicePreset,
+  normalizeVoiceRate,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
 } from "@/lib/museVoice";
 import {
   normalizeSexRibbons,
@@ -92,6 +94,7 @@ export type MuseMember = {
   mainPhotoIndex?: number;
   voiceGender?: MuseVoiceGender;
   voicePreset?: MuseVoicePresetId;
+  voiceRate?: MuseVoiceRateId;
   voiceId?: string;
   /** Solo Muse id created/updated when this unit is saved */
   linkedPartnerId?: number | null;
@@ -244,6 +247,7 @@ export function emptyMuseMember(
         : 0,
     voiceGender,
     voicePreset: normalizeVoicePreset(partial.voicePreset, voiceGender),
+    voiceRate: normalizeVoiceRate(partial.voiceRate),
     voiceId:
       typeof partial.voiceId === "string"
         ? partial.voiceId.trim().slice(0, 200)
@@ -315,6 +319,7 @@ export function hydrateMembersFromLinkedSolos(
         mainPhotoIndex: solo.mainPhotoIndex ?? m.mainPhotoIndex,
         voiceGender: solo.voiceGender || m.voiceGender,
         voicePreset: solo.voicePreset || m.voicePreset,
+        voiceRate: solo.voiceRate || m.voiceRate,
         voiceId: solo.voiceId || m.voiceId,
         linkedPartnerId: Number(solo.id),
         role: m.role,
@@ -404,6 +409,7 @@ export function syncUnitLinkedSolos(
           : 0,
         voiceGender,
         voicePreset: normalizeVoicePreset(m.voicePreset, voiceGender),
+        voiceRate: normalizeVoiceRate(m.voiceRate),
         voiceId: m.voiceId || "",
         notes: prev.notes?.trim() ? prev.notes : baseNotes,
         updatedAt: now,
@@ -417,6 +423,7 @@ export function syncUnitLinkedSolos(
         photos,
         voiceGender: updated.voiceGender,
         voicePreset: updated.voicePreset,
+        voiceRate: updated.voiceRate,
         voiceId: updated.voiceId,
       });
     }
@@ -435,6 +442,7 @@ export function syncUnitLinkedSolos(
         : 0,
       voiceGender,
       voicePreset: normalizeVoicePreset(m.voicePreset, voiceGender),
+      voiceRate: normalizeVoiceRate(m.voiceRate),
       voiceId: m.voiceId || "",
       notes: baseNotes,
       // Share desire tags for continuity; leave doneActs empty so Echo
@@ -456,6 +464,7 @@ export function syncUnitLinkedSolos(
       photos,
       voiceGender: solo.voiceGender,
       voicePreset: solo.voicePreset,
+      voiceRate: solo.voiceRate,
       voiceId: solo.voiceId,
     });
   });
@@ -646,12 +655,14 @@ export type PartnerRecord = {
    */
   sexRibbons: SexRibbonAward[];
   /**
-   * Chat narration voice gender (Web Speech / future TTS).
+   * Chat narration voice gender (Web Speech / TTS).
    * Defaults from Muse presentation gender when unset.
    */
   voiceGender: MuseVoiceGender;
-  /** Delivery preset: sultry/soft/bright (female) or deep/warm/smooth (male). */
+  /** Delivery: sultry/sexy/dominant/… (tone); rate is separate. */
   voicePreset: MuseVoicePresetId;
+  /** Speech speed: normal / slow / slower. */
+  voiceRate: MuseVoiceRateId;
   /**
    * Voice target: `accent:<BCP47>` locale preference (e.g. accent:en-GB),
    * or a browser SpeechSynthesisVoice.voiceURI override.
@@ -1381,6 +1392,7 @@ export function emptyPartner(
     sexRibbons: [],
     voiceGender: defaultVoiceGender("woman"),
     voicePreset: "auto",
+    voiceRate: "normal",
     voiceId: "",
     createdAt: now,
     updatedAt: now,
@@ -2295,6 +2307,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     sexRibbons: [],
     voiceGender: defaultVoiceGender(s.gender),
     voicePreset: "auto",
+    voiceRate: "normal",
     voiceId: "",
     createdAt: now,
     updatedAt: now,
@@ -2366,6 +2379,7 @@ export function loadPartners(): PartnerRecord[] {
               String(p.gender || "woman"),
             ),
           ),
+          voiceRate: normalizeVoiceRate((p as PartnerRecord).voiceRate),
           voiceId:
             typeof (p as PartnerRecord).voiceId === "string"
               ? (p as PartnerRecord).voiceId.trim().slice(0, 200)

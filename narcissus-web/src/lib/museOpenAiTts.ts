@@ -11,13 +11,15 @@
 
 import {
   getVoiceAccent,
-  getVoicePreset,
+  getVoiceRate,
   normalizeVoiceAccent,
   normalizeVoiceGender,
   normalizeVoicePreset,
+  normalizeVoiceRate,
   type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
   type MuseVoiceSettings,
 } from "@/lib/museVoice";
 
@@ -43,6 +45,7 @@ export type OpenAiTtsPlan = {
   speed: number;
   gender: MuseVoiceGender;
   preset: MuseVoicePresetId;
+  rate: MuseVoiceRateId;
   accent: MuseVoiceAccentId;
 };
 
@@ -89,6 +92,60 @@ function pickVoice(
   preset: MuseVoicePresetId,
   accent: MuseVoiceAccentId,
 ): VoicePick {
+  // Shared sexy / Dominant — distinct from sultry/soft/bright/deep.
+  if (preset === "sexy") {
+    if (gender === "female") {
+      return {
+        voice: "shimmer",
+        delivery: [
+          "Voice Affect: teasing, breathy, sexually charged companion.",
+          "Tone: flirtatious heat with a knowing smile — playful, not shy.",
+          "Pacing: linger on desire words; soft laughs at the edges.",
+          "Emotion: lusty invitation and mischievous confidence.",
+          "Pauses: sensual breaths; never rush the tease.",
+          "Delivery: sexy pillow talk aimed at one person — never announcer.",
+        ],
+      };
+    }
+    return {
+      voice: "verse",
+      delivery: [
+        "Voice Affect: seductive male heat with a low smile in the voice.",
+        "Tone: flirtatious, charged, privately filthy without cartoon growl.",
+        "Pacing: unhurried pull; lean into suggestive lines.",
+        "Emotion: hungry confidence and warm desire.",
+        "Pauses: brief charged beats; let heat land.",
+        "Delivery: intimate seduction — human, not radio host.",
+      ],
+    };
+  }
+  if (preset === "dominant") {
+    if (gender === "female") {
+      return {
+        voice: "alloy",
+        delivery: [
+          "Voice Affect: commanding Domme — clear, firm, controlled.",
+          "Tone: authoritative and intimate; she already owns the room.",
+          "Pacing: deliberate orders; weight on key commands.",
+          "Emotion: cool control with heated certainty — never shrill.",
+          "Pauses: let instructions land; no nervous filler.",
+          "Delivery: Domme speaking to her submissive — never theatrical villain.",
+        ],
+      };
+    }
+    return {
+      voice: "onyx",
+      delivery: [
+        "Voice Affect: commanding Dom — deep, steady, decisive.",
+        "Tone: quiet authority; ownership without cartoon menace.",
+        "Pacing: measured; weight on directives.",
+        "Emotion: controlled desire and firm expectation.",
+        "Pauses: deliberate; silence as power.",
+        "Delivery: Dom speaking to his submissive — human, never announcer.",
+      ],
+    };
+  }
+
   // British auto → fable’s UK lean still sounds more natural than forcing marin.
   if (gender === "female") {
     switch (preset) {
@@ -202,25 +259,26 @@ function pickVoice(
 }
 
 function clampSpeed(rate: number): number {
-  // Muse presets use ~0.88–1.02; OpenAI speed is 0.25–4.0.
-  // Keep near 1.0 so instructions (not speed) carry most of the character.
-  const mapped = Math.max(0.88, Math.min(1.08, rate));
+  // OpenAI speed 0.25–4.0; honor Slow / Slower chips without going cartoon.
+  const mapped = Math.max(0.65, Math.min(1.15, rate));
   return Math.round(mapped * 100) / 100;
 }
 
-/** Resolve gender / accent / preset → OpenAI TTS request fields. */
+/** Resolve gender / accent / preset / rate → OpenAI TTS request fields. */
 export function planOpenAiTts(
-  settings: Pick<MuseVoiceSettings, "gender" | "preset" | "accent"> & {
+  settings: Pick<MuseVoiceSettings, "gender" | "preset" | "accent" | "rate"> & {
     gender?: MuseVoiceGender | string;
     preset?: MuseVoicePresetId | string;
     accent?: MuseVoiceAccentId | string;
+    rate?: MuseVoiceRateId | string;
   },
 ): OpenAiTtsPlan {
   const gender = normalizeVoiceGender(settings.gender);
   const preset = normalizeVoicePreset(settings.preset, gender);
   const accent = normalizeVoiceAccent(settings.accent);
+  const rate = normalizeVoiceRate(settings.rate);
   const pick = pickVoice(gender, preset, accent);
-  const presetDef = getVoicePreset(preset);
+  const rateDef = getVoiceRate(rate);
   const accentLine = ACCENT_INSTRUCTIONS[accent] || ACCENT_INSTRUCTIONS.auto;
   const accentDef = getVoiceAccent(accent);
 
@@ -244,9 +302,10 @@ export function planOpenAiTts(
     model,
     voice: pick.voice,
     instructions,
-    speed: clampSpeed(presetDef.rate),
+    speed: clampSpeed(rateDef.openaiSpeed),
     gender,
     preset,
+    rate,
     accent,
   };
 }
@@ -264,12 +323,16 @@ export const OPENAI_VOICE_PRESET_MAP: Record<
     sultry: "coral",
     soft: "marin",
     bright: "nova",
+    sexy: "shimmer",
+    dominant: "alloy",
   },
   male: {
     auto: "cedar",
     deep: "onyx",
     warm: "cedar",
     smooth: "ballad",
+    sexy: "verse",
+    dominant: "onyx",
   },
 };
 

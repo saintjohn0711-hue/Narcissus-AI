@@ -25,9 +25,17 @@ export type MuseVoicePresetId =
   | "sultry"
   | "soft"
   | "bright"
+  | "sexy"
+  | "dominant"
   | "deep"
   | "warm"
   | "smooth";
+
+/**
+ * How fast the Muse speaks. Independent of delivery preset.
+ * Mapped to OpenAI `speed`, Edge rate %, and Web Speech `utterance.rate`.
+ */
+export type MuseVoiceRateId = "normal" | "slow" | "slower";
 
 /**
  * Accent / locale preference. Stored on Muse `voiceId` as `accent:<BCP47>`
@@ -51,8 +59,10 @@ export type MuseVoiceAccentId =
 
 export type MuseVoiceSettings = {
   gender: MuseVoiceGender;
-  /** Named delivery preset (pitch/rate). */
+  /** Named delivery preset (tone / pitch / voice pick). */
   preset: MuseVoicePresetId;
+  /** Speech speed (Normal / Slow / Slower). */
+  rate: MuseVoiceRateId;
   /** Locale accent preference (maps to Web Speech lang). */
   accent: MuseVoiceAccentId;
   /** Optional SpeechSynthesisVoice.voiceURI — browser-specific. */
@@ -103,6 +113,22 @@ export const MUSE_VOICE_PRESETS: Array<{
     pitch: 1.08,
   },
   {
+    id: "sexy",
+    label: "Sexy",
+    blurb: "Teasing heat — breathy, flirtatious, charged (both).",
+    genders: "both",
+    rate: 0.9,
+    pitch: 0.94,
+  },
+  {
+    id: "dominant",
+    label: "Dominant",
+    blurb: "Commanding Domme / Dom energy — firm, deliberate (both).",
+    genders: "both",
+    rate: 0.88,
+    pitch: 0.86,
+  },
+  {
     id: "deep",
     label: "Deep",
     blurb: "Resonant male register — calm, grounded heat.",
@@ -125,6 +151,44 @@ export const MUSE_VOICE_PRESETS: Array<{
     genders: ["male"],
     rate: 0.98,
     pitch: 0.9,
+  },
+];
+
+/** User-facing speech speed chips (OpenAI + Edge + Web Speech). */
+export const MUSE_VOICE_RATES: Array<{
+  id: MuseVoiceRateId;
+  label: string;
+  blurb: string;
+  /** Web Speech utterance.rate */
+  speechRate: number;
+  /** OpenAI TTS speed (0.25–4.0) */
+  openaiSpeed: number;
+  /** Edge relative percent from 1.0 (e.g. -15 → -15%) */
+  edgePct: number;
+}> = [
+  {
+    id: "normal",
+    label: "Normal",
+    blurb: "Natural conversational pace.",
+    speechRate: 1,
+    openaiSpeed: 1,
+    edgePct: 0,
+  },
+  {
+    id: "slow",
+    label: "Slow",
+    blurb: "Unhurried — linger on every line.",
+    speechRate: 0.85,
+    openaiSpeed: 0.85,
+    edgePct: -15,
+  },
+  {
+    id: "slower",
+    label: "Slower",
+    blurb: "Very slow, deliberate, close-mic pace.",
+    speechRate: 0.72,
+    openaiSpeed: 0.72,
+    edgePct: -28,
   },
 ];
 
@@ -269,6 +333,10 @@ export function isMuseVoiceAccentId(v: unknown): v is MuseVoiceAccentId {
   return MUSE_VOICE_ACCENTS.some((a) => a.id === v);
 }
 
+export function isMuseVoiceRateId(v: unknown): v is MuseVoiceRateId {
+  return MUSE_VOICE_RATES.some((r) => r.id === v);
+}
+
 export function normalizeVoiceGender(
   raw: unknown,
   museGender?: MusePresentationGender,
@@ -286,6 +354,11 @@ export function normalizeVoicePreset(
     if (def.genders === "both" || def.genders.includes(gender)) return raw;
   }
   return "auto";
+}
+
+export function normalizeVoiceRate(raw: unknown): MuseVoiceRateId {
+  if (isMuseVoiceRateId(raw)) return raw;
+  return "normal";
 }
 
 export function normalizeVoiceAccent(raw: unknown): MuseVoiceAccentId {
@@ -332,6 +405,7 @@ export function voiceSettingsFromPartner(partner: {
   gender?: MusePresentationGender;
   voiceGender?: string;
   voicePreset?: string;
+  voiceRate?: string;
   voiceId?: string;
 }): MuseVoiceSettings {
   const gender = normalizeVoiceGender(partner.voiceGender, partner.gender);
@@ -339,6 +413,7 @@ export function voiceSettingsFromPartner(partner: {
   return {
     gender,
     preset: normalizeVoicePreset(partner.voicePreset, gender),
+    rate: normalizeVoiceRate(partner.voiceRate),
     accent: parsed.kind === "accent" ? parsed.accent : "auto",
     voiceId: parsed.kind === "uri" ? parsed.uri : undefined,
   };
@@ -346,6 +421,10 @@ export function voiceSettingsFromPartner(partner: {
 
 export function getVoicePreset(id: MuseVoicePresetId) {
   return MUSE_VOICE_PRESETS.find((p) => p.id === id) || MUSE_VOICE_PRESETS[0]!;
+}
+
+export function getVoiceRate(id: MuseVoiceRateId) {
+  return MUSE_VOICE_RATES.find((r) => r.id === id) || MUSE_VOICE_RATES[0]!;
 }
 
 export function getVoiceAccent(id: MuseVoiceAccentId) {
@@ -802,11 +881,13 @@ async function speakWithWebSpeech(
   primeSpeechEngine();
 
   const preset = getVoicePreset(settings.preset);
+  const rateDef = getVoiceRate(normalizeVoiceRate(settings.rate));
   const accent = getVoiceAccent(normalizeVoiceAccent(settings.accent));
   const utter = new SpeechSynthesisUtterance(cleaned);
   const voice = pickSpeechVoice(settings);
   if (voice) utter.voice = voice;
-  utter.rate = preset.rate;
+  // Speed from voiceRate chips; pitch still follows delivery preset.
+  utter.rate = rateDef.speechRate;
   utter.pitch = preset.pitch;
   utter.volume = 1;
   utter.lang = voice?.lang || accent.lang || "en-US";
@@ -936,6 +1017,7 @@ async function speakWithOpenAiAudio(
       text: cleaned,
       gender: settings.gender,
       preset: settings.preset,
+      rate: normalizeVoiceRate(settings.rate),
       accent: normalizeVoiceAccent(settings.accent),
       preview: preview || undefined,
     }),

@@ -46,6 +46,7 @@ import {
   encodeAccentVoiceId,
   loadChatVoicePrefs,
   MUSE_VOICE_ACCENTS,
+  MUSE_VOICE_RATES,
   presetsForGender,
   saveChatVoicePrefs,
   narrationSupported,
@@ -58,6 +59,7 @@ import {
   type MuseVoiceAccentId,
   type MuseVoiceGender,
   type MuseVoicePresetId,
+  type MuseVoiceRateId,
 } from "@/lib/museVoice";
 import {
   clearChatForPartner,
@@ -661,6 +663,7 @@ function ChatPageInner() {
   async function setMuseVoice(patch: {
     voiceGender?: MuseVoiceGender;
     voicePreset?: MuseVoicePresetId;
+    voiceRate?: MuseVoiceRateId;
     voiceAccent?: MuseVoiceAccentId;
     voiceId?: string;
   }) {
@@ -675,6 +678,7 @@ function ChatPageInner() {
             voicePreset:
               patch.voicePreset ??
               (patch.voiceGender ? "auto" : p.voicePreset),
+            voiceRate: patch.voiceRate ?? p.voiceRate ?? "normal",
             // Gender change keeps accent (locale); only clear exact URI overrides.
             voiceId:
               patch.voiceId !== undefined
@@ -1918,7 +1922,7 @@ function ChatPageInner() {
                         {!speechOk
                           ? "Speech unavailable here — chat still works."
                           : naturalTts || voicePreview.natural
-                            ? "Pick accent & delivery — each plays a short test."
+                            ? "Pick accent, delivery & speed — each plays a short test."
                             : "Browser voice fallback — server TTS unreachable."}
                       </p>
                     </div>
@@ -2042,6 +2046,38 @@ function ChatPageInner() {
                           </button>
                         ),
                       )}
+                    </div>
+
+                    <p className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                      Speed
+                    </p>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {MUSE_VOICE_RATES.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          title={r.blurb}
+                          onClick={() => {
+                            void setMuseVoice({
+                              voiceRate: r.id as MuseVoiceRateId,
+                            });
+                            voicePreview.preview(
+                              voiceSettingsFromPartner({
+                                ...partner,
+                                voiceRate: r.id as MuseVoiceRateId,
+                              }),
+                            );
+                          }}
+                          className={`rounded-sm border px-2.5 py-1.5 text-xs ${
+                            (partner.voiceRate || "normal") === r.id
+                              ? "border-[var(--glow)]/55 bg-[var(--glow)]/12 text-[var(--glow)]"
+                              : "border-[var(--glow)]/20 text-[var(--soft)] hover:border-[var(--glow)]/40"
+                          }`}
+                          data-testid={`chat-voice-rate-${r.id}`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
                     </div>
 
                     <MuseVoicePreviewBar
