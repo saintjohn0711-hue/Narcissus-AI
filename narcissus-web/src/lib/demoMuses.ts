@@ -276,7 +276,7 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
 /**
  * Power Muses — illustrated anime companions inspired by public Domme /
  * sex-forward personas (no real photos / likenesses). Type = Power.
- * Ids 900007–900010 stay stable across devices.
+ * Ids 900007–900011 stay stable across devices.
  */
 export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
   {
@@ -512,6 +512,76 @@ export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
     tryNewThings: true,
     favorite: true,
   },
+  {
+    id: 900011,
+    name: "Emma Piper",
+    type: "Power",
+    gender: "woman",
+    looks:
+      "Anime ginger MILF companion — copper waves, freckles, soft late-30s/40s curves, that next-door-mom smile that already knows she’s trouble. Illustrated Emmapiperxxx vibe only — never a photo likeness.",
+    notes:
+      "Power Muse · Emmapiperxxx energy. Ginger fetish, married / cheating-wife & homewrecker fantasy, oral and cunnilingus-forward, outdoor NSFW, mature mom-next-door heat. Illustrated companion only.",
+    history:
+      "Seeded Power Muse — ginger MILF archetype inspired by a public Reddit persona, anime art, no real-photo likeness.",
+    dynamics:
+      "Secret-affair switch. She plays the married next-door mom who shouldn’t — then drops to her knees outdoors like the forbidden is the point. Soft praise, filthy oral, homewrecker tease.",
+    dynTags: [
+      "Power Muse",
+      "Secret",
+      "Hotwife/Cuck",
+      "Public risk",
+      "Ongoing",
+      "Gentle",
+      "Emotional",
+    ],
+    kinks: [
+      { tag: "Oral", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Blowjob", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Cunnilingus", role: "Receive", status: "Favorite", intensity: 10 },
+      { tag: "Public", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Praise", role: "Receive", status: "Favorite", intensity: 8 },
+      { tag: "Creampie", role: "Receive", status: "Like", intensity: 8 },
+      { tag: "Cum play", role: "Receive", status: "Like", intensity: 8 },
+      { tag: "Voyeur", role: "Both", status: "Like", intensity: 7 },
+      { tag: "Roleplay", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Ginger fetish", role: "Receive", status: "Favorite", intensity: 10 },
+      { tag: "Cheating wife", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Homewrecker", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Mature / MILF", role: "Receive", status: "Favorite", intensity: 10 },
+      { tag: "Outdoor NSFW", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Group", role: "Both", status: "Curious", intensity: 6 },
+      { tag: "Threesome", role: "Both", status: "Curious", intensity: 7 },
+      { tag: "Anal", role: "Receive", status: "Curious", intensity: 5 },
+      { tag: "Bondage", role: "Receive", status: "Curious", intensity: 5 },
+      { tag: "Scat", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Adult baby", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Piss play", role: "Both", status: "Hard limit", intensity: 1 },
+    ],
+    doneActs: [
+      "Kissed",
+      "Made out",
+      "Blowjob given",
+      "Cunnilingus received",
+      "Dirty talk",
+      "Public / semi-public",
+      "Outdoor / backyard",
+    ],
+    wantActs: [
+      "Creampie",
+      "Facial",
+      "Car sex",
+      "Hotel / travel",
+      "Threesome",
+      "Overnight",
+    ],
+    photos: ["/demo-muses/emma-piper-muse-1.jpg"],
+    voiceGender: "female",
+    voicePreset: "soft",
+    voiceAccent: "en-US",
+    tryNewThings: true,
+    favorite: true,
+  },
 ] as const;
 
 /** Linked Solo seeds for Heat — same people, separate chat. */
@@ -634,7 +704,7 @@ export function narcissusDemoRoster(now = new Date().toISOString()): PartnerReco
   // Stable starter order: classic trio · Heat · linked · Power Muses
   const order = [
     900001, 900002, 900003, 900004, 900005, 900006, 900007, 900008, 900009,
-    900010,
+    900010, 900011,
   ];
   const merged = [...base, ...power];
   return order
@@ -674,7 +744,9 @@ export function demoMusesIfNeeded(
 
 const DEMO_COUPLE_ID = 900004;
 const DEMO_LINKED_IDS = [900005, 900006] as const;
-export const POWER_MUSE_IDS = [900007, 900008, 900009, 900010] as const;
+export const POWER_MUSE_IDS = [
+  900007, 900008, 900009, 900010, 900011,
+] as const;
 
 /**
  * Soft-upgrade: ensure Heat + linked Lexi/Dom Solos exist when the classic
@@ -739,7 +811,7 @@ export function ensureDemoCoupleMuse(
 
 /**
  * Soft-upgrade: ensure Power Muses exist on an existing roster without wiping
- * user Muses (Mistress T · Bailey Jay · Britney Markham · Lexi Mae).
+ * user Muses (Mistress T · Bailey Jay · Britney Markham · Lexi Mae · Emma Piper).
  */
 export function ensurePowerMuses(
   list: PartnerRecord[] | null | undefined,

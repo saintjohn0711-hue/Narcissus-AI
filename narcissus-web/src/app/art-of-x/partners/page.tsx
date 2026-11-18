@@ -968,7 +968,7 @@ function PartnersPageInner() {
     if (
       partners.length &&
       !confirm(
-        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, Jaxx, Heat (couple), and Power Muses (Mistress T, Bailey Jay, Britney Markham, Lexi Mae)?`,
+        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, Jaxx, Heat (couple), and Power Muses (Mistress T, Bailey Jay, Britney Markham, Lexi Mae, Emma Piper)?`,
       )
     ) {
       return;
