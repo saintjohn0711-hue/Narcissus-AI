@@ -6,15 +6,17 @@ import { PERSON_LABEL } from "@/lib/artOfX";
 
 export const metadata: Metadata = {
   title: "Menu",
-  description: "Muses, Studio, Stories, chat, Circle, Echo — Narcissus.",
+  description:
+    "Muses, AI chat, Stories, Studio, Art of X, Circle, Echo — Narcissus.",
 };
 
-const HOUSE = [
+/** Every live top-level destination — post-age-gate hub. No outlet picker. */
+const DESTINATIONS = [
   {
     id: "muses",
     href: "/art-of-x/partners",
     name: PERSON_LABEL.plural,
-    line: "All Muses — ledger, craft, desire.",
+    line: "Ledger, craft, desire — everyone you keep.",
   },
   {
     id: "chat",
@@ -47,10 +49,28 @@ const HOUSE = [
     line: "Discovery and share codes.",
   },
   {
+    id: "circle-me",
+    href: "/circle/me",
+    name: "My Circle",
+    line: "Your Circle profile.",
+  },
+  {
     id: "echo",
     href: "/account",
     name: "Echo",
-    line: "Account, stats, your trail.",
+    line: "Account, Muse stats, your trail.",
+  },
+  {
+    id: "sign-in",
+    href: "/sign-in",
+    name: "Sign in",
+    line: "Return to your cloud Muses.",
+  },
+  {
+    id: "sign-up",
+    href: "/sign-up",
+    name: "Create account",
+    line: "18+ account for saved Muses and Circle.",
   },
 ] as const;
 
@@ -76,7 +96,7 @@ export default function MenuPage() {
           <div className="menu-hero-grain" />
         </div>
 
-        <div className="relative z-10 mx-auto w-full max-w-4xl">
+        <div className="relative z-10 mx-auto w-full max-w-3xl">
           <div className="home-fade-up">
             <span className="home-brand-mark relative mb-5 inline-flex h-16 w-16 overflow-hidden rounded-sm ring-1 ring-[var(--glow)]/25 sm:h-20 sm:w-20">
               <Image
@@ -104,13 +124,10 @@ export default function MenuPage() {
 
           <nav
             className="home-fade-up home-fade-up-delay-1 mt-12"
-            aria-label="House"
+            aria-label="Menu"
           >
-            <p className="mb-5 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--accent-strong)]">
-              House
-            </p>
             <ul className="menu-house-list">
-              {HOUSE.map((room) => (
+              {DESTINATIONS.map((room) => (
                 <li key={room.id}>
                   <Link href={room.href} className="menu-house-link group">
                     <span
@@ -125,24 +142,6 @@ export default function MenuPage() {
               ))}
             </ul>
           </nav>
-
-          <div className="home-fade-up home-fade-up-delay-2 mt-12 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-8 text-sm">
-            <Link
-              href="/sign-in"
-              className="tracking-[0.12em] text-[var(--soft)] transition hover:text-[var(--ink)]"
-            >
-              Sign in
-            </Link>
-            <span className="text-[var(--muted)]" aria-hidden>
-              ·
-            </span>
-            <Link
-              href="/sign-up"
-              className="tracking-[0.12em] text-[var(--accent-strong)] transition hover:underline"
-            >
-              Create account
-            </Link>
-          </div>
         </div>
       </section>
     </div>
