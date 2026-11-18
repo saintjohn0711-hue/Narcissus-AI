@@ -590,6 +590,11 @@ export type PartnerRecord = {
   dynTags: string[];
   kinks: KinkEntry[];
   doneActs: string[];
+  /**
+   * Acts you’d like with this Muse that haven’t happened yet.
+   * Mutually exclusive with doneActs for the same label.
+   */
+  wantActs: string[];
   /** data-URL photos (local persistence; keep few + small) */
   photos: string[];
   /** Index into photos for the primary/top image */
@@ -935,6 +940,22 @@ export function normalizeDoneActs(raw: unknown): string[] {
   return out;
 }
 
+/** Wishlist acts use the same catalog + alias migration as doneActs. */
+export function normalizeWantActs(raw: unknown): string[] {
+  return normalizeDoneActs(raw);
+}
+
+/**
+ * Drop any wantActs that are already logged as done (wishlist is “not yet”).
+ */
+export function reconcileWantActs(
+  doneActs: string[] | undefined,
+  wantActs: string[] | undefined,
+): string[] {
+  const done = new Set(normalizeDoneActs(doneActs));
+  return normalizeWantActs(wantActs).filter((a) => !done.has(a));
+}
+
 export const DYN_TAGS = [
   "Long-term",
   "Casual",
@@ -1230,6 +1251,60 @@ export function normalizeKinks(
     .filter((x) => x.tag);
 }
 
+/** Muse edit buckets for kink status (one tag → one bucket). */
+export type MuseKinkBucket = "into" | "try" | "hardNo";
+
+export function kinkBucketOf(status: KinkStatus | string): MuseKinkBucket {
+  if (status === "Curious") return "try";
+  if (status === "Hard limit" || status === "Soft limit") return "hardNo";
+  return "into";
+}
+
+export function kinkStatusForBucket(
+  bucket: MuseKinkBucket,
+  previous?: KinkEntry,
+): KinkStatus {
+  if (bucket === "try") return "Curious";
+  if (bucket === "hardNo") return "Hard limit";
+  if (previous?.status === "Favorite") return "Favorite";
+  return "Like";
+}
+
+export function kinksInBucket(
+  list: Array<string | KinkEntry> | undefined,
+  bucket: MuseKinkBucket,
+): string[] {
+  return normalizeKinks(list)
+    .filter((k) => kinkBucketOf(k.status) === bucket)
+    .map((k) => k.tag);
+}
+
+/**
+ * Toggle a kink tag into a Muse bucket. Same tag can’t sit in two buckets —
+ * selecting again in the active bucket removes it; selecting in another moves it.
+ */
+export function toggleKinkBucket(
+  list: Array<string | KinkEntry> | undefined,
+  tag: string,
+  bucket: MuseKinkBucket,
+): KinkEntry[] {
+  const clean = String(tag || "").trim();
+  if (!clean) return normalizeKinks(list);
+  const current = normalizeKinks(list);
+  const existing = current.find((k) => k.tag === clean);
+  if (existing && kinkBucketOf(existing.status) === bucket) {
+    return current.filter((k) => k.tag !== clean);
+  }
+  const next: KinkEntry = {
+    tag: clean,
+    role: existing?.role || "Both",
+    status: kinkStatusForBucket(bucket, existing),
+    intensity:
+      typeof existing?.intensity === "number" ? existing.intensity : 6,
+  };
+  return [...current.filter((k) => k.tag !== clean), next];
+}
+
 /** Postgres `integer` / `serial` max — client temp ids must fit. */
 export const PG_INT4_MAX = 2_147_483_647;
 
@@ -1275,6 +1350,7 @@ export function emptyPartner(
     dynTags: [],
     kinks: [],
     doneActs: [],
+    wantActs: [],
     photos: [],
     mainPhotoIndex: 0,
     favorite: false,
@@ -2188,6 +2264,7 @@ export function arkDemoRoster(): PartnerRecord[] {
     dynTags: s.dynTags,
     kinks: normalizeKinks(s.kinks),
     doneActs: normalizeDoneActs(s.doneActs),
+    wantActs: [],
     photos: [],
     mainPhotoIndex: 0,
     favorite: false,
@@ -2248,6 +2325,7 @@ export function loadPartners(): PartnerRecord[] {
           partnerA: String((p as PartnerRecord).partnerA || ""),
           partnerB: String((p as PartnerRecord).partnerB || ""),
           doneActs: normalizeDoneActs(p.doneActs),
+          wantActs: reconcileWantActs(p.doneActs, (p as PartnerRecord).wantActs),
           dynTags: Array.isArray(p.dynTags) ? p.dynTags : [],
           pairedWith: normalizePairedWith(
             (p as PartnerRecord).pairedWith,
