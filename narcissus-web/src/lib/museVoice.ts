@@ -1,11 +1,11 @@
 /**
  * Muse chat voice narration.
  *
- * Primary: OpenAI TTS via `POST /api/art-of-x/tts` (needs `OPENAI_API_KEY`) —
- * natural voices with gender / accent / delivery mapped server-side.
- * Fallback: browser Web Speech API (offline / missing key / network errors).
+ * Primary: `POST /api/art-of-x/tts` → OpenAI when `OPENAI_API_KEY` is set,
+ * otherwise keyless Microsoft Edge neural (server). Gender / accent / delivery
+ * map server-side. Last resort: browser Web Speech (offline / TTS errors).
  *
- * Studio Edge-TTS (`lib/tts.ts`) stays Comfy/video-only — not used on Vercel chat.
+ * Studio Python Edge-TTS (`lib/tts.ts`) stays Comfy/video-only.
  * ElevenLabs is not wired (no project key).
  */
 
@@ -639,7 +639,7 @@ export function narrationSupported(): boolean {
   return audioPlaybackSupported() || speechSupported();
 }
 
-/** Cached probe of `GET /api/art-of-x/tts` (OpenAI key present). */
+/** Cached probe of `GET /api/art-of-x/tts` (server can return audio). */
 export async function naturalTtsAvailable(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (naturalTtsCache !== null) return naturalTtsCache;
@@ -649,8 +649,14 @@ export async function naturalTtsAvailable(): Promise<boolean> {
       naturalTtsCache = false;
       return false;
     }
-    const data = (await res.json()) as { available?: boolean };
-    naturalTtsCache = Boolean(data.available);
+    const data = (await res.json()) as {
+      available?: boolean;
+      provider?: string | null;
+    };
+    // Server TTS (OpenAI or Edge neural) counts as natural; Web Speech is local.
+    naturalTtsCache = Boolean(
+      data.available && data.provider && data.provider !== "web-speech",
+    );
     return naturalTtsCache;
   } catch {
     naturalTtsCache = false;
@@ -937,6 +943,7 @@ async function speakWithOpenAiAudio(
 
   if (speakGeneration !== generation) return true; // superseded
 
+  // Legacy missing-key probe + hard upstream failures → soft Web Speech.
   if (res.status === 503) {
     naturalTtsCache = false;
     return false;

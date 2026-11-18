@@ -1850,11 +1850,12 @@ function PartnersPageInner() {
               Chat voice
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Sexy female or male narration for Companion chat. Natural OpenAI TTS
-              when <code className="text-[var(--soft)]">OPENAI_API_KEY</code> is
-              set on Vercel; otherwise this browser’s voice (soft recovery — never
-              blocks chat). Pick gender, accent (locale), and delivery — each
-              selection plays a short preview.
+              Sexy female or male narration for Companion chat. Server TTS uses
+              OpenAI when{" "}
+              <code className="text-[var(--soft)]">OPENAI_API_KEY</code> is set
+              on Vercel; otherwise Microsoft Edge neural (no key). Browser Web
+              Speech is last-resort only. Pick gender, accent, and delivery —
+              each selection plays a short preview.
             </p>
             <div className="flex flex-wrap gap-2">
               {VOICE_GENDERS.map((g) => (

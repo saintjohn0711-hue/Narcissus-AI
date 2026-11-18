@@ -1919,7 +1919,7 @@ function ChatPageInner() {
                           ? "Speech unavailable here — chat still works."
                           : naturalTts || voicePreview.natural
                             ? "Pick accent & delivery — each plays a short test."
-                            : "Browser voice for now. Natural TTS needs OPENAI_API_KEY on Vercel."}
+                            : "Browser voice fallback — server TTS unreachable."}
                       </p>
                     </div>
                     <button

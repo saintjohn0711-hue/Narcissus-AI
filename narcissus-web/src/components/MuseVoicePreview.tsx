@@ -18,7 +18,7 @@ export type MuseVoicePreviewApi = {
   sample: string;
   setSample: (value: string) => void;
   supported: boolean;
-  /** True when OpenAI TTS is configured server-side. */
+  /** True when server TTS can return audio (OpenAI or Edge neural). */
   natural: boolean;
   previewing: boolean;
   /** Soft status (missing key / browser recovery) — never blocks chat. */
@@ -102,7 +102,7 @@ export function MuseVoicePreviewBar({
     <div
       className={`muse-voice-preview ${compact ? "muse-voice-preview--compact" : ""} ${className}`}
       data-testid="muse-voice-preview"
-      data-engine={api.natural ? "openai" : "web-speech"}
+      data-engine={api.natural ? "server-tts" : "web-speech"}
     >
       <label className="muse-voice-preview-label" htmlFor="muse-voice-preview-sample">
         Sample line
@@ -143,8 +143,8 @@ export function MuseVoicePreviewBar({
       </div>
       <p className="muse-voice-preview-hint">
         {api.natural
-          ? "Selecting gender, accent, or delivery plays a short natural voice test."
-          : "Using this browser’s voice for now — set OPENAI_API_KEY on Vercel (Production + Preview) and redeploy for natural OpenAI TTS. Chat stays usable either way."}
+          ? "Selecting gender, accent, or delivery plays a short natural voice test (server TTS). Optional: set OPENAI_API_KEY on Vercel for OpenAI marin/cedar voices."
+          : "Speech isn’t available in this browser — chat still works without voice."}
       </p>
       {api.hint ? (
         <p
