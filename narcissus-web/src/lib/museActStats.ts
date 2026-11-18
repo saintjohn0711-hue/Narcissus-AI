@@ -123,6 +123,7 @@ const TYPE_MULT: Record<PersonType, number> = {
   Real: 3,
   Dream: 2,
   Wanted: 1,
+  Power: 3,
 };
 
 const DIRECTION_RE = /^(.*) (given|received)$/i;
@@ -431,7 +432,7 @@ export function buildMuseActScoreboard(
     return a.stem.localeCompare(b.stem);
   });
 
-  const typeOrder: PersonType[] = ["Real", "Dream", "Wanted"];
+  const typeOrder: PersonType[] = ["Real", "Dream", "Wanted", "Power"];
   const byType = typeOrder.map((type) => {
     const set = filtered.filter((p) => p.type === type);
     let logs = 0;

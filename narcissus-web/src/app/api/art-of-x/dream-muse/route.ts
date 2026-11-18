@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     "",
     dreamMuseCatalogPromptBlock(),
     "",
-    'JSON shape: { "name"?: string, "type"?: "Real"|"Dream"|"Wanted", "gender"?: string, "isCouple"?: boolean, "partnerA"?: string, "partnerB"?: string, "looks"?: string, "notes"?: string, "history"?: string, "dynamics"?: string, "locations"?: string, "dynTags"?: string[], "doneActs"?: string[], "kinks"?: Array<{tag,role,status,intensity}> }',
+    'JSON shape: { "name"?: string, "type"?: "Real"|"Dream"|"Wanted"|"Power", "gender"?: string, "isCouple"?: boolean, "partnerA"?: string, "partnerB"?: string, "looks"?: string, "notes"?: string, "history"?: string, "dynamics"?: string, "locations"?: string, "dynTags"?: string[], "doneActs"?: string[], "kinks"?: Array<{tag,role,status,intensity}> }',
   ].join("\n");
 
   try {

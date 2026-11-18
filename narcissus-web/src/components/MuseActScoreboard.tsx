@@ -31,6 +31,7 @@ const TYPE_FILTERS: Array<PersonType | "All"> = [
   "Real",
   "Dream",
   "Wanted",
+  "Power",
 ];
 
 function pct(part: number, whole: number): number {

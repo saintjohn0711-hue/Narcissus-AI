@@ -82,6 +82,7 @@ const TYPE_HINTS: Array<{ re: RegExp; type: PersonType }> = [
   { re: /\b(dream|fantasy|imaginary|ideal)\b/i, type: "Dream" },
   { re: /\b(wanted|wishlist|crush|desire|seeking)\b/i, type: "Wanted" },
   { re: /\b(real|ex|current|actual|irl)\b/i, type: "Real" },
+  { re: /\b(power\s*muse|femdom|domme|power)\b/i, type: "Power" },
 ];
 
 const ROLE_HINTS: Array<{ re: RegExp; role: KinkRole }> = [
@@ -400,7 +401,12 @@ export function sanitizeDreamMuseFill(raw: unknown): DreamMuseFill {
   const fill: DreamMuseFill = {};
 
   if (typeof o.name === "string" && o.name.trim()) fill.name = o.name.trim().slice(0, 80);
-  if (o.type === "Real" || o.type === "Dream" || o.type === "Wanted") {
+  if (
+    o.type === "Real" ||
+    o.type === "Dream" ||
+    o.type === "Wanted" ||
+    o.type === "Power"
+  ) {
     fill.type = o.type;
   }
   if (
