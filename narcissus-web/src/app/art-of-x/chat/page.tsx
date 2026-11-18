@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MuseChatNarrate } from "@/components/MuseChatNarrate";
 import { MusePresence } from "@/components/MusePresence";
 import {
@@ -183,6 +184,7 @@ function ChatPageInner() {
   const [memoryDraft, setMemoryDraft] = useState("");
   const [memoryKind, setMemoryKind] = useState<MuseMemoryKind>("relationship");
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
+  const [pendingClearMemories, setPendingClearMemories] = useState(false);
   /** Inline edit for the user's own chat bubbles (not the composer). */
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -818,6 +820,19 @@ function ChatPageInner() {
       memories: normalizeMemories(p.memories).filter((m) => m.id !== memoryId),
       updatedAt: new Date().toISOString(),
     }));
+  }
+
+  async function clearAllMemories() {
+    if (!partner) return;
+    setPendingClearMemories(false);
+    await persistPartnerPatch((p) => ({
+      ...p,
+      memories: [],
+      updatedAt: new Date().toISOString(),
+    }));
+    setEditingMemoryId(null);
+    setMemoryDraft("");
+    setMemoryKind("relationship");
   }
 
   async function saveManualMemory() {
@@ -2228,6 +2243,16 @@ function ChatPageInner() {
                         >
                           Full page
                         </Link>
+                        {visibleMemories.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setPendingClearMemories(true)}
+                            className="text-[10px] uppercase tracking-[0.14em] text-[#f0c4b8] underline-offset-2 hover:underline"
+                            data-testid="muse-chat-delete-memories"
+                          >
+                            Delete memories
+                          </button>
+                        )}
                         <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                           Survives reset · loads into chat
                         </p>
@@ -2355,6 +2380,26 @@ function ChatPageInner() {
           </section>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingClearMemories}
+        title={
+          partner
+            ? `Delete ${displayName(partner)}'s memories?`
+            : "Delete memories?"
+        }
+        description={
+          partner
+            ? `Are you sure you want to delete every saved memory for ${displayName(partner)}? Chat history stays; only this Muse’s durable memories are cleared. You can’t undo this.`
+            : "Are you sure you want to delete every saved memory for this Muse? You can’t undo this."
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Delete memories"
+        danger
+        onCancel={() => setPendingClearMemories(false)}
+        onConfirm={() => void clearAllMemories()}
+        testId="muse-chat-memories-delete-confirm"
+      />
     </div>
   );
 }
