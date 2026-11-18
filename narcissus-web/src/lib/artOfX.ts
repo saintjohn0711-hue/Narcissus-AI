@@ -146,6 +146,20 @@ export function museKindLabel(k: MuseKind | string): string {
   }
 }
 
+/** Short helper under Muse shape chips (create/edit). */
+export function museKindBlurb(k: MuseKind | string): string {
+  switch (k) {
+    case "solo":
+      return "One person — chat and ledger as a single Muse.";
+    case "couple":
+      return "Two partners as one Muse. Save links Solos so you can play together or separate.";
+    case "group":
+      return "Three or more partners as one Muse — multi-partner scenes without juggling casts.";
+    default:
+      return "";
+  }
+}
+
 /**
  * Couple = 2 partners (+ optional guests up to 4 total).
  * Group = 3–4 partners (+ guests up to 5 total) so Roy-type extras fit.

@@ -58,6 +58,7 @@ export function UiButton(props: AsButton | AsLink) {
       aria-expanded={buttonProps["aria-expanded"]}
       aria-controls={buttonProps["aria-controls"]}
       title={buttonProps.title}
+      data-testid={buttonProps["data-testid"]}
     >
       {children}
     </button>
