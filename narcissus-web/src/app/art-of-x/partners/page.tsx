@@ -109,7 +109,7 @@ import {
   type MuseVoicePresetId,
 } from "@/lib/museVoice";
 
-const TYPES: PersonType[] = ["Real", "Dream", "Wanted"];
+const TYPES: PersonType[] = ["Real", "Dream", "Wanted", "Power"];
 const VOICE_GENDERS: MuseVoiceGender[] = ["female", "male"];
 
 export default function PartnersPage() {
@@ -968,7 +968,7 @@ function PartnersPageInner() {
     if (
       partners.length &&
       !confirm(
-        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, Jaxx, and Heat (couple)?`,
+        `Replace current ${PERSON_LABEL.pluralLower} with Woman, Rocky, Jaxx, Heat (couple), and Power Muses (Mistress T, Bailey Jay, Britney Markham, Lexi Mae)?`,
       )
     ) {
       return;

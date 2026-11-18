@@ -19,7 +19,7 @@ import {
   type SexRibbonAward,
 } from "@/lib/sexRibbons";
 
-export type PersonType = "Real" | "Dream" | "Wanted";
+export type PersonType = "Real" | "Dream" | "Wanted" | "Power";
 export type { MuseMemory };
 
 /**
@@ -991,6 +991,7 @@ export const DYN_TAGS = [
   "Gentle",
   "Owns me",
   "Friends with benefits",
+  "Power Muse",
 ] as const;
 
 export const KINK_GROUPS: Array<{ cat: string; tags: string[] }> = [

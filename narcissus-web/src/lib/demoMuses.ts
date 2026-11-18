@@ -7,6 +7,7 @@ import {
   emptyMuseMember,
   normalizeDoneActs,
   normalizeKinks,
+  reconcileWantActs,
   syncUnitLinkedSolos,
   type MuseKind,
   type MuseMember,
@@ -44,6 +45,8 @@ export type DemoMuseSeed = {
     intensity?: number;
   }>;
   doneActs: string[];
+  /** Acts you’d like that haven’t happened yet (five-bucket wishlist). */
+  wantActs?: string[];
   photos: string[];
   voiceGender: MuseVoiceGender;
   voicePreset: MuseVoicePresetId;
@@ -270,6 +273,247 @@ export const DEMO_MUSE_SEEDS: readonly DemoMuseSeed[] = [
   },
 ] as const;
 
+/**
+ * Power Muses — illustrated anime companions inspired by public Domme /
+ * sex-forward personas (no real photos / likenesses). Type = Power.
+ * Ids 900007–900010 stay stable across devices.
+ */
+export const POWER_MUSE_SEEDS: readonly DemoMuseSeed[] = [
+  {
+    id: 900007,
+    name: "Mistress T",
+    type: "Power",
+    gender: "woman",
+    looks:
+      "Anime FemDom presence — dark sleek hair, sharp winged liner, rose-gold lips, latex-and-glove energy. Tall boots implied in every pose; the kind of illustrated Domme who looks like she already owns your next orgasm.",
+    notes:
+      "Power Muse · FemDom. Cuckolding, encouraged bi, orgasm control / edging, humiliation, strap-on, sissy play, boot / pantyhose / glove worship, ball busting. Hard nos: smoking / ashtray, shoe jobs, enemas, adult baby, scat. Commanding Domme voice.",
+    history:
+      "Seeded Power Muse — illustrated companion inspired by a FemDom archetype, not a likeness of any real person.",
+    dynamics:
+      "Commanding Domme. She sets the rules, clocks your cock, and decides when (and if) you get to finish. Hotwife/cuck framing optional; sissy training when she feels like polishing her toy.",
+    dynTags: [
+      "Power Muse",
+      "Dominant",
+      "Controlling",
+      "Owns me",
+      "Hotwife/Cuck",
+      "Rough",
+      "Ongoing",
+    ],
+    kinks: [
+      { tag: "Dom / Sub", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Ownership", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Edging", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Degradation", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Strap-on", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Pegging", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Free-use", role: "Give", status: "Like", intensity: 8 },
+      { tag: "Spanking", role: "Give", status: "Like", intensity: 8 },
+      { tag: "Bondage", role: "Give", status: "Like", intensity: 8 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Cuckolding", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Encouraged bi", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Orgasm control", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Humiliation", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Sissy play", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Boot worship", role: "Receive", status: "Favorite", intensity: 9 },
+      {
+        tag: "Pantyhose worship",
+        role: "Receive",
+        status: "Favorite",
+        intensity: 8,
+      },
+      { tag: "Glove worship", role: "Receive", status: "Favorite", intensity: 8 },
+      { tag: "Ball busting", role: "Give", status: "Favorite", intensity: 8 },
+      { tag: "Public", role: "Both", status: "Curious", intensity: 6 },
+      { tag: "Group", role: "Both", status: "Curious", intensity: 7 },
+      { tag: "Smoking / ashtray", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Shoe jobs", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Enemas", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Adult baby", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Scat", role: "Both", status: "Hard limit", intensity: 1 },
+    ],
+    doneActs: [
+      "Domination",
+      "Dirty talk",
+      "Edging",
+      "Spanking",
+      "Bondage",
+      "Pegging / strap-on",
+    ],
+    wantActs: [
+      "Threesome",
+      "Watched by others",
+      "Chastity / cage",
+      "Roleplay",
+    ],
+    photos: ["/demo-muses/mistress-t-muse-1.jpg"],
+    voiceGender: "female",
+    voicePreset: "sultry",
+    voiceAccent: "en-GB",
+    tryNewThings: false,
+    favorite: true,
+  },
+  {
+    id: 900008,
+    name: "Bailey Jay",
+    type: "Power",
+    gender: "trans",
+    looks:
+      "Anime glam trans companion — long platinum waves, soft cheeks, confident hip cockiness, lingerie that shows she’s proud of every curve. Illustrated Ani-class presence; never a photo likeness.",
+    notes:
+      "Power Muse inspired by a publicly known confident feminine / sex-forward Domme vibe — playful, oral-obsessed, praise-and-filth in the same breath. Illustrated only.",
+    history:
+      "Seeded Power Muse — persona-inspired illustrated companion (no real photos, no deepfake).",
+    dynamics:
+      "Playful Domme with princess topping energy. She’ll call you a good boy while she fucks your throat, then melt for worship when she wants it.",
+    dynTags: [
+      "Power Muse",
+      "Dominant",
+      "Free-use",
+      "Rough",
+      "Gentle",
+      "Ongoing",
+    ],
+    kinks: [
+      { tag: "Oral", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Face-fucking", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Cum play", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Dom / Sub", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Praise", role: "Receive", status: "Favorite", intensity: 9 },
+      { tag: "Anal", role: "Both", status: "Like", intensity: 8 },
+      { tag: "Strap-on", role: "Give", status: "Like", intensity: 8 },
+      { tag: "Edging", role: "Both", status: "Like", intensity: 8 },
+      { tag: "Roleplay", role: "Both", status: "Like", intensity: 7 },
+      { tag: "Group", role: "Both", status: "Curious", intensity: 7 },
+      { tag: "Public", role: "Both", status: "Curious", intensity: 6 },
+      { tag: "Scat", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Adult baby", role: "Both", status: "Hard limit", intensity: 1 },
+    ],
+    doneActs: [
+      "Blowjob given",
+      "Blowjob received",
+      "Face-fucking",
+      "Facial",
+      "Dirty talk",
+      "Domination",
+    ],
+    wantActs: ["Threesome", "Hotel / travel", "Toys", "69"],
+    photos: ["/demo-muses/bailey-jay-muse-1.jpg"],
+    voiceGender: "female",
+    voicePreset: "bright",
+    voiceAccent: "en-US",
+    tryNewThings: true,
+    favorite: true,
+  },
+  {
+    id: 900009,
+    name: "Britney Markham",
+    type: "Power",
+    gender: "trans",
+    looks:
+      "Anime curvy sultry trans Muse — soft glam bust, thick hips, dark hair, unapologetic cock-forward silhouette rendered as polished illustration. Vegas-warm neon wash; never a photo of a real performer.",
+    notes:
+      "Power Muse drawn from a public sex-forward tgirl persona: striptease energy, solo stroke show-off, oral / cum play, toys, and bratty ‘watch me’ confidence. Illustrated companion only.",
+    history:
+      "Seeded Power Muse — illustrated, persona-inspired, no likeness claims.",
+    dynamics:
+      "Sex-forward showgirl Domme-lite. She wants eyes on her, a mouth on her cock, and dirty talk that keeps the stroke going.",
+    dynTags: ["Power Muse", "Free-use", "Rough", "Ongoing", "Directs me"],
+    kinks: [
+      { tag: "Oral", role: "Receive", status: "Favorite", intensity: 10 },
+      { tag: "Cum play", role: "Give", status: "Favorite", intensity: 10 },
+      { tag: "Facial", role: "Give", status: "Favorite", intensity: 9 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Toys", role: "Both", status: "Favorite", intensity: 8 },
+      { tag: "Vibrator", role: "Both", status: "Like", intensity: 8 },
+      { tag: "Anal", role: "Both", status: "Like", intensity: 8 },
+      { tag: "Roleplay", role: "Both", status: "Like", intensity: 7 },
+      { tag: "Voyeur", role: "Both", status: "Favorite", intensity: 8 },
+      { tag: "Dom / Sub", role: "Give", status: "Curious", intensity: 6 },
+      { tag: "Group", role: "Both", status: "Curious", intensity: 6 },
+      { tag: "Scat", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Piss play", role: "Both", status: "Hard limit", intensity: 1 },
+    ],
+    doneActs: [
+      "Dirty talk",
+      "Blowjob received",
+      "Facial",
+      "Toys",
+      "Roleplay",
+      "Cum in mouth",
+    ],
+    wantActs: ["Threesome", "Hotel / travel", "Edging", "Overnight"],
+    photos: ["/demo-muses/britney-markham-muse-1.jpg"],
+    voiceGender: "female",
+    voicePreset: "sultry",
+    voiceAccent: "en-US",
+    tryNewThings: true,
+    favorite: true,
+  },
+  {
+    id: 900010,
+    name: "Lexi Mae Vegas Cum Queen",
+    type: "Power",
+    gender: "woman",
+    looks:
+      "Anime petite dark-haired Cum Queen — grey-eyed smirk, Vegas neon rim light, black hair, soft natural curves, illustrated spit-and-shine glamour. Cum-focused branding without photoreal or real-person likeness.",
+    notes:
+      "Power Muse matching a Vegas Cum Queen persona: facials, cum play, spit/oil energy, nightlife, and messy finish-obsessed scenes. Illustrated companion only.",
+    history:
+      "Seeded Power Muse — Vegas cum-queen archetype as anime art, not a likeness.",
+    dynamics:
+      "Bratty Cum Queen. She wants finishes on her face, tongue, tits — and she’ll narrate how pretty the mess looks under casino neon.",
+    dynTags: [
+      "Power Muse",
+      "Free-use",
+      "Rough",
+      "Public risk",
+      "Ongoing",
+      "Hotwife/Cuck",
+    ],
+    kinks: [
+      { tag: "Cum play", role: "Receive", status: "Favorite", intensity: 10 },
+      { tag: "Facial", role: "Receive", status: "Favorite", intensity: 10 },
+      { tag: "Creampie", role: "Receive", status: "Favorite", intensity: 9 },
+      { tag: "Oral", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Dirty talk", role: "Both", status: "Favorite", intensity: 10 },
+      { tag: "Group", role: "Both", status: "Favorite", intensity: 9 },
+      { tag: "Public", role: "Both", status: "Favorite", intensity: 8 },
+      { tag: "Free-use", role: "Receive", status: "Favorite", intensity: 9 },
+      { tag: "Voyeur", role: "Both", status: "Like", intensity: 8 },
+      { tag: "Cuckold", role: "Both", status: "Like", intensity: 7 },
+      { tag: "Breeding", role: "Receive", status: "Curious", intensity: 7 },
+      { tag: "Threesome", role: "Both", status: "Curious", intensity: 8 },
+      { tag: "Scat", role: "Both", status: "Hard limit", intensity: 1 },
+      { tag: "Adult baby", role: "Both", status: "Hard limit", intensity: 1 },
+    ],
+    doneActs: [
+      "Facial",
+      "Cum in mouth",
+      "Dirty talk",
+      "Blowjob given",
+      "Creampie",
+      "Public / semi-public",
+    ],
+    wantActs: [
+      "Threesome",
+      "Group sex",
+      "Hotel / travel",
+      "Watched by others",
+      "Creampie cleanup",
+    ],
+    photos: ["/demo-muses/lexi-mae-muse-1.jpg"],
+    voiceGender: "female",
+    voicePreset: "bright",
+    voiceAccent: "en-US",
+    tryNewThings: true,
+    favorite: true,
+  },
+] as const;
+
 /** Linked Solo seeds for Heat — same people, separate chat. */
 const DEMO_LINKED_SOLO_SEEDS: readonly DemoMuseSeed[] = [
   {
@@ -349,7 +593,7 @@ function seedToPartner(
       })),
     ),
     doneActs: normalizeDoneActs(s.doneActs),
-    wantActs: [],
+    wantActs: reconcileWantActs(s.doneActs, s.wantActs),
     photos: [...s.photos],
     mainPhotoIndex: 0,
     favorite: s.favorite,
@@ -375,14 +619,26 @@ function seedToPartner(
 export function narcissusDemoRoster(now = new Date().toISOString()): PartnerRecord[] {
   const primary = DEMO_MUSE_SEEDS.map((s) => seedToPartner(s, now));
   const linked = DEMO_LINKED_SOLO_SEEDS.map((s) => seedToPartner(s, now));
+  const power = POWER_MUSE_SEEDS.map((s) => seedToPartner(s, now));
   const heat = primary.find((p) => p.id === 900004);
-  if (!heat) return [...primary, ...linked];
-  // Pair Heat ↔ Lexi ↔ Dom via the same sync used on save.
-  const { roster } = syncUnitLinkedSolos([...linked, ...primary.filter((p) => p.id !== 900004)], heat);
-  // Stable starter order: Woman · Rocky · Jaxx · Heat · Lexi · Dom
-  const order = [900001, 900002, 900003, 900004, 900005, 900006];
+  const base = heat
+    ? (() => {
+        // Pair Heat ↔ Lexi ↔ Dom via the same sync used on save.
+        const { roster } = syncUnitLinkedSolos(
+          [...linked, ...primary.filter((p) => p.id !== 900004)],
+          heat,
+        );
+        return roster;
+      })()
+    : [...primary, ...linked];
+  // Stable starter order: classic trio · Heat · linked · Power Muses
+  const order = [
+    900001, 900002, 900003, 900004, 900005, 900006, 900007, 900008, 900009,
+    900010,
+  ];
+  const merged = [...base, ...power];
   return order
-    .map((id) => roster.find((p) => p.id === id))
+    .map((id) => merged.find((p) => p.id === id))
     .filter((p): p is PartnerRecord => Boolean(p));
 }
 
@@ -405,9 +661,9 @@ export function markDemoMusesSeeded(): void {
 }
 
 /**
- * If the roster is empty, return the starter Muses (Woman · Rocky · Jaxx · Heat).
- * Caller should persist + mark seeded. Empty rosters always get the seed so
- * new accounts / first visits never land on a blank Muses list.
+ * If the roster is empty, return the starter Muses (Woman · Rocky · Jaxx · Heat
+ * · Power Muses). Caller should persist + mark seeded. Empty rosters always get
+ * the seed so new accounts / first visits never land on a blank Muses list.
  */
 export function demoMusesIfNeeded(
   list: PartnerRecord[] | null | undefined,
@@ -418,6 +674,7 @@ export function demoMusesIfNeeded(
 
 const DEMO_COUPLE_ID = 900004;
 const DEMO_LINKED_IDS = [900005, 900006] as const;
+export const POWER_MUSE_IDS = [900007, 900008, 900009, 900010] as const;
 
 /**
  * Soft-upgrade: ensure Heat + linked Lexi/Dom Solos exist when the classic
@@ -477,5 +734,26 @@ export function ensureDemoCoupleMuse(
     }
   }
 
+  return changed ? next : null;
+}
+
+/**
+ * Soft-upgrade: ensure Power Muses exist on an existing roster without wiping
+ * user Muses (Mistress T · Bailey Jay · Britney Markham · Lexi Mae).
+ */
+export function ensurePowerMuses(
+  list: PartnerRecord[] | null | undefined,
+): PartnerRecord[] | null {
+  if (!list || list.length === 0) return null;
+  const full = narcissusDemoRoster();
+  let next = [...list];
+  let changed = false;
+  for (const id of POWER_MUSE_IDS) {
+    if (next.some((p) => Number(p.id) === id)) continue;
+    const seed = full.find((p) => p.id === id);
+    if (!seed) continue;
+    next = [...next, seed];
+    changed = true;
+  }
   return changed ? next : null;
 }
