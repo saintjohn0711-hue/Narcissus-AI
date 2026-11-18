@@ -19,10 +19,11 @@ import {
   memberPartnersOf,
   museKindLabel,
   museMembersOf,
+  kinksInBucket,
   normalizeDoneActs,
-  normalizeKinks,
   normalizeMuseKind,
   normalizePairedWith,
+  normalizeWantActs,
   pairedMusesFor,
   PERSON_LABEL,
   samePartnerId,
@@ -254,7 +255,9 @@ export function PartnerCard({
   }, [p.id]);
 
   const thumb = mainPhoto(p);
-  const kinkTags = normalizeKinks(p.kinks).map((k) => k.tag);
+  const kinksInto = kinksInBucket(p.kinks, "into");
+  const kinksTry = kinksInBucket(p.kinks, "try");
+  const kinksHardNo = kinksInBucket(p.kinks, "hardNo");
   const paired = pairedMusesFor(p, roster);
   const pairedIds = new Set(
     normalizePairedWith(p.pairedWith, p.id).map((id) => Number(id)),
@@ -265,6 +268,9 @@ export function PartnerCard({
   );
   const memoryCount = normalizeMemories(p.memories).length;
   const doneActs = normalizeDoneActs(p.doneActs);
+  const wantActs = normalizeWantActs(p.wantActs).filter(
+    (a) => !doneActs.includes(a),
+  );
   const actCount = doneActs.length;
 
   const kind = normalizeMuseKind(p.museKind, p);
@@ -290,7 +296,9 @@ export function PartnerCard({
 
   const hasLooks = Boolean(p.looks?.trim());
   const hasHistory = Boolean(p.history?.trim());
-  const hasKinks = kinkTags.length > 0;
+  const hasKinks =
+    kinksInto.length > 0 || kinksTry.length > 0 || kinksHardNo.length > 0;
+  const hasWantActs = wantActs.length > 0;
   const hasDynTags = p.dynTags.length > 0;
   const hasDynamics = Boolean(p.dynamics?.trim());
   const hasDynBlock = hasDynTags || hasDynamics;
@@ -300,6 +308,7 @@ export function PartnerCard({
     hasLooks ||
     hasHistory ||
     hasKinks ||
+    hasWantActs ||
     hasDynBlock ||
     hasNotes ||
     hasPaired ||
@@ -525,11 +534,11 @@ export function PartnerCard({
           <div className="mb-2.5 flex flex-wrap items-end justify-between gap-2">
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-[var(--glow)]">
-                Sexual activity with {p.name}
+                Acts you&apos;ve done with {p.name}
               </p>
               <p className="mt-0.5 text-[11px] text-[var(--muted)]">
-                Tap labeled boxes to log what you&apos;ve done — saved with this
-                Muse.
+                Tap labeled boxes to log — Echo overscore. Wishlist + kink
+                buckets live in Edit.
               </p>
             </div>
             {onToggleAct ? null : (
@@ -538,7 +547,7 @@ export function PartnerCard({
                 onClick={onEdit}
                 className="text-[11px] text-[var(--accent-strong)] underline-offset-2 hover:underline"
               >
-                Edit to log acts
+                Edit acts &amp; kinks
               </button>
             )}
           </div>
@@ -549,7 +558,7 @@ export function PartnerCard({
               selected={doneActs}
               onToggle={onToggleAct}
               compact
-              label="Filter acts"
+              label="Filter acts done"
               searchPlaceholder="Filter boxes — blowjob, given, anal…"
               emptySelectedHint="Nothing logged yet — tap a box below."
               allowCustom
@@ -568,6 +577,15 @@ export function PartnerCard({
               ))}
             </ul>
           ) : null}
+
+          {hasWantActs && (
+            <div className="mt-3">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted)]">
+                Acts you&apos;d like (not yet)
+              </p>
+              <SoftList items={wantActs} />
+            </div>
+          )}
         </div>
       )}
 
@@ -755,7 +773,32 @@ export function PartnerCard({
 
             {hasKinks && (
               <DetailBlock label="Kinks">
-                <SoftList items={kinkTags} />
+                <div className="flex flex-col gap-2.5">
+                  {kinksInto.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Into
+                      </p>
+                      <SoftList items={kinksInto} />
+                    </div>
+                  )}
+                  {kinksTry.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Want to try
+                      </p>
+                      <SoftList items={kinksTry} />
+                    </div>
+                  )}
+                  {kinksHardNo.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
+                        Hard no
+                      </p>
+                      <SoftList items={kinksHardNo} />
+                    </div>
+                  )}
+                </div>
               </DetailBlock>
             )}
 

@@ -9,6 +9,7 @@ import {
   normalizeMembers,
   normalizeMuseKind,
   normalizePairedWith,
+  reconcileWantActs,
   type PartnerRecord,
 } from "@/lib/artOfX";
 import { normalizeMemories } from "@/lib/museChatMemory";
@@ -32,6 +33,9 @@ async function ensurePartnersKindColumns(
   `);
   await db.execute(sql`
     ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "members" jsonb DEFAULT '[]'::jsonb NOT NULL
+  `);
+  await db.execute(sql`
+    ALTER TABLE "partners" ADD COLUMN IF NOT EXISTS "want_acts" jsonb DEFAULT '[]'::jsonb NOT NULL
   `);
 }
 
@@ -101,6 +105,7 @@ function rowToPartner(
     dynTags: row.dynTags || [],
     kinks: (row.kinks || []) as PartnerRecord["kinks"],
     doneActs: normalizeDoneActs(row.doneActs),
+    wantActs: reconcileWantActs(row.doneActs, row.wantActs),
     photos: row.photos || [],
     mainPhotoIndex: row.mainPhotoIndex ?? 0,
     favorite: row.favorite,
@@ -302,6 +307,7 @@ export async function PUT(req: NextRequest) {
         dynTags: p.dynTags || [],
         kinks: p.kinks || [],
         doneActs: normalizeDoneActs(p.doneActs),
+        wantActs: reconcileWantActs(p.doneActs, p.wantActs),
         photos: p.photos || [],
         mainPhotoIndex: p.mainPhotoIndex ?? 0,
         favorite: Boolean(p.favorite),
@@ -339,6 +345,7 @@ export async function PUT(req: NextRequest) {
             dynTags: row.dynTags,
             kinks: row.kinks,
             doneActs: row.doneActs,
+            wantActs: row.wantActs,
             photos: row.photos,
             mainPhotoIndex: row.mainPhotoIndex,
             favorite: row.favorite,

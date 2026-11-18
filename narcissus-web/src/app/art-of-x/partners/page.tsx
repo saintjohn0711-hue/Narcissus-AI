@@ -45,19 +45,24 @@ import {
   museKindLabel,
   museMemberPresenceLabel,
   museMembersOf,
+  kinksInBucket,
   normalizeDoneActs,
   normalizeKinks,
   normalizeMemberPresence,
   normalizeMuseKind,
   normalizePairedWith,
+  normalizeWantActs,
+  reconcileWantActs,
   samePartnerId,
   saveMuseOrder,
   syncUnitLinkedSolos,
+  toggleKinkBucket,
   toggleMusePairing,
   withMainPhoto,
   withMuseKindFields,
   DEFAULT_MUSE_SORT,
   type MuseKind,
+  type MuseKinkBucket,
   type MuseMember,
   type MuseMemberPresence,
   type MuseSortMode,
@@ -325,7 +330,8 @@ function PartnersPageInner() {
           kinks: normalizeKinks(p.kinks),
           photos: [...(p.photos || [])],
           mainPhotoIndex: main,
-          doneActs: [...(p.doneActs || [])],
+          doneActs: normalizeDoneActs(p.doneActs),
+          wantActs: reconcileWantActs(p.doneActs, p.wantActs),
           dynTags: [...(p.dynTags || [])],
           pairedWith: normalizePairedWith(p.pairedWith, p.id),
         },
@@ -688,9 +694,28 @@ function PartnersPageInner() {
     if (!tag) return;
     const current = normalizeDoneActs(editing.doneActs);
     const has = current.includes(tag);
+    const doneActs = has
+      ? current.filter((a) => a !== tag)
+      : [...current, tag];
     setEditing({
       ...editing,
-      doneActs: has
+      doneActs,
+      // Logging as done clears the wishlist for that act.
+      wantActs: reconcileWantActs(doneActs, editing.wantActs),
+    });
+  }
+
+  function toggleWantAct(act: string) {
+    if (!editing) return;
+    const tag = canonicalizeAct(act);
+    if (!tag) return;
+    const done = new Set(normalizeDoneActs(editing.doneActs));
+    if (done.has(tag)) return;
+    const current = normalizeWantActs(editing.wantActs);
+    const has = current.includes(tag);
+    setEditing({
+      ...editing,
+      wantActs: has
         ? current.filter((a) => a !== tag)
         : [...current, tag],
     });
@@ -704,11 +729,13 @@ function PartnersPageInner() {
         if (!samePartnerId(p.id, partnerId)) return p;
         const current = normalizeDoneActs(p.doneActs);
         const has = current.includes(tag);
+        const doneActs = has
+          ? current.filter((a) => a !== tag)
+          : [...current, tag];
         return {
           ...p,
-          doneActs: has
-            ? current.filter((a) => a !== tag)
-            : [...current, tag],
+          doneActs,
+          wantActs: reconcileWantActs(doneActs, p.wantActs),
           updatedAt: new Date().toISOString(),
         };
       }),
@@ -717,26 +744,22 @@ function PartnersPageInner() {
       if (!ed || !samePartnerId(ed.id, partnerId)) return ed;
       const current = normalizeDoneActs(ed.doneActs);
       const has = current.includes(tag);
+      const doneActs = has
+        ? current.filter((a) => a !== tag)
+        : [...current, tag];
       return {
         ...ed,
-        doneActs: has
-          ? current.filter((a) => a !== tag)
-          : [...current, tag],
+        doneActs,
+        wantActs: reconcileWantActs(doneActs, ed.wantActs),
       };
     });
   }
 
-  function toggleKink(tag: string) {
+  function toggleKinkInBucket(tag: string, bucket: MuseKinkBucket) {
     if (!editing) return;
-    const has = editing.kinks.some((k) => k.tag === tag);
     setEditing({
       ...editing,
-      kinks: has
-        ? editing.kinks.filter((k) => k.tag !== tag)
-        : [
-            ...editing.kinks,
-            { tag, role: "Both", status: "Like", intensity: 6 },
-          ],
+      kinks: toggleKinkBucket(editing.kinks, tag, bucket),
     });
   }
 
@@ -1940,43 +1963,116 @@ function PartnersPageInner() {
             )}
           </div>
 
-          <fieldset className="space-y-3">
+          <fieldset
+            className="space-y-5"
+            data-testid="muse-edit-acts-kinks"
+          >
             <legend className="text-sm uppercase tracking-[0.16em]">
-              Acts logged
+              Acts &amp; kinks
             </legend>
             <p className="text-xs text-[var(--muted)]">
-              Tap a labeled box to log or undo — same pick style as voice and
-              Dynamics. Filter when the list is long; selected glow shows what
-              counts for this Muse.
+              Five buckets per Muse — tap labeled boxes. Acts feed Echo
+              overscore; kinks sit in one bucket each (into / try / hard no).
             </p>
-            <CatalogMultiSelect
-              groups={ACT_GROUPS}
-              selected={normalizeDoneActs(editing.doneActs)}
-              onToggle={toggleAct}
-              label="Filter acts"
-              searchPlaceholder="Filter boxes — blowjob, given, anal…"
-              allowCustom
-              customPlaceholder="Add custom act…"
-            />
-          </fieldset>
 
-          <fieldset className="space-y-3">
-            <legend className="text-sm uppercase tracking-[0.16em]">
-              Kinks
-            </legend>
-            <p className="text-xs text-[var(--muted)]">
-              Tap boxes for desires — oral, toys, power, and more. Glow means
-              on; tap again to clear. Filter or add custom when you need it.
-            </p>
-            <CatalogMultiSelect
-              groups={KINK_GROUPS}
-              selected={normalizeKinks(editing.kinks).map((k) => k.tag)}
-              onToggle={toggleKink}
-              label="Filter kinks"
-              searchPlaceholder="Filter boxes — bondage, free-use…"
-              allowCustom
-              customPlaceholder="Add custom kink…"
-            />
+            <div className="space-y-2">
+              <h3 className="text-xs uppercase tracking-[0.16em] text-[var(--glow)]">
+                Acts you&apos;ve done
+              </h3>
+              <p className="text-[11px] text-[var(--muted)]">
+                Logged with this Muse — counts for Echo overscore.
+              </p>
+              <CatalogMultiSelect
+                groups={ACT_GROUPS}
+                selected={normalizeDoneActs(editing.doneActs)}
+                onToggle={toggleAct}
+                label="Filter acts done"
+                searchPlaceholder="Filter boxes — blowjob, given, anal…"
+                emptySelectedHint="Nothing logged yet — tap a box below."
+                allowCustom
+                customPlaceholder="Add custom act…"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xs uppercase tracking-[0.16em] text-[var(--glow)]">
+                Acts you&apos;d like (not yet)
+              </h3>
+              <p className="text-[11px] text-[var(--muted)]">
+                Wishlist with them — cleared automatically when you log it as
+                done.
+              </p>
+              <CatalogMultiSelect
+                groups={ACT_GROUPS}
+                selected={reconcileWantActs(
+                  editing.doneActs,
+                  editing.wantActs,
+                )}
+                onToggle={toggleWantAct}
+                label="Filter acts wishlist"
+                searchPlaceholder="Filter boxes — hotel, pegging…"
+                emptySelectedHint="No wishlist yet — tap a box below."
+                allowCustom
+                customPlaceholder="Add custom want…"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xs uppercase tracking-[0.16em] text-[var(--glow)]">
+                Kinks you were into
+              </h3>
+              <p className="text-[11px] text-[var(--muted)]">
+                Established with them — likes and favorites.
+              </p>
+              <CatalogMultiSelect
+                groups={KINK_GROUPS}
+                selected={kinksInBucket(editing.kinks, "into")}
+                onToggle={(tag) => toggleKinkInBucket(tag, "into")}
+                label="Filter kinks into"
+                searchPlaceholder="Filter boxes — bondage, free-use…"
+                emptySelectedHint="None marked into yet."
+                allowCustom
+                customPlaceholder="Add custom kink…"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xs uppercase tracking-[0.16em] text-[var(--glow)]">
+                Kinks you want to try
+              </h3>
+              <p className="text-[11px] text-[var(--muted)]">
+                Curious with them — not established yet.
+              </p>
+              <CatalogMultiSelect
+                groups={KINK_GROUPS}
+                selected={kinksInBucket(editing.kinks, "try")}
+                onToggle={(tag) => toggleKinkInBucket(tag, "try")}
+                label="Filter kinks to try"
+                searchPlaceholder="Filter boxes — breeding, public…"
+                emptySelectedHint="Nothing on the try list yet."
+                allowCustom
+                customPlaceholder="Add custom try…"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xs uppercase tracking-[0.16em] text-[var(--glow)]">
+                Kinks that are hard no
+              </h3>
+              <p className="text-[11px] text-[var(--muted)]">
+                Hard limits with this Muse — stay off the table.
+              </p>
+              <CatalogMultiSelect
+                groups={KINK_GROUPS}
+                selected={kinksInBucket(editing.kinks, "hardNo")}
+                onToggle={(tag) => toggleKinkInBucket(tag, "hardNo")}
+                label="Filter hard-no kinks"
+                searchPlaceholder="Filter boxes — piss, cuckold…"
+                emptySelectedHint="No hard nos set."
+                allowCustom
+                customPlaceholder="Add hard no…"
+              />
+            </div>
           </fieldset>
 
           <fieldset className="space-y-3">

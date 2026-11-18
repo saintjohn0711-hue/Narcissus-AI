@@ -349,6 +349,7 @@ function seedToPartner(
       })),
     ),
     doneActs: normalizeDoneActs(s.doneActs),
+    wantActs: [],
     photos: [...s.photos],
     mainPhotoIndex: 0,
     favorite: s.favorite,

@@ -108,6 +108,8 @@ export const partners = pgTable("partners", {
     .notNull()
     .default([]),
   doneActs: jsonb("done_acts").$type<string[]>().notNull().default([]),
+  /** Acts you’d like with this Muse that haven’t happened yet. */
+  wantActs: jsonb("want_acts").$type<string[]>().notNull().default([]),
   /** Photo URLs or data-URLs (Blob URLs preferred later) */
   photos: jsonb("photos").$type<string[]>().notNull().default([]),
   mainPhotoIndex: integer("main_photo_index").notNull().default(0),
