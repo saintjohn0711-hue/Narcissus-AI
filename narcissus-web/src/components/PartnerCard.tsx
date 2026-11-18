@@ -46,6 +46,8 @@ type PartnerCardProps = {
   onUnpair?: (otherId: number) => void;
   onEdit: () => void;
   onRemove: () => void;
+  /** Request delete-all memories for this Muse (parent shows verify confirm) */
+  onClearMemories?: () => void;
   /** Persist featured/main photo when the viewer picks one */
   onSelectPhoto?: (index: number) => void;
   /** Inline act toggle — persists without opening full editor */
@@ -229,6 +231,7 @@ export function PartnerCard({
   onUnpair,
   onEdit,
   onRemove,
+  onClearMemories,
   onSelectPhoto,
   onToggleAct,
   onMoveUp,
@@ -427,6 +430,17 @@ export function PartnerCard({
               >
                 Mem{memoryCount ? ` ${memoryCount}` : ""}
               </Link>
+              {onClearMemories && memoryCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onClearMemories}
+                  className="text-[var(--danger)] underline-offset-2 hover:underline"
+                  data-testid="muse-card-delete-memories"
+                  title={`Delete memories for ${displayName(p)}`}
+                >
+                  Clear mem
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onEdit}
@@ -632,6 +646,36 @@ export function PartnerCard({
                     )}
                   </div>
                 )}
+              </DetailBlock>
+            )}
+
+            {(memoryCount > 0 || onClearMemories) && (
+              <DetailBlock label="Memories">
+                <p className="text-[13px] leading-[1.55] text-[#d8cfc2]">
+                  {memoryCount
+                    ? `${memoryCount} durable ${
+                        memoryCount === 1 ? "memory" : "memories"
+                      } for chat.`
+                    : "No durable memories yet."}
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-3 text-[11px]">
+                  <Link
+                    href={`/art-of-x/partners/${p.id}/memories`}
+                    className="text-[var(--accent-strong)] underline-offset-2 hover:underline"
+                  >
+                    Open memories
+                  </Link>
+                  {onClearMemories && memoryCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={onClearMemories}
+                      className="text-[var(--danger)] underline-offset-2 hover:underline"
+                      data-testid="muse-details-delete-memories"
+                    >
+                      Delete memories…
+                    </button>
+                  )}
+                </div>
               </DetailBlock>
             )}
 

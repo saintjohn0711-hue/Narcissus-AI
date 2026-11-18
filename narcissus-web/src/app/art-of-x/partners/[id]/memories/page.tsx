@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppNav } from "@/components/AppNav";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   displayName,
   mainPhoto,
@@ -45,6 +46,7 @@ export default function MuseMemoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
+  const [pendingClearAll, setPendingClearAll] = useState(false);
   const partnersRef = useRef<PartnerRecord[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -173,6 +175,20 @@ export default function MuseMemoriesPage() {
     setFlash("Memory forgotten");
   }
 
+  async function clearAllMemories() {
+    if (!partner) return;
+    setPendingClearAll(false);
+    await persistPatch((p) => ({
+      ...p,
+      memories: [],
+      updatedAt: new Date().toISOString(),
+    }));
+    setEditingId(null);
+    setDraft("");
+    setKind("relationship");
+    setFlash("All memories deleted");
+  }
+
   function beginEdit(m: MuseMemory) {
     setEditingId(m.id);
     setDraft(m.text);
@@ -265,6 +281,15 @@ export default function MuseMemoriesPage() {
                 >
                   All Muses
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setPendingClearAll(true)}
+                  disabled={memories.length === 0 || saving}
+                  className="rounded-sm border border-[var(--danger)]/40 px-3 py-1.5 text-xs font-medium text-[#f0c4b8] transition hover:bg-[var(--danger)]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  data-testid="muse-memories-delete-all"
+                >
+                  Delete memories
+                </button>
                 <span className="self-center text-[10px] uppercase tracking-[0.14em] text-[var(--muted)]">
                   {memories.length} saved
                   {saving ? " · saving…" : ""}
@@ -447,6 +472,26 @@ export default function MuseMemoriesPage() {
           </section>
         </>
       )}
+
+      <ConfirmDialog
+        open={pendingClearAll}
+        title={
+          partner
+            ? `Delete ${name}'s memories?`
+            : "Delete all memories?"
+        }
+        description={
+          partner
+            ? `Are you sure you want to delete every saved memory for ${name}? Chat history stays; only this Muse’s durable memories are cleared. You can’t undo this.`
+            : "Are you sure you want to delete every saved memory for this Muse? You can’t undo this."
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Delete memories"
+        danger
+        onCancel={() => setPendingClearAll(false)}
+        onConfirm={() => void clearAllMemories()}
+        testId="muse-memories-delete-confirm"
+      />
     </main>
   );
 }

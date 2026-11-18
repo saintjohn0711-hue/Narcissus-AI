@@ -132,6 +132,9 @@ function PartnersPageInner() {
   const [editing, setEditing] = useState<PartnerRecord | null>(null);
   /** Muse id waiting on delete confirm — null when no dialog. */
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const [pendingClearMemoriesId, setPendingClearMemoriesId] = useState<
+    number | null
+  >(null);
   const voicePreview = useMuseVoicePreview();
   /** Photo indexes chosen as sources for “Pull looks” */
   const [looksFromIdx, setLooksFromIdx] = useState<number[]>([]);
@@ -582,6 +585,38 @@ function PartnersPageInner() {
     remove(id);
   }
 
+  function requestClearMemories(id: number) {
+    setPendingClearMemoriesId(Number(id));
+  }
+
+  function cancelClearMemories() {
+    setPendingClearMemoriesId(null);
+  }
+
+  function confirmClearMemories() {
+    if (pendingClearMemoriesId == null) return;
+    const id = pendingClearMemoriesId;
+    setPendingClearMemoriesId(null);
+    setPartners((prev) =>
+      prev.map((p) =>
+        samePartnerId(p.id, id)
+          ? {
+              ...p,
+              memories: [],
+              updatedAt: new Date().toISOString(),
+            }
+          : p,
+      ),
+    );
+    if (editing && samePartnerId(editing.id, id)) {
+      setEditing({
+        ...editing,
+        memories: [],
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
   function remove(id: number) {
     setPartners((prev) => prev.filter((p) => !samePartnerId(p.id, id)));
     setManualOrder((prev) => {
@@ -607,6 +642,15 @@ function PartnersPageInner() {
         samePartnerId(editing.id, pendingDeleteId)
       ? displayName(editing)
       : null;
+
+  const pendingClearMemoriesMuse =
+    pendingClearMemoriesId != null
+      ? partners.find((p) => samePartnerId(p.id, pendingClearMemoriesId)) ??
+        null
+      : null;
+  const pendingClearMemoriesName = pendingClearMemoriesMuse
+    ? displayName(pendingClearMemoriesMuse)
+    : null;
 
   function moveMuse(id: number, dir: -1 | 1) {
     setSortMode("manual");
@@ -2145,6 +2189,7 @@ function PartnersPageInner() {
               onUnpair={(otherId) => setPairWith(p.id, otherId)}
               onEdit={() => openEdit(p)}
               onRemove={() => requestRemove(p.id)}
+              onClearMemories={() => requestClearMemories(p.id)}
               onSelectPhoto={(photoIndex) => setFeaturedPhoto(p.id, photoIndex)}
               onToggleAct={(act) => togglePartnerAct(p.id, act)}
               onMoveUp={
@@ -2180,6 +2225,26 @@ function PartnersPageInner() {
         onCancel={cancelRemove}
         onConfirm={confirmRemove}
         testId="muse-delete-confirm"
+      />
+
+      <ConfirmDialog
+        open={pendingClearMemoriesId != null}
+        title={
+          pendingClearMemoriesName
+            ? `Delete ${pendingClearMemoriesName}'s memories?`
+            : "Delete memories?"
+        }
+        description={
+          pendingClearMemoriesName
+            ? `Are you sure you want to delete every saved memory for ${pendingClearMemoriesName}? Chat history stays; only this Muse’s durable memories are cleared. You can’t undo this.`
+            : "Are you sure you want to delete every saved memory for this Muse? You can’t undo this."
+        }
+        cancelLabel="Cancel"
+        confirmLabel="Delete memories"
+        danger
+        onCancel={cancelClearMemories}
+        onConfirm={confirmClearMemories}
+        testId="muse-clear-memories-confirm"
       />
     </PageShell>
   );
