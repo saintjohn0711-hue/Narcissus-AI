@@ -2709,11 +2709,11 @@ export function saveChats(map: Record<string, ChatMessage[]>) {
 }
 
 /**
- * Soft photo caps for local MVP. Production will gate these by account tier
- * (free / plus / private vault) — do not hard-code product limits in UI copy.
+ * Legacy soft defaults (Plus tier). Prefer musePhotoLimitsForAccount() /
+ * musePhotoLimitsForTier() so Free / High / Owner caps apply.
  */
 export const PARTNER_PHOTO_LIMITS = {
-  /** Per-partner photo file size until accounts exist */
+  /** Default per-Muse cap when tier is unknown (Plus). */
   perPartner: 12,
   /** Keep new uploads lean so multi-Muse ledgers fit cloud + localStorage. */
   maxSidePx: 720,

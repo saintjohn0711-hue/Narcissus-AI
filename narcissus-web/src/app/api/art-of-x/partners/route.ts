@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, ne, notInArray, sql } from "drizzle-orm";
 import { getDb, isDatabaseConfigured, schema } from "@/db";
-import { requireUserId } from "@/lib/session";
+import { requireUserId, requireUserSession } from "@/lib/session";
 import {
   PG_INT4_MAX,
   museMembersOf,
@@ -12,6 +12,10 @@ import {
   reconcileWantActs,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import {
+  clampPartnerPhotos,
+  musePhotoLimitsForAccount,
+} from "@/lib/musePhotoLimits";
 import { normalizeMemories } from "@/lib/museChatMemory";
 import {
   normalizeVoiceGender,
@@ -171,7 +175,7 @@ export async function PUT(req: NextRequest) {
   if (!isDatabaseConfigured()) {
     return NextResponse.json({ error: "database_not_configured" }, { status: 503 });
   }
-  const auth = await requireUserId();
+  const auth = await requireUserSession();
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
@@ -183,11 +187,24 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
+  const photoLimits = musePhotoLimitsForAccount({
+    email: auth.email,
+    signedIn: true,
+  });
+
   let list: PartnerRecord[] = Array.isArray(body.partners)
-    ? body.partners.map((p) => ({
-        ...p,
-        photos: Array.isArray(p?.photos) ? [...p.photos] : [],
-      }))
+    ? body.partners.map((p) => {
+        const clamped = clampPartnerPhotos(
+          p?.photos,
+          p?.mainPhotoIndex,
+          photoLimits.perPartner,
+        );
+        return {
+          ...p,
+          photos: clamped.photos,
+          mainPhotoIndex: clamped.mainPhotoIndex,
+        };
+      })
     : [];
   const db = getDb();
   const userId = auth.userId;
@@ -195,8 +212,8 @@ export async function PUT(req: NextRequest) {
 
   // Soft photo budget before delete-all (avoids wiping Muses on 413).
   // Prefer trimming non-main extras over hard-failing "add Muse" for heavy ledgers.
-  const PHOTO_CHAR_BUDGET = 3_200_000;
-  const PHOTO_COUNT_BUDGET = 80;
+  const PHOTO_CHAR_BUDGET = photoLimits.charBudget;
+  const PHOTO_COUNT_BUDGET = photoLimits.accountTotal;
 
   function measurePhotos(rows: PartnerRecord[]) {
     let photoChars = 0;

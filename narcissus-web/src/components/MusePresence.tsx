@@ -11,10 +11,11 @@ import {
   displayName,
   fileToPartnerPhoto,
   mainPhoto,
-  PARTNER_PHOTO_LIMITS,
   samePartnerId,
   type PartnerRecord,
 } from "@/lib/artOfX";
+import { authClient } from "@/lib/auth-client";
+import { musePhotoLimitsForAccount } from "@/lib/musePhotoLimits";
 import {
   clothingUsesToyOptions,
   comfyWardrobeEditPrompt,
@@ -83,6 +84,8 @@ type MusePresenceProps = {
     photos: string[],
     mainPhotoIndex: number,
   ) => void | Promise<void>;
+  /** Override per-Muse photo cap (defaults from account tier). */
+  photoCap?: number;
 };
 
 type MatchSource = "xai" | "local" | "comfy" | null;
@@ -117,7 +120,18 @@ export function MusePresence({
   chatOpen,
   menusOpenRequest = 0,
   onPartnerPhotosChange,
+  photoCap,
 }: MusePresenceProps) {
+  const { data: session } = authClient.useSession();
+  const tierPhotoCap = useMemo(
+    () =>
+      musePhotoLimitsForAccount({
+        email: session?.user?.email,
+        signedIn: Boolean(session?.user?.id),
+      }).perPartner,
+    [session?.user?.email, session?.user?.id],
+  );
+  const perPartnerPhotoCap = photoCap ?? tierPhotoCap;
   const sceneCast = (() => {
     const raw =
       castPartners && castPartners.length > 0
@@ -836,7 +850,7 @@ export function MusePresence({
       if (input) input.value = "";
       return;
     }
-    const cap = PARTNER_PHOTO_LIMITS.perPartner;
+    const cap = perPartnerPhotoCap;
     if (photos.length >= cap) {
       setGenError(`This Muse already has ${cap} photos.`);
       if (input) input.value = "";

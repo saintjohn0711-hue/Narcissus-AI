@@ -27,7 +27,6 @@ import {
   MUSE_MEMBER_PRESENCES,
   MUSE_MEMBER_ROLE_CHIPS,
   MUSE_SORT_OPTIONS,
-  PARTNER_PHOTO_LIMITS,
   PERSON_GENDERS,
   PERSON_LABEL,
   arkDemoRoster,
@@ -93,6 +92,8 @@ import {
   parseDreamMuseLocal,
 } from "@/lib/dreamMuse";
 import { pullLooksFromPhotos } from "@/lib/looksFromPhoto";
+import { musePhotoLimitsForAccount } from "@/lib/musePhotoLimits";
+import { authClient } from "@/lib/auth-client";
 import {
   MuseVoicePreviewBar,
   useMuseVoicePreview,
@@ -131,6 +132,16 @@ function PartnersPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const outlet = parseOutletParam(searchParams.get("outlet"));
+  const { data: session } = authClient.useSession();
+  const photoLimits = useMemo(
+    () =>
+      musePhotoLimitsForAccount({
+        email: session?.user?.email,
+        signedIn: Boolean(session?.user?.id),
+      }),
+    [session?.user?.email, session?.user?.id],
+  );
+  const perPartnerPhotoCap = photoLimits.perPartner;
   const [partners, setPartners] = useState<PartnerRecord[]>([]);
   const [filter, setFilter] = useState<"all" | PersonType>("all");
   const [sortMode, setSortMode] = useState<MuseSortMode>(DEFAULT_MUSE_SORT);
@@ -825,10 +836,12 @@ function PartnersPageInner() {
     input?: HTMLInputElement | null,
   ) {
     if (!editing || !files?.length) return;
-    const cap = PARTNER_PHOTO_LIMITS.perPartner;
+    const cap = perPartnerPhotoCap;
     const room = cap - editing.photos.length;
     if (room <= 0) {
-      setLooksNote(`Limit reached — ${cap} photos per Muse.`);
+      setLooksNote(
+        `Limit reached — ${cap} photos per Muse (${photoLimits.label} tier).`,
+      );
       if (input) input.value = "";
       return;
     }
@@ -1053,7 +1066,7 @@ function PartnersPageInner() {
     if (!editing || !files?.length) return;
     const members = [...museMembersOf(editing)];
     const member = emptyMuseMember(members[index] || { name: "" });
-    const cap = Math.min(4, PARTNER_PHOTO_LIMITS.perPartner);
+    const cap = Math.min(4, perPartnerPhotoCap);
     const room = cap - (member.photos?.length || 0);
     if (room <= 0) {
       if (input) input.value = "";
@@ -1357,16 +1370,15 @@ function PartnersPageInner() {
             )}
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#c4b7a8]">
               <span>
-                {editing.photos.length} / {PARTNER_PHOTO_LIMITS.perPartner}{" "}
-                photos
+                {editing.photos.length} / {perPartnerPhotoCap} photos
                 <span className="text-[var(--muted)]">
                   {" "}
-                  · account limits later
+                  · {photoLimits.label} tier
                 </span>
               </span>
               <label
                 className={`cursor-pointer rounded-sm border px-3 py-1.5 text-xs uppercase tracking-wide ${
-                  editing.photos.length >= PARTNER_PHOTO_LIMITS.perPartner
+                  editing.photos.length >= perPartnerPhotoCap
                     ? "pointer-events-none border-[var(--line)] opacity-40"
                     : "border-[var(--accent)] bg-[var(--accent)]/15 text-[var(--accent-strong)]"
                 }`}
@@ -1376,9 +1388,7 @@ function PartnersPageInner() {
                   type="file"
                   accept="image/*"
                   multiple
-                  disabled={
-                    editing.photos.length >= PARTNER_PHOTO_LIMITS.perPartner
-                  }
+                  disabled={editing.photos.length >= perPartnerPhotoCap}
                   onChange={(e) => onPhoto(e.target.files, e.target)}
                   className="sr-only"
                 />
