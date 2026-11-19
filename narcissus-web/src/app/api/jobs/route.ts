@@ -518,6 +518,7 @@ export async function POST(req: NextRequest) {
                 });
 
     let faceLockFallback = false;
+    let cockIpFallback = false;
     let result;
     try {
       result = await runPromptToImages(graph, {
@@ -528,9 +529,17 @@ export async function POST(req: NextRequest) {
       // Retry undress/scene on FaceID (SD1.5) so Studio stays usable.
       // NA-219: FaceID itself can throw `InsightFace: No face detected` —
       // retry scene with ReActor-only (still usable) instead of raw 502.
+      // NA-223: cock IP-Adapter PLUS missing on pod → "IPAdapter model not found"
+      // (user sees this as a Studio load failure). Retry without cock IP;
+      // held-cock prompt + bare-ckpt refine still invent a penis.
       const msg = err instanceof Error ? err.message : String(err);
       const noFace =
         /no face detected/i.test(msg) || /Reference Image/i.test(msg);
+      const missingCockIp =
+        /IPAdapter model not found/i.test(msg) &&
+        mode === "scene" &&
+        Boolean(cockUploadedName) &&
+        sceneTpl?.id === "eye_contact_handjob";
       const canFallbackInstantId =
         noFace &&
         identityEngine === "instantid" &&
@@ -541,82 +550,109 @@ export async function POST(req: NextRequest) {
         identityEngine === "faceid" &&
         mode === "scene" &&
         sceneTpl?.id !== "facial";
-      if (!canFallbackInstantId && !canFallbackFaceId) {
-        throw err;
-      }
-      faceLockFallback = true;
-      if (mode === "undress") {
-        const cockFallback = getBodyType(bodyType).needsCock;
-        result = await runPromptToImages(
-          buildUndressPrompt(uploaded.filename, {
-            promptOverride,
-            identity: Math.max(identity, 0.88),
-            bodyType,
-            cockState,
-            cockSize,
-            checkpoint: sd15Ckpt || undefined,
-            faceLock: true,
-            identityEngine: "faceid",
-            denoise: cockFallback ? 0.68 : 0.62,
-          }),
-          { timeoutMs: 240_000 },
-        );
-      } else if (canFallbackFaceId) {
-        // Drop FaceID conditioning; keep ReActor polish from the upload crop.
-        // Head-paste still runs for eye_contact_handjob (forceHeadPaste).
+      if (missingCockIp) {
+        cockIpFallback = true;
         result = await runPromptToImages(
           buildScenePrompt(uploaded.filename, {
             promptOverride: [
               sceneTpl!.stillPrompt,
               sceneAnatomy?.positive,
               promptOverride,
+              "match a realistic erect adult penis in her hand even without IP-Adapter",
             ]
               .filter(Boolean)
               .join(", "),
-            identity: Math.max(
-              identity,
-              sceneForceFaceId ? 0.95 : 0.85,
+            identity: Math.max(identity, 0.95),
+            denoise: Math.min(
+              0.58,
+              sceneDenoise(sceneTpl!.stillDenoise, identity),
             ),
-            denoise: sceneForceFaceId
-              ? Math.min(0.58, sceneDenoise(sceneTpl!.stillDenoise, identity))
-              : sceneDenoise(sceneTpl!.stillDenoise, identity),
             faceLock: true,
-            prefix: `narcissus_scene_${sceneTpl!.id}_noface`,
-            checkpoint: sd15Ckpt || realismCkpt || undefined,
-            identityEngine: "reactor",
+            prefix: `narcissus_scene_${sceneTpl!.id}_nocockip`,
+            checkpoint: realismCkpt || sd15Ckpt || undefined,
+            identityEngine: "faceid",
             cockRefImage: null,
-            qualityPass: false,
+            qualityPass: true,
           }),
           { timeoutMs: 240_000 },
         );
-      } else {
-        result = await runPromptToImages(
-          buildScenePrompt(uploaded.filename, {
-            promptOverride: [
-              sceneTpl!.stillPrompt,
-              sceneAnatomy?.positive,
+      } else if (canFallbackInstantId || canFallbackFaceId) {
+        faceLockFallback = true;
+        if (mode === "undress") {
+          const cockFallback = getBodyType(bodyType).needsCock;
+          result = await runPromptToImages(
+            buildUndressPrompt(uploaded.filename, {
               promptOverride,
-            ]
-              .filter(Boolean)
-              .join(", "),
-            identity: Math.max(
-              identity,
-              sceneForceFaceId ? 0.95 : 0.85,
-            ),
-            denoise: sceneForceFaceId
-              ? Math.min(0.58, sceneDenoise(sceneTpl!.stillDenoise, identity))
-              : sceneDenoise(sceneTpl!.stillDenoise, identity),
-            faceLock: true,
-            prefix: `narcissus_scene_${sceneTpl!.id}`,
-            checkpoint: sd15Ckpt || undefined,
-            identityEngine: "faceid",
-            cockRefImage: cockUploadedName,
-            qualityPass:
-              sceneTpl!.id === "eye_contact_handjob" ||
-              Boolean(sceneTpl?.forceFaceId),
-          }),
-          { timeoutMs: 240_000 },
-        );
+              identity: Math.max(identity, 0.88),
+              bodyType,
+              cockState,
+              cockSize,
+              checkpoint: sd15Ckpt || undefined,
+              faceLock: true,
+              identityEngine: "faceid",
+              denoise: cockFallback ? 0.68 : 0.62,
+            }),
+            { timeoutMs: 240_000 },
+          );
+        } else if (canFallbackFaceId) {
+          // Drop FaceID conditioning; keep ReActor polish from the upload crop.
+          // Head-paste still runs for eye_contact_handjob (forceHeadPaste).
+          result = await runPromptToImages(
+            buildScenePrompt(uploaded.filename, {
+              promptOverride: [
+                sceneTpl!.stillPrompt,
+                sceneAnatomy?.positive,
+                promptOverride,
+              ]
+                .filter(Boolean)
+                .join(", "),
+              identity: Math.max(
+                identity,
+                sceneForceFaceId ? 0.95 : 0.85,
+              ),
+              denoise: sceneForceFaceId
+                ? Math.min(0.58, sceneDenoise(sceneTpl!.stillDenoise, identity))
+                : sceneDenoise(sceneTpl!.stillDenoise, identity),
+              faceLock: true,
+              prefix: `narcissus_scene_${sceneTpl!.id}_noface`,
+              checkpoint: sd15Ckpt || realismCkpt || undefined,
+              identityEngine: "reactor",
+              cockRefImage: null,
+              qualityPass: false,
+            }),
+            { timeoutMs: 240_000 },
+          );
+        } else {
+          result = await runPromptToImages(
+            buildScenePrompt(uploaded.filename, {
+              promptOverride: [
+                sceneTpl!.stillPrompt,
+                sceneAnatomy?.positive,
+                promptOverride,
+              ]
+                .filter(Boolean)
+                .join(", "),
+              identity: Math.max(
+                identity,
+                sceneForceFaceId ? 0.95 : 0.85,
+              ),
+              denoise: sceneForceFaceId
+                ? Math.min(0.58, sceneDenoise(sceneTpl!.stillDenoise, identity))
+                : sceneDenoise(sceneTpl!.stillDenoise, identity),
+              faceLock: true,
+              prefix: `narcissus_scene_${sceneTpl!.id}`,
+              checkpoint: sd15Ckpt || undefined,
+              identityEngine: "faceid",
+              cockRefImage: cockUploadedName,
+              qualityPass:
+                sceneTpl!.id === "eye_contact_handjob" ||
+                Boolean(sceneTpl?.forceFaceId),
+            }),
+            { timeoutMs: 240_000 },
+          );
+        }
+      } else {
+        throw err;
       }
     }
 
@@ -831,6 +867,7 @@ export async function POST(req: NextRequest) {
         null,
       checkpoint: realismCkpt,
       faceLockFallback,
+      cockIpFallback,
       message:
         mode === "faceswap"
           ? "Face swap finished — donor face applied onto the source photo."
@@ -840,9 +877,11 @@ export async function POST(req: NextRequest) {
               : `Clothing removed with ${bodyLabel}${cockNote}. Original face & hair locked onto the body.`
             : mode === "scene"
               ? sceneTpl?.id === "eye_contact_handjob"
-                ? cockUploadedName
-                  ? "Eye contact handjob ready — face locked; your cock reference blended onto the held penis."
-                  : "Eye contact handjob ready — face locked with generated default cock in hand."
+                ? cockIpFallback
+                  ? "Eye contact handjob ready — face locked; cock IP model missing so generated default used (upload kept for next try)."
+                  : cockUploadedName
+                    ? "Eye contact handjob ready — face locked; your cock reference blended onto the held penis."
+                    : "Eye contact handjob ready — face locked with generated default cock in hand."
                 : identityLocked
                   ? `${sceneTpl?.label || "Scene"} ready — original face & hair locked.`
                   : `${sceneTpl?.label || "Scene"}${showBodyMeta ? ` · ${bodyLabel}${cockNote}` : ""} photo finished.`
