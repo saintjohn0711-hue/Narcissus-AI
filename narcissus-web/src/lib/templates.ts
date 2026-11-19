@@ -118,13 +118,13 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
     kind: "photo",
     label: "Eye contact handjob",
     blurb:
-      "She looks into the camera while stroking a cock — FaceID face lock; optional upload of yours for the penis in her hand.",
+      "She looks into the camera while stroking a cock — face stays hers; optional cock upload matches the penis in her hand (skip = generated default).",
     stillPrompt:
-      "photorealistic adult POV handjob, beautiful adult woman looking directly into the camera with intense eye contact, eyes locked on viewer, pupils and irises sharp and centered, slight seductive smile, her hand wrapping firmly around an erect penis shaft and glans in the foreground, fingers gripping cock mid-stroke, intimate bedroom lighting, detailed skin pores and knuckles, realistic foreskin or circumcised detail, adults only",
-    // NA-221: moderate reshape — high denoise was rewriting the face.
-    // Pose/hands still change; FaceID + ReActor + head-paste keep identity.
-    stillDenoise: 0.52,
-    useBodyOptions: true,
+      "photorealistic adult POV handjob, beautiful adult woman looking directly into the camera with intense eye contact, eyes locked on viewer, pupils and irises sharp and centered, slight seductive smile, her hand wrapping firmly around a clearly visible erect penis shaft and glans in the foreground, fingers gripping cock mid-stroke, thick shaft between her knuckles, intimate bedroom lighting, detailed skin pores and knuckles, realistic foreskin or circumcised detail, mandatory visible penis not censored, adults only",
+    // Room to invent held cock; FaceID + ReActor + head-paste keep her face (NA-221/222).
+    stillDenoise: 0.58,
+    // Do NOT feed undress body anatomy — female "no penis" cancels the handjob cock.
+    useBodyOptions: false,
     needsCockRef: true,
     forceFaceId: true,
   },

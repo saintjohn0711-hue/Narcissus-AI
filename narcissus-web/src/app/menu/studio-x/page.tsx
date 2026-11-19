@@ -22,7 +22,7 @@ const STUDIO_LINKS = [
     id: "eye-contact-handjob",
     href: "/studio",
     name: "Eye contact handjob",
-    line: "Photo → eye contact + handjob; optional cock upload.",
+    line: "Her photo + optional cock → eye contact handjob (skip cock = generated).",
   },
   {
     id: "photo",

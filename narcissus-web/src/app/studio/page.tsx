@@ -105,7 +105,9 @@ export default function StudioPage() {
     mode === "undress" ||
     (mode === "scene" && Boolean(activePhotoTemplate.useBodyOptions)) ||
     (mode === "video" && Boolean(activeTemplate.useBodyOptions));
-  const showCockOptions = showBodyOptions && activeBody.needsCock;
+  // Handjob always exposes hard/soft/size for the held cock (even without upload).
+  const showCockOptions =
+    needsCockRef || (showBodyOptions && activeBody.needsCock);
 
   const canSubmit = useMemo(() => {
     if (!adultsOk || !file || busy) return false;
@@ -250,6 +252,11 @@ export default function StudioPage() {
           body.set("cockSize", cockSize);
         }
       }
+      // Handjob held-cock size/state even when body panel is hidden (NA-222).
+      if (needsCockRef) {
+        body.set("cockState", cockState);
+        body.set("cockSize", cockSize);
+      }
       if (mode === "custom" && prompt.trim()) {
         body.set("prompt", prompt.trim());
       }
@@ -324,14 +331,18 @@ export default function StudioPage() {
         className="border-b border-[var(--line)] pb-8"
         kicker="Studio"
         title="Narcissus"
-        lede="Eye contact handjob, face swap, scene acts, undress, and 5s clips. Optional cock upload locks your penis into her hand — face stays hers from the photo. Muses live under Menu."
+        lede="Eye contact handjob: upload her face photo, optionally yours for the cock in her hand, confirm adults, Generate. Face stays hers; skip cock upload for a generated default. Muses live under Menu."
       />
 
       <form onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="space-y-6">
           <div className="space-y-3">
             <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-              {needsFace ? "Source photo (body / scene)" : "Source photo"}
+              {needsFace
+                ? "Source photo (body / scene)"
+                : needsCockRef
+                  ? "Her photo (face lock)"
+                  : "Source photo"}
             </span>
             <div className="relative flex min-h-72 w-full items-center justify-center overflow-hidden rounded-sm border border-dashed border-[var(--line)] bg-[#12100e]">
               {preview ? (
@@ -349,7 +360,9 @@ export default function StudioPage() {
                 <span className="px-6 text-center text-sm text-[#c4b7a8]">
                   {needsFace
                     ? "Body or scene that will receive the new face"
-                    : "Drop or choose a clear face photo"}
+                    : needsCockRef
+                      ? "Clear photo of her face — this face stays locked while she strokes"
+                      : "Drop or choose a clear face photo"}
                 </span>
               )}
             </div>
@@ -394,8 +407,12 @@ export default function StudioPage() {
           {needsCockRef && (
             <div className="space-y-3">
               <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                Yours (optional cock)
+                Cock in her hand (optional)
               </span>
+              <p className="text-xs text-[#c4b7a8]">
+                Slot 1 = her face. Slot 2 = the penis she holds. Leave empty to
+                generate a default erect cock; upload yours to match it.
+              </p>
               <div className="relative flex min-h-48 w-full items-center justify-center overflow-hidden rounded-sm border border-dashed border-[var(--line)] bg-[#12100e]">
                 {cockPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -407,9 +424,8 @@ export default function StudioPage() {
                   />
                 ) : (
                   <span className="px-6 text-center text-sm text-[#c4b7a8]">
-                    Optional — upload your cock so the one in her hand matches
-                    you. Skip for a generated default. Your own adult content
-                    only.
+                    Optional — your cock photo (adult, yours only). Skip for a
+                    generated default in her hand.
                   </span>
                 )}
               </div>
@@ -579,7 +595,7 @@ export default function StudioPage() {
             <>
               <fieldset className="space-y-3">
                 <legend className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
-                  Cock
+                  {needsCockRef ? "Held cock" : "Cock"}
                 </legend>
                 <div className="flex flex-wrap gap-3">
                   {COCK_STATES.map((c) => (
