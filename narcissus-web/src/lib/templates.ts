@@ -121,8 +121,9 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
       "She looks into the camera while stroking a cock — FaceID face lock; optional upload of yours for the penis in her hand.",
     stillPrompt:
       "photorealistic adult POV handjob, beautiful adult woman looking directly into the camera with intense eye contact, eyes locked on viewer, pupils and irises sharp and centered, slight seductive smile, her hand wrapping firmly around an erect penis shaft and glans in the foreground, fingers gripping cock mid-stroke, intimate bedroom lighting, detailed skin pores and knuckles, realistic foreskin or circumcised detail, adults only",
-    // High reshape — pose must change from a clothed portrait to handjob POV.
-    stillDenoise: 0.68,
+    // NA-221: moderate reshape — high denoise was rewriting the face.
+    // Pose/hands still change; FaceID + ReActor + head-paste keep identity.
+    stillDenoise: 0.52,
     useBodyOptions: true,
     needsCockRef: true,
     forceFaceId: true,

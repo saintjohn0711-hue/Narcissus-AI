@@ -573,18 +573,22 @@ function wireInstantId(
  * crop — letterboxed / off-center / tall portraits made FaceID throw
  * `InsightFace: No face detected.` (same class as InstantID NA-81).
  * ReActor polish still uses the upper crop (node 17).
+ * NA-221: `strong` raises FaceID / FaceID-v2 weights so scene acts keep the
+ * uploaded woman's face (pose/hands may change; identity must not drift).
  */
 function wireFaceIdPlus(
   graph: Record<string, unknown>,
   identity: number,
+  opts?: { strong?: boolean },
 ): [string, number] {
   const id = Math.min(1, Math.max(0.35, identity));
+  const strong = opts?.strong === true;
   graph["20"] = {
     class_type: "IPAdapterUnifiedLoaderFaceID",
     inputs: {
       model: ["1", 0],
       preset: "FACEID PLUS V2",
-      lora_strength: 0.7 + id * 0.15,
+      lora_strength: strong ? 0.85 + id * 0.12 : 0.7 + id * 0.15,
       provider: "CUDA",
     },
   };
@@ -595,12 +599,12 @@ function wireFaceIdPlus(
       ipadapter: ["20", 1],
       // Full frame — InsightFace locates the face. Do NOT use node 17 crop.
       image: ["3", 0],
-      weight: 0.85 + id * 0.25,
-      weight_faceidv2: 1.1 + id * 0.4,
+      weight: strong ? 1.05 + id * 0.2 : 0.85 + id * 0.25,
+      weight_faceidv2: strong ? 1.45 + id * 0.35 : 1.1 + id * 0.4,
       weight_type: "linear",
       combine_embeds: "concat",
       start_at: 0.0,
-      end_at: 0.9,
+      end_at: strong ? 1.0 : 0.9,
       embeds_scaling: "V only",
     },
   };
@@ -1040,10 +1044,16 @@ export function buildScenePrompt(
   const savePrefix = `${prefix}_${stamp}`;
   const cockRef = opts?.cockRefImage?.trim() || null;
 
+  // NA-221: quality FaceID (eye-contact handjob) must NOT demand a full face
+  // rewrite — pose/hands change; face + hair stay the upload.
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.scene,
-    "major visible change from the reference photo required",
-    "do not leave clothing pose or framing unchanged",
+    quality
+      ? "change pose and hands only; keep the exact same woman from the reference photo"
+      : "major visible change from the reference photo required",
+    quality
+      ? "body and hand pose may change; face identity is locked"
+      : "do not leave clothing pose or framing unchanged",
     "exact same face as the reference photo, identical eyes nose mouth bone structure",
     "exact same hairstyle hair color and hairline as the reference",
     "photorealistic skin, sharp detail",
@@ -1059,7 +1069,9 @@ export function buildScenePrompt(
 
   const negative = [
     NEGATIVE,
-    "identical to input, unchanged photo, passthrough, no change",
+    quality
+      ? "different woman, face swap to stranger, beauty filter face, generic AI face, face morph"
+      : "identical to input, unchanged photo, passthrough, no change",
     "blank, black image, empty frame",
     "different face, different person, different hairstyle, wrong hair color",
     "looking away, closed eyes, averted gaze, eyes looking down",
@@ -1113,6 +1125,10 @@ export function buildScenePrompt(
   let cfg = 7;
   // myimg-parity stills: more steps when FaceID quality path is on.
   let steps = quality ? 42 : 36;
+  // NA-221: sceneDenoise could push ~0.78 and rewrite the face — hard-cap
+  // when FaceID quality lock is on so pose can move without identity drift.
+  const sampleDenoise =
+    quality && useFaceId ? Math.min(denoise, 0.55) : denoise;
 
   if (faceLock && useInstantId) {
     const iid = wireInstantId(graph, identity);
@@ -1122,16 +1138,16 @@ export function buildScenePrompt(
     cfg = 3.5;
     steps = quality ? 34 : 30;
   } else if (faceLock && useFaceId) {
-    modelRef = wireFaceIdPlus(graph, identity);
-    cfg = quality ? 6.0 : 5.5;
-    steps = quality ? 44 : 36;
+    modelRef = wireFaceIdPlus(graph, identity, { strong: quality });
+    cfg = quality ? 5.5 : 5.5;
+    steps = quality ? 40 : 36;
   }
 
   // Optional cock identity: IP-Adapter PLUS on the penis reference (SD1.5).
-  // Chains after FaceID so face lock stays primary; moderate weight so the
-  // handjob pose isn't washed into a genital close-up.
+  // Chains after FaceID so face lock stays primary; keep weight modest so the
+  // cock ref cannot wash out face identity (NA-221).
   if (cockRef && useFaceId) {
-    modelRef = wireCockIpAdapter(graph, modelRef, cockRef, identity);
+    modelRef = wireCockIpAdapter(graph, modelRef, cockRef, identity * 0.85);
   }
 
   graph["7"] = {
@@ -1142,7 +1158,7 @@ export function buildScenePrompt(
       cfg,
       sampler_name: "euler",
       scheduler: "normal",
-      denoise,
+      denoise: sampleDenoise,
       model: modelRef,
       positive: posRef,
       negative: negRef,
@@ -1156,15 +1172,16 @@ export function buildScenePrompt(
 
   let decodeRef: [string, number] = ["8", 0];
 
-  // Hand + cock anatomy refine (base ckpt) — FaceID alone often soft-censors
-  // the shaft or mangled hands; second pass invents clear grip + penis.
+  // Hand + cock anatomy refine — NA-221: keep FaceID MODEL on the refine
+  // (raw ckpt was regenerating a stranger's face). Low denoise = hands/cock
+  // only; ReActor + optional head paste restore likeness afterward.
   if (quality && useFaceId) {
     const refinePos = [
       opts?.promptOverride?.trim() ||
         "photorealistic adult POV handjob, eye contact with camera",
       "her hand firmly gripping an erect penis, clear fingers wrapping the shaft, visible glans, detailed knuckles",
       "looking directly at the camera, sharp eyes",
-      "same face hair and upper body identity as the previous frame",
+      "exact same face and hair as the reference photo, do not change facial identity",
       cockRef
         ? "penis matching the cock reference photo in color shape and glans"
         : "realistic erect adult penis in her hand",
@@ -1174,7 +1191,7 @@ export function buildScenePrompt(
       "looking away, closed eyes, averted gaze",
       "extra fingers, fused fingers, deformed hand, missing fingers",
       "Barbie crotch, vagina, missing penis, no cock, censored",
-      "different face, wrong hair",
+      "different face, different woman, wrong hair, beauty filter face, generic AI face",
     ].join(", ");
     graph["60"] = {
       class_type: "CLIPTextEncode",
@@ -1192,12 +1209,13 @@ export function buildScenePrompt(
       class_type: "KSampler",
       inputs: {
         seed: (seed + 23) >>> 0,
-        steps: 28,
-        cfg: 7.5,
+        steps: 22,
+        cfg: 6.0,
         sampler_name: "euler",
         scheduler: "normal",
-        denoise: 0.42,
-        model: ["1", 0],
+        denoise: 0.26,
+        // Keep FaceID conditioning — never refine on bare ckpt (face drift).
+        model: modelRef,
         positive: ["60", 0],
         negative: ["61", 0],
         latent_image: ["62", 0],

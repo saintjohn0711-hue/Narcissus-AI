@@ -480,8 +480,17 @@ export async function POST(req: NextRequest) {
                   ]
                     .filter(Boolean)
                     .join(", "),
-                  identity: Math.max(identity, sceneForceFaceId ? 0.9 : 0.85),
-                  denoise: sceneDenoise(sceneTpl.stillDenoise, identity),
+                  // NA-221: floor identity high so FaceID/ReActor keep the upload.
+                  identity: Math.max(
+                    identity,
+                    sceneForceFaceId ? 0.95 : 0.85,
+                  ),
+                  denoise: sceneForceFaceId
+                    ? Math.min(
+                        0.55,
+                        sceneDenoise(sceneTpl.stillDenoise, identity),
+                      )
+                    : sceneDenoise(sceneTpl.stillDenoise, identity),
                   // Facial needs the generated face effect — don't ReActor it away.
                   faceLock: sceneTpl.id !== "facial",
                   prefix: `narcissus_scene_${sceneTpl.id}`,
@@ -549,6 +558,7 @@ export async function POST(req: NextRequest) {
         );
       } else if (canFallbackFaceId) {
         // Drop FaceID conditioning; keep ReActor polish from the upload crop.
+        // Head-paste still runs for eye_contact_handjob (forceHeadPaste).
         result = await runPromptToImages(
           buildScenePrompt(uploaded.filename, {
             promptOverride: [
@@ -558,8 +568,13 @@ export async function POST(req: NextRequest) {
             ]
               .filter(Boolean)
               .join(", "),
-            identity: Math.max(identity, 0.85),
-            denoise: sceneDenoise(sceneTpl!.stillDenoise, identity),
+            identity: Math.max(
+              identity,
+              sceneForceFaceId ? 0.95 : 0.85,
+            ),
+            denoise: sceneForceFaceId
+              ? Math.min(0.55, sceneDenoise(sceneTpl!.stillDenoise, identity))
+              : sceneDenoise(sceneTpl!.stillDenoise, identity),
             faceLock: true,
             prefix: `narcissus_scene_${sceneTpl!.id}_noface`,
             checkpoint: sd15Ckpt || realismCkpt || undefined,
@@ -579,8 +594,13 @@ export async function POST(req: NextRequest) {
             ]
               .filter(Boolean)
               .join(", "),
-            identity: Math.max(identity, 0.85),
-            denoise: sceneDenoise(sceneTpl!.stillDenoise, identity),
+            identity: Math.max(
+              identity,
+              sceneForceFaceId ? 0.95 : 0.85,
+            ),
+            denoise: sceneForceFaceId
+              ? Math.min(0.55, sceneDenoise(sceneTpl!.stillDenoise, identity))
+              : sceneDenoise(sceneTpl!.stillDenoise, identity),
             faceLock: true,
             prefix: `narcissus_scene_${sceneTpl!.id}`,
             checkpoint: sd15Ckpt || undefined,
@@ -678,12 +698,16 @@ export async function POST(req: NextRequest) {
     // NA-75: InstantID/FaceID + ReActor already condition identity during
     // generation. Skip oval head-paste for those paths — paste inflates cosine
     // (~0.96) but looks like a sticker; commercial path is generated likeness.
+    // NA-221 exception: eye-contact handjob — face lock is non-negotiable
+    // (myimg bar); always paste original face/hair after ReActor.
     let resultUrl = result.viewUrls[0] ?? null;
     let identityLocked = false;
+    const forceHeadPaste = mode === "scene" && sceneTpl?.id === "eye_contact_handjob";
     const skipHeadPaste =
-      (mode === "scene" && sceneTpl?.id === "facial") ||
-      ((mode === "undress" || mode === "custom" || mode === "scene") &&
-        (identityEngine === "instantid" || identityEngine === "faceid"));
+      !forceHeadPaste &&
+      ((mode === "scene" && sceneTpl?.id === "facial") ||
+        ((mode === "undress" || mode === "custom" || mode === "scene") &&
+          (identityEngine === "instantid" || identityEngine === "faceid")));
     if (
       !skipHeadPaste &&
       (mode === "undress" || mode === "custom" || mode === "scene") &&
@@ -696,11 +720,19 @@ export async function POST(req: NextRequest) {
           const id = Math.min(1, Math.max(0.35, identity));
           const locked = await lockHeadAndHair(editedBytes, originalBytes, {
             shape: "oval",
-            faceCenterY: mode === "undress" ? 0.14 : 0.15,
-            faceRx: 0.3 + id * 0.03,
-            faceRy:
-              mode === "undress" ? 0.24 + id * 0.025 : 0.25 + id * 0.03,
-            feather: 0.35,
+            // Eye-contact handjob framing is more portrait — center face higher.
+            faceCenterY: forceHeadPaste
+              ? 0.18
+              : mode === "undress"
+                ? 0.14
+                : 0.15,
+            faceRx: forceHeadPaste ? 0.34 + id * 0.04 : 0.3 + id * 0.03,
+            faceRy: forceHeadPaste
+              ? 0.28 + id * 0.03
+              : mode === "undress"
+                ? 0.24 + id * 0.025
+                : 0.25 + id * 0.03,
+            feather: forceHeadPaste ? 0.28 : 0.35,
             globalPull: 0,
           });
           const localName = await saveLocalResult(

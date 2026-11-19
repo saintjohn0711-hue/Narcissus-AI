@@ -77,7 +77,8 @@ export default function StudioPage() {
   const [bodyType, setBodyType] = useState<BodyTypeId>("female");
   const [cockState, setCockState] = useState<CockStateId>("hard");
   const [cockSize, setCockSize] = useState<CockSizeId>("average");
-  const [identity, setIdentity] = useState(0.92);
+  // NA-221: default high so FaceID/ReActor keep the uploaded woman's face.
+  const [identity, setIdentity] = useState(0.95);
   const [fit, setFit] = useState<FitMode>("contain");
   const [cropX, setCropX] = useState(0.5);
   const [cropY, setCropY] = useState(0.5);
