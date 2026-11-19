@@ -169,13 +169,15 @@ export default function StudioPage() {
     setJob(null);
     try {
       const size = outputSizeForMode(mode === "scene" ? "custom" : mode);
-      // Face swap needs a filled frame with a visible face — cover/center beats letterbox.
+      // Face swap + FaceID scenes (eye-contact handjob): filled frame so InsightFace
+      // sees a face. Letterbox/contain often pads to empty crop → "No face detected".
+      const faceFillFrame = needsFace || needsCockRef;
       const prepared = await preparePhoto(file, {
-        fit: needsFace ? "cover" : fit,
+        fit: faceFillFrame ? "cover" : fit,
         width: size.width,
         height: size.height,
-        cropX: needsFace ? 0.5 : cropX,
-        cropY: needsFace ? 0.35 : cropY,
+        cropX: faceFillFrame ? 0.5 : cropX,
+        cropY: faceFillFrame ? 0.35 : cropY,
         mime: "image/jpeg",
         quality: 0.95,
       });
@@ -255,7 +257,21 @@ export default function StudioPage() {
       }
       const res = await fetch("/api/jobs", { method: "POST", body });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Request failed");
+      if (!res.ok) {
+        const raw = String(data.error || "Request failed");
+        // NA-219: surface a clear action when InsightFace / prep fails.
+        if (/no face detected/i.test(raw)) {
+          throw new Error(
+            "No face detected in the photo — use a clear frontal face (JPEG/PNG), crop closer, and try again.",
+          );
+        }
+        if (/failed to load image/i.test(raw)) {
+          throw new Error(
+            "Couldn’t load that photo — use JPEG/PNG/WebP (HEIC often fails).",
+          );
+        }
+        throw new Error(raw);
+      }
       setJob(data as JobResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
