@@ -19,6 +19,12 @@ const STUDIO_LINKS = [
     line: "Full Studio X workspace.",
   },
   {
+    id: "eye-contact-handjob",
+    href: "/studio",
+    name: "Eye contact handjob",
+    line: "Photo → eye contact + handjob; optional cock upload.",
+  },
+  {
     id: "photo",
     href: "/studio",
     name: "Photo",

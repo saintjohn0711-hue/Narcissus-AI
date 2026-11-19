@@ -1001,6 +1001,13 @@ export function buildScenePrompt(
     /** ReActor face lock from the upload. Skip for face-effect templates (facial). */
     faceLock?: boolean;
     identityEngine?: IdentityEngine;
+    /**
+     * Optional cock reference filename already on Comfy — IP-Adapter PLUS
+     * blends penis identity into the held shaft (eye-contact handjob).
+     */
+    cockRefImage?: string | null;
+    /** Quality bump: more steps / portrait res (myimg-parity stills). */
+    qualityPass?: boolean;
   },
 ): Record<string, unknown> {
   const seed = opts?.seed ?? Math.floor(Math.random() * 2 ** 32);
@@ -1008,9 +1015,15 @@ export function buildScenePrompt(
   const engine: IdentityEngine = opts?.identityEngine ?? "instantid";
   const useInstantId = engine === "instantid";
   const useFaceId = engine === "faceid";
+  const quality = opts?.qualityPass === true;
   const denoise = opts?.denoise ?? sceneDenoise(0.42, identity);
-  const width = opts?.width ?? (useInstantId ? 1016 : 768);
-  const height = opts?.height ?? (useInstantId ? 1016 : 768);
+  // Portrait bias for eye-contact acts; InstantID stays near-square non-1024.
+  const width =
+    opts?.width ??
+    (useInstantId ? 1016 : quality ? 768 : 768);
+  const height =
+    opts?.height ??
+    (useInstantId ? 1016 : quality ? 960 : 768);
   const ckpt =
     opts?.checkpoint?.trim() ||
     (useInstantId ? INSTANTID_CKPTS[0]! : CKPT_SD15);
@@ -1018,6 +1031,7 @@ export function buildScenePrompt(
   const prefix = opts?.prefix ?? "narcissus_scene";
   const stamp = Date.now().toString(36);
   const savePrefix = `${prefix}_${stamp}`;
+  const cockRef = opts?.cockRefImage?.trim() || null;
 
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.scene,
@@ -1026,13 +1040,24 @@ export function buildScenePrompt(
     "exact same face as the reference photo, identical eyes nose mouth bone structure",
     "exact same hairstyle hair color and hairline as the reference",
     "photorealistic skin, sharp detail",
-  ].join(", ");
+    quality
+      ? "direct eye contact with the camera, sharp focused eyes looking at viewer, detailed iris reflection"
+      : "",
+    cockRef
+      ? "match the uploaded penis reference for shaft shape color and glans identity in her hand"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const negative = [
     NEGATIVE,
     "identical to input, unchanged photo, passthrough, no change",
     "blank, black image, empty frame",
     "different face, different person, different hairstyle, wrong hair color",
+    "looking away, closed eyes, averted gaze, eyes looking down",
+    "extra fingers, fused fingers, deformed hand, missing fingers, bad anatomy hands",
+    "Barbie crotch, missing penis, no cock, vagina instead of penis",
     useInstantId ? "watermark, text, logo" : "",
   ]
     .filter(Boolean)
@@ -1079,7 +1104,8 @@ export function buildScenePrompt(
   let posRef: [string, number] = ["4", 0];
   let negRef: [string, number] = ["5", 0];
   let cfg = 7;
-  let steps = 36;
+  // myimg-parity stills: more steps when FaceID quality path is on.
+  let steps = quality ? 42 : 36;
 
   if (faceLock && useInstantId) {
     const iid = wireInstantId(graph, identity);
@@ -1087,10 +1113,18 @@ export function buildScenePrompt(
     posRef = iid.positive;
     negRef = iid.negative;
     cfg = 3.5;
-    steps = 30;
+    steps = quality ? 34 : 30;
   } else if (faceLock && useFaceId) {
     modelRef = wireFaceIdPlus(graph, identity);
-    cfg = 5.5;
+    cfg = quality ? 6.0 : 5.5;
+    steps = quality ? 44 : 36;
+  }
+
+  // Optional cock identity: IP-Adapter PLUS on the penis reference (SD1.5).
+  // Chains after FaceID so face lock stays primary; moderate weight so the
+  // handjob pose isn't washed into a genital close-up.
+  if (cockRef && useFaceId) {
+    modelRef = wireCockIpAdapter(graph, modelRef, cockRef, identity);
   }
 
   graph["7"] = {
@@ -1113,19 +1147,123 @@ export function buildScenePrompt(
     inputs: { samples: ["7", 0], vae: ["1", 2] },
   };
 
+  let decodeRef: [string, number] = ["8", 0];
+
+  // Hand + cock anatomy refine (base ckpt) — FaceID alone often soft-censors
+  // the shaft or mangled hands; second pass invents clear grip + penis.
+  if (quality && useFaceId) {
+    const refinePos = [
+      opts?.promptOverride?.trim() ||
+        "photorealistic adult POV handjob, eye contact with camera",
+      "her hand firmly gripping an erect penis, clear fingers wrapping the shaft, visible glans, detailed knuckles",
+      "looking directly at the camera, sharp eyes",
+      "same face hair and upper body identity as the previous frame",
+      cockRef
+        ? "penis matching the cock reference photo in color shape and glans"
+        : "realistic erect adult penis in her hand",
+    ].join(", ");
+    const refineNeg = [
+      NEGATIVE,
+      "looking away, closed eyes, averted gaze",
+      "extra fingers, fused fingers, deformed hand, missing fingers",
+      "Barbie crotch, vagina, missing penis, no cock, censored",
+      "different face, wrong hair",
+    ].join(", ");
+    graph["60"] = {
+      class_type: "CLIPTextEncode",
+      inputs: { text: refinePos, clip: ["1", 1] },
+    };
+    graph["61"] = {
+      class_type: "CLIPTextEncode",
+      inputs: { text: refineNeg, clip: ["1", 1] },
+    };
+    graph["62"] = {
+      class_type: "VAEEncode",
+      inputs: { pixels: ["8", 0], vae: ["1", 2] },
+    };
+    graph["63"] = {
+      class_type: "KSampler",
+      inputs: {
+        seed: (seed + 23) >>> 0,
+        steps: 28,
+        cfg: 7.5,
+        sampler_name: "euler",
+        scheduler: "normal",
+        denoise: 0.42,
+        model: ["1", 0],
+        positive: ["60", 0],
+        negative: ["61", 0],
+        latent_image: ["62", 0],
+      },
+    };
+    graph["64"] = {
+      class_type: "VAEDecode",
+      inputs: { samples: ["63", 0], vae: ["1", 2] },
+    };
+    decodeRef = ["64", 0];
+  }
+
   if (faceLock) {
-    wireReactorPolish(graph, ["8", 0], ["17", 0], savePrefix);
+    wireReactorPolish(graph, decodeRef, ["17", 0], savePrefix);
   } else {
     graph["10"] = {
       class_type: "SaveImage",
       inputs: {
         filename_prefix: savePrefix,
-        images: ["8", 0],
+        images: decodeRef,
       },
     };
   }
 
   return graph;
+}
+
+/**
+ * IP-Adapter PLUS conditioned on a cock reference photo.
+ * Expects FaceID (or base) MODEL already in `modelRef`. Uses nodes 50–53.
+ */
+function wireCockIpAdapter(
+  graph: Record<string, unknown>,
+  modelRef: [string, number],
+  cockImageName: string,
+  identity: number,
+): [string, number] {
+  const w = Math.min(0.85, Math.max(0.45, 0.55 + identity * 0.2));
+  graph["50"] = {
+    class_type: "LoadImage",
+    inputs: { image: cockImageName },
+  };
+  graph["51"] = {
+    class_type: "ImageScale",
+    inputs: {
+      image: ["50", 0],
+      upscale_method: "lanczos",
+      width: 512,
+      height: 512,
+      crop: "center",
+    },
+  };
+  graph["52"] = {
+    class_type: "IPAdapterUnifiedLoader",
+    inputs: {
+      model: modelRef,
+      preset: "PLUS (high strength)",
+    },
+  };
+  graph["53"] = {
+    class_type: "IPAdapter",
+    inputs: {
+      model: ["52", 0],
+      ipadapter: ["52", 1],
+      image: ["51", 0],
+      weight: w,
+      // Live Comfy schema (IPAdapter_plus): standard | prompt is more important | style transfer
+      weight_type: "standard",
+      start_at: 0.0,
+      end_at: 0.75,
+    },
+  };
+  return ["53", 0];
 }
 
 export function buildImg2ImgPrompt(
