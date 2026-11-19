@@ -19,7 +19,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Failed to load image for prep"));
+    img.onerror = () =>
+      reject(
+        new Error(
+          "Failed to load image for prep — use JPEG/PNG/WebP (iPhone HEIC often fails in browser).",
+        ),
+      );
     img.src = src;
   });
 }

@@ -512,15 +512,22 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       // NA-81: InstantID hard-fails with "Reference Image: No face detected."
       // Retry undress/scene on FaceID (SD1.5) so Studio stays usable.
+      // NA-219: FaceID itself can throw `InsightFace: No face detected` —
+      // retry scene with ReActor-only (still usable) instead of raw 502.
       const msg = err instanceof Error ? err.message : String(err);
       const noFace =
         /no face detected/i.test(msg) || /Reference Image/i.test(msg);
-      if (
-        !noFace ||
-        identityEngine !== "instantid" ||
-        (mode !== "undress" && mode !== "scene") ||
-        (mode === "scene" && sceneTpl?.id === "facial")
-      ) {
+      const canFallbackInstantId =
+        noFace &&
+        identityEngine === "instantid" &&
+        (mode === "undress" || mode === "scene") &&
+        !(mode === "scene" && sceneTpl?.id === "facial");
+      const canFallbackFaceId =
+        noFace &&
+        identityEngine === "faceid" &&
+        mode === "scene" &&
+        sceneTpl?.id !== "facial";
+      if (!canFallbackInstantId && !canFallbackFaceId) {
         throw err;
       }
       faceLockFallback = true;
@@ -537,6 +544,28 @@ export async function POST(req: NextRequest) {
             faceLock: true,
             identityEngine: "faceid",
             denoise: cockFallback ? 0.68 : 0.62,
+          }),
+          { timeoutMs: 240_000 },
+        );
+      } else if (canFallbackFaceId) {
+        // Drop FaceID conditioning; keep ReActor polish from the upload crop.
+        result = await runPromptToImages(
+          buildScenePrompt(uploaded.filename, {
+            promptOverride: [
+              sceneTpl!.stillPrompt,
+              sceneAnatomy?.positive,
+              promptOverride,
+            ]
+              .filter(Boolean)
+              .join(", "),
+            identity: Math.max(identity, 0.85),
+            denoise: sceneDenoise(sceneTpl!.stillDenoise, identity),
+            faceLock: true,
+            prefix: `narcissus_scene_${sceneTpl!.id}_noface`,
+            checkpoint: sd15Ckpt || realismCkpt || undefined,
+            identityEngine: "reactor",
+            cockRefImage: null,
+            qualityPass: false,
           }),
           { timeoutMs: 240_000 },
         );

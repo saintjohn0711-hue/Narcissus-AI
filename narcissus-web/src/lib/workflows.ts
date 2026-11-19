@@ -567,7 +567,13 @@ function wireInstantId(
   };
 }
 
-/** NA-75 FaceID Plus V2 on SD1.5 (epicrealism). Returns conditioned MODEL ref. */
+/**
+ * NA-75 FaceID Plus V2 on SD1.5 (epicrealism). Returns conditioned MODEL ref.
+ * NA-219: feed InsightFace the **full scaled frame** (node 3), not the upper
+ * crop — letterboxed / off-center / tall portraits made FaceID throw
+ * `InsightFace: No face detected.` (same class as InstantID NA-81).
+ * ReActor polish still uses the upper crop (node 17).
+ */
 function wireFaceIdPlus(
   graph: Record<string, unknown>,
   identity: number,
@@ -587,7 +593,8 @@ function wireFaceIdPlus(
     inputs: {
       model: ["20", 0],
       ipadapter: ["20", 1],
-      image: ["17", 0],
+      // Full frame — InsightFace locates the face. Do NOT use node 17 crop.
+      image: ["3", 0],
       weight: 0.85 + id * 0.25,
       weight_faceidv2: 1.1 + id * 0.4,
       weight_type: "linear",
