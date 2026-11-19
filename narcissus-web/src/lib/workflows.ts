@@ -1272,6 +1272,9 @@ function wireCockIpAdapter(
       crop: "center",
     },
   };
+  // Prefer PLUS when present on the volume; STANDARD is the lighter SD1.5
+  // twin (ip-adapter_sd15). Jobs retry without cock IP if neither file exists
+  // (NA-223 — "IPAdapter model not found" was the Studio "load failed").
   graph["52"] = {
     class_type: "IPAdapterUnifiedLoader",
     inputs: {

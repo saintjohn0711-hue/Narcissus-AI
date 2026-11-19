@@ -278,6 +278,13 @@ export default function StudioPage() {
             "Couldn’t load that photo — use JPEG/PNG/WebP (HEIC often fails).",
           );
         }
+        // NA-223: Comfy IP-Adapter PLUS missing → raw "IPAdapter model not found"
+        // reads like a vague load failure in Studio.
+        if (/IPAdapter model not found/i.test(raw)) {
+          throw new Error(
+            "Cock-reference model missing on GPU — retry without the cock upload (generated default still works), or try again after models finish installing.",
+          );
+        }
         throw new Error(raw);
       }
       setJob(data as JobResult);
