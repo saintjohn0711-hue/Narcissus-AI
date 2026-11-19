@@ -1044,15 +1044,15 @@ export function buildScenePrompt(
   const savePrefix = `${prefix}_${stamp}`;
   const cockRef = opts?.cockRefImage?.trim() || null;
 
-  // NA-221: quality FaceID (eye-contact handjob) must NOT demand a full face
-  // rewrite — pose/hands change; face + hair stay the upload.
+  // NA-221: face identity locked. NA-222: front-load mandatory held cock —
+  // soft face-only prompts + FaceID refine had wiped the penis.
   const positive = [
     opts?.promptOverride?.trim() || DEFAULT_PROMPTS.scene,
     quality
-      ? "change pose and hands only; keep the exact same woman from the reference photo"
+      ? "mandatory clearly visible erect penis shaft and glans in her hand in the foreground, fingers gripping the cock"
       : "major visible change from the reference photo required",
     quality
-      ? "body and hand pose may change; face identity is locked"
+      ? "pose and hands may change to hold the cock; keep the exact same woman face and hair from the reference photo"
       : "do not leave clothing pose or framing unchanged",
     "exact same face as the reference photo, identical eyes nose mouth bone structure",
     "exact same hairstyle hair color and hairline as the reference",
@@ -1060,9 +1060,14 @@ export function buildScenePrompt(
     quality
       ? "direct eye contact with the camera, sharp focused eyes looking at viewer, detailed iris reflection"
       : "",
+    quality
+      ? "explicit POV handjob, penis fully rendered not censored not hidden not empty hand"
+      : "",
     cockRef
       ? "match the uploaded penis reference for shaft shape color and glans identity in her hand"
-      : "",
+      : quality
+        ? "generated realistic adult erect penis in her hand"
+        : "",
   ]
     .filter(Boolean)
     .join(", ");
@@ -1076,7 +1081,7 @@ export function buildScenePrompt(
     "different face, different person, different hairstyle, wrong hair color",
     "looking away, closed eyes, averted gaze, eyes looking down",
     "extra fingers, fused fingers, deformed hand, missing fingers, bad anatomy hands",
-    "Barbie crotch, missing penis, no cock, vagina instead of penis",
+    "Barbie crotch, missing penis, no cock, empty hands, empty hand, vagina instead of penis, censored, mosaic",
     useInstantId ? "watermark, text, logo" : "",
   ]
     .filter(Boolean)
@@ -1125,10 +1130,9 @@ export function buildScenePrompt(
   let cfg = 7;
   // myimg-parity stills: more steps when FaceID quality path is on.
   let steps = quality ? 42 : 36;
-  // NA-221: sceneDenoise could push ~0.78 and rewrite the face — hard-cap
-  // when FaceID quality lock is on so pose can move without identity drift.
+  // NA-221/222: cap denoise so face stays; allow enough reshape for held cock.
   const sampleDenoise =
-    quality && useFaceId ? Math.min(denoise, 0.55) : denoise;
+    quality && useFaceId ? Math.min(denoise, 0.58) : denoise;
 
   if (faceLock && useInstantId) {
     const iid = wireInstantId(graph, identity);
@@ -1144,10 +1148,9 @@ export function buildScenePrompt(
   }
 
   // Optional cock identity: IP-Adapter PLUS on the penis reference (SD1.5).
-  // Chains after FaceID so face lock stays primary; keep weight modest so the
-  // cock ref cannot wash out face identity (NA-221).
+  // Full weight again (NA-222) — face stays locked via ReActor + head-paste.
   if (cockRef && useFaceId) {
-    modelRef = wireCockIpAdapter(graph, modelRef, cockRef, identity * 0.85);
+    modelRef = wireCockIpAdapter(graph, modelRef, cockRef, identity);
   }
 
   graph["7"] = {
@@ -1172,26 +1175,26 @@ export function buildScenePrompt(
 
   let decodeRef: [string, number] = ["8", 0];
 
-  // Hand + cock anatomy refine — NA-221: keep FaceID MODEL on the refine
-  // (raw ckpt was regenerating a stranger's face). Low denoise = hands/cock
-  // only; ReActor + optional head paste restore likeness afterward.
+  // NA-222: hand + cock anatomy refine on BARE checkpoint (same as NA-78
+  // undress). FaceID soft-censors / won't invent a held penis; denoise ~0.45
+  // invents shaft+grip. Face restored by ReActor + head-paste afterward.
   if (quality && useFaceId) {
     const refinePos = [
-      opts?.promptOverride?.trim() ||
-        "photorealistic adult POV handjob, eye contact with camera",
-      "her hand firmly gripping an erect penis, clear fingers wrapping the shaft, visible glans, detailed knuckles",
-      "looking directly at the camera, sharp eyes",
-      "exact same face and hair as the reference photo, do not change facial identity",
+      "photorealistic adult POV handjob, eye contact with camera",
+      "insert a clearly visible erect penis into her hand in the foreground",
+      "her fingers wrapping firmly around the shaft, visible glans, detailed knuckles gripping the cock",
+      "mandatory penis fully rendered, not empty hands, not censored",
+      "same woman looking at the camera, same hair framing",
       cockRef
         ? "penis matching the cock reference photo in color shape and glans"
-        : "realistic erect adult penis in her hand",
+        : "realistic erect adult penis shaft and glans in her hand",
     ].join(", ");
     const refineNeg = [
       NEGATIVE,
       "looking away, closed eyes, averted gaze",
       "extra fingers, fused fingers, deformed hand, missing fingers",
-      "Barbie crotch, vagina, missing penis, no cock, censored",
-      "different face, different woman, wrong hair, beauty filter face, generic AI face",
+      "Barbie crotch, vagina, missing penis, no cock, empty hands, empty hand, censored, mosaic",
+      "different woman, beauty filter face, generic AI face",
     ].join(", ");
     graph["60"] = {
       class_type: "CLIPTextEncode",
@@ -1209,13 +1212,13 @@ export function buildScenePrompt(
       class_type: "KSampler",
       inputs: {
         seed: (seed + 23) >>> 0,
-        steps: 22,
-        cfg: 6.0,
+        steps: 28,
+        cfg: 7.5,
         sampler_name: "euler",
         scheduler: "normal",
-        denoise: 0.26,
-        // Keep FaceID conditioning — never refine on bare ckpt (face drift).
-        model: modelRef,
+        denoise: 0.45,
+        // Bare ckpt invents cock (FaceID blocks it). Face restored next.
+        model: ["1", 0],
         positive: ["60", 0],
         negative: ["61", 0],
         latent_image: ["62", 0],
@@ -1253,7 +1256,8 @@ function wireCockIpAdapter(
   cockImageName: string,
   identity: number,
 ): [string, number] {
-  const w = Math.min(0.85, Math.max(0.45, 0.55 + identity * 0.2));
+  // NA-222: stronger cock IP so the upload actually shows in her hand.
+  const w = Math.min(1.05, Math.max(0.65, 0.7 + identity * 0.25));
   graph["50"] = {
     class_type: "LoadImage",
     inputs: { image: cockImageName },
@@ -1285,7 +1289,7 @@ function wireCockIpAdapter(
       // Live Comfy schema (IPAdapter_plus): standard | prompt is more important | style transfer
       weight_type: "standard",
       start_at: 0.0,
-      end_at: 0.75,
+      end_at: 0.9,
     },
   };
   return ["53", 0];

@@ -162,3 +162,31 @@ export function anatomyPromptFor(
     ].join(", "),
   };
 }
+
+/**
+ * Held / POV cock for handjob scenes — never reuse female undress anatomy
+ * ("no penis") which cancels the cock in her hand (NA-222).
+ */
+export function heldCockPromptFor(
+  cockStateId?: CockStateId,
+  cockSizeId?: CockSizeId,
+): { positive: string; negative: string } {
+  const state = getCockState(cockStateId);
+  const size = getCockSize(cockSizeId);
+  return {
+    positive: [
+      "mandatory clearly visible erect adult penis in her hand in the foreground",
+      "her fingers wrapping the shaft, knuckles gripping, glans and shaft fully rendered",
+      "photo-real cock skin texture veins and foreskin or circumcised detail",
+      size.prompt,
+      state.prompt,
+      "penis not cropped out, not hidden, not censored, not replaced by empty hand",
+    ].join(", "),
+    negative: [
+      state.negative,
+      "empty hands, empty hand, no penis, missing penis, no cock, Barbie crotch",
+      "vagina, vulva, pussy, censored, mosaic, soft blur over genitals",
+      "hands only with nothing held, closed fist with no shaft",
+    ].join(", "),
+  };
+}

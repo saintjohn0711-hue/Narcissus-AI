@@ -6,6 +6,7 @@ import {
   getBodyType,
   getCockSize,
   getCockState,
+  heldCockPromptFor,
   isBodyTypeId,
   isCockSizeId,
   isCockStateId,
@@ -378,10 +379,14 @@ export async function POST(req: NextRequest) {
 
     const useBodyOnScene = Boolean(sceneTpl?.useBodyOptions);
     const useBodyOnVideo = Boolean(tpl?.useBodyOptions);
+    // NA-222: handjob must NEVER get female undress anatomy ("no penis").
+    // Held-cock prompt always applies for eye_contact_handjob.
     const sceneAnatomy =
-      useBodyOnScene
-        ? anatomyPromptFor(bodyType, cockState, cockSize)
-        : null;
+      sceneTpl?.id === "eye_contact_handjob"
+        ? heldCockPromptFor(cockState, cockSize)
+        : useBodyOnScene
+          ? anatomyPromptFor(bodyType, cockState, cockSize)
+          : null;
 
     // Undress: FaceID + epicrealism (SD1.5) — InstantID/RealVisXL soft-censors
     // lingerie/genitals and leaves subjects clothed. Scene still prefers InstantID.
@@ -487,7 +492,7 @@ export async function POST(req: NextRequest) {
                   ),
                   denoise: sceneForceFaceId
                     ? Math.min(
-                        0.55,
+                        0.58,
                         sceneDenoise(sceneTpl.stillDenoise, identity),
                       )
                     : sceneDenoise(sceneTpl.stillDenoise, identity),
@@ -573,7 +578,7 @@ export async function POST(req: NextRequest) {
               sceneForceFaceId ? 0.95 : 0.85,
             ),
             denoise: sceneForceFaceId
-              ? Math.min(0.55, sceneDenoise(sceneTpl!.stillDenoise, identity))
+              ? Math.min(0.58, sceneDenoise(sceneTpl!.stillDenoise, identity))
               : sceneDenoise(sceneTpl!.stillDenoise, identity),
             faceLock: true,
             prefix: `narcissus_scene_${sceneTpl!.id}_noface`,
@@ -599,7 +604,7 @@ export async function POST(req: NextRequest) {
               sceneForceFaceId ? 0.95 : 0.85,
             ),
             denoise: sceneForceFaceId
-              ? Math.min(0.55, sceneDenoise(sceneTpl!.stillDenoise, identity))
+              ? Math.min(0.58, sceneDenoise(sceneTpl!.stillDenoise, identity))
               : sceneDenoise(sceneTpl!.stillDenoise, identity),
             faceLock: true,
             prefix: `narcissus_scene_${sceneTpl!.id}`,
