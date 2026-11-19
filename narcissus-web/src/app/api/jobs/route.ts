@@ -120,6 +120,8 @@ export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = asUploadFile(form.get("photo"));
   const faceFile = asUploadFile(form.get("face"));
+  /** Optional penis reference for eye-contact handjob (user's own adult content). */
+  const cockFile = asUploadFile(form.get("cock"));
   const mode = String(form.get("mode") || "") as JobMode;
   const adultsConfirmed = form.get("adultsConfirmed") === "true";
   const promptOverride = String(form.get("prompt") || "").trim() || undefined;
@@ -209,6 +211,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (cockFile && cockFile.size > MAX_BYTES) {
+    return NextResponse.json(
+      { error: "Cock reference photo too large (max 12MB)." },
+      { status: 400 },
+    );
+  }
+
   if (mode === "custom" && !promptOverride) {
     return NextResponse.json(
       { error: "Custom mode needs a prompt describing the photo." },
@@ -247,6 +256,18 @@ export async function POST(req: NextRequest) {
         faceFile.name.replace(/[^\w.\-]+/g, "_") || "face.png";
       const faceUploaded = await uploadImage(faceFile, `face_${faceSafe}`);
       faceUploadedName = faceUploaded.filename;
+    }
+
+    let cockUploadedName: string | null = null;
+    if (
+      mode === "scene" &&
+      sceneTpl?.needsCockRef &&
+      cockFile
+    ) {
+      const cockSafe =
+        cockFile.name.replace(/[^\w.\-]+/g, "_") || "cock.png";
+      const cockUploaded = await uploadImage(cockFile, `cock_${cockSafe}`);
+      cockUploadedName = cockUploaded.filename;
     }
 
     // --- Companion sex toys: product txt2img (retry until white studio bg) + composite ---
@@ -376,9 +397,12 @@ export async function POST(req: NextRequest) {
       "v1-5-pruned-emaonly-fp16.safetensors",
     );
     const needsCockBody = getBodyType(bodyType).needsCock;
+    // Eye-contact handjob (+ any forceFaceId scene) must use FaceID —
+    // InstantID/RealVisXL soft-censors visible penis (NA-78 lesson).
+    const sceneForceFaceId = Boolean(sceneTpl?.forceFaceId);
     // Undress + Companion fetish custom → FaceID/epicrealism (no InstantID soft-censor).
     const identityEngine: IdentityEngine =
-      mode === "undress" || mode === "custom"
+      mode === "undress" || mode === "custom" || sceneForceFaceId
         ? "faceid"
         : hasSdxl
           ? "instantid"
@@ -389,7 +413,7 @@ export async function POST(req: NextRequest) {
     const realismCkpt =
       mode === "faceswap"
         ? null
-        : mode === "undress" || mode === "custom"
+        : mode === "undress" || mode === "custom" || sceneForceFaceId
           ? await resolveCheckpoint(
               REALISM_CKPTS,
               sd15Ckpt,
@@ -456,14 +480,21 @@ export async function POST(req: NextRequest) {
                   ]
                     .filter(Boolean)
                     .join(", "),
-                  identity: Math.max(identity, 0.85),
+                  identity: Math.max(identity, sceneForceFaceId ? 0.9 : 0.85),
                   denoise: sceneDenoise(sceneTpl.stillDenoise, identity),
                   // Facial needs the generated face effect — don't ReActor it away.
                   faceLock: sceneTpl.id !== "facial",
                   prefix: `narcissus_scene_${sceneTpl.id}`,
                   checkpoint: realismCkpt || undefined,
                   identityEngine:
-                    sceneTpl.id === "facial" ? "reactor" : identityEngine,
+                    sceneTpl.id === "facial"
+                      ? "reactor"
+                      : sceneForceFaceId
+                        ? "faceid"
+                        : identityEngine,
+                  cockRefImage: cockUploadedName,
+                  qualityPass:
+                    sceneTpl.id === "eye_contact_handjob" || sceneForceFaceId,
                 })
               : buildImg2ImgPrompt(mode, uploaded.filename, {
                   promptOverride,
@@ -512,7 +543,11 @@ export async function POST(req: NextRequest) {
       } else {
         result = await runPromptToImages(
           buildScenePrompt(uploaded.filename, {
-            promptOverride: [sceneTpl!.stillPrompt, promptOverride]
+            promptOverride: [
+              sceneTpl!.stillPrompt,
+              sceneAnatomy?.positive,
+              promptOverride,
+            ]
               .filter(Boolean)
               .join(", "),
             identity: Math.max(identity, 0.85),
@@ -521,6 +556,10 @@ export async function POST(req: NextRequest) {
             prefix: `narcissus_scene_${sceneTpl!.id}`,
             checkpoint: sd15Ckpt || undefined,
             identityEngine: "faceid",
+            cockRefImage: cockUploadedName,
+            qualityPass:
+              sceneTpl!.id === "eye_contact_handjob" ||
+              Boolean(sceneTpl?.forceFaceId),
           }),
           { timeoutMs: 240_000 },
         );
@@ -717,6 +756,7 @@ export async function POST(req: NextRequest) {
       identityLocked,
       filename: file.name,
       faceFilename: faceFile?.name ?? null,
+      cockFilename: cockUploadedName ? cockFile?.name ?? null : null,
       bytes: file.size,
       prompt:
         promptOverride ||
@@ -733,9 +773,13 @@ export async function POST(req: NextRequest) {
               ? `Clothing removed with ${bodyLabel}${cockNote} anatomy (face-lock skipped — previous frame was blank).`
               : `Clothing removed with ${bodyLabel}${cockNote}. Original face & hair locked onto the body.`
             : mode === "scene"
-              ? identityLocked
-                ? `${sceneTpl?.label || "Scene"} ready — original face & hair locked.`
-                : `${sceneTpl?.label || "Scene"}${showBodyMeta ? ` · ${bodyLabel}${cockNote}` : ""} photo finished.`
+              ? sceneTpl?.id === "eye_contact_handjob"
+                ? cockUploadedName
+                  ? "Eye contact handjob ready — face locked; your cock reference blended onto the held penis."
+                  : "Eye contact handjob ready — face locked with generated default cock in hand."
+                : identityLocked
+                  ? `${sceneTpl?.label || "Scene"} ready — original face & hair locked.`
+                  : `${sceneTpl?.label || "Scene"}${showBodyMeta ? ` · ${bodyLabel}${cockNote}` : ""} photo finished.`
               : mode === "video"
                 ? tpl?.needsSpeech
                   ? speechMuxed
@@ -775,6 +819,7 @@ export async function GET() {
       engine: "img2img undress + cock options + ReActor face/hair boost",
     },
     photoTemplates: [
+      "eye_contact_handjob",
       "blowjob",
       "double_blowjob",
       "cumshot",
@@ -787,6 +832,13 @@ export async function GET() {
       "lbd",
       "wet_silk",
     ],
+    eyeContactHandjob: {
+      requires: ["photo"],
+      optional: ["cock"],
+      engine:
+        "FaceID Plus V2 + epicrealism + optional IP-Adapter PLUS cock ref + hand/cock refine + ReActor",
+      qualityTarget: "myimg.ai undress/effects stills — eye contact, hands, anatomy, face lock",
+    },
     videoTemplates: [
       "natural",
       "blowjob",

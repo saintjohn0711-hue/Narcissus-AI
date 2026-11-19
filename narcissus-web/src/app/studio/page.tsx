@@ -40,6 +40,7 @@ type JobResult = {
   mode: JobMode;
   filename: string;
   faceFilename?: string | null;
+  cockFilename?: string | null;
   bodyType?: BodyTypeId | null;
   cockState?: CockStateId | null;
   cockSize?: CockSizeId | null;
@@ -66,17 +67,17 @@ const MODES: Array<[JobMode, string]> = [
 
 export default function StudioPage() {
   const [adultsOk, setAdultsOk] = useState(false);
-  const [mode, setMode] = useState<JobMode>("video");
-  const [prompt, setPrompt] = useState(defaultPromptFor("video"));
+  const [mode, setMode] = useState<JobMode>("scene");
+  const [prompt, setPrompt] = useState(defaultPromptFor("scene"));
   const [speech, setSpeech] = useState("Hey… come closer.");
   const [photoTemplate, setPhotoTemplate] =
-    useState<PhotoTemplateId>("blowjob");
+    useState<PhotoTemplateId>("eye_contact_handjob");
   const [template, setTemplate] = useState<VideoTemplateId>("face_swap");
   const [voice, setVoice] = useState(SAY_VOICES[0]!.id);
   const [bodyType, setBodyType] = useState<BodyTypeId>("female");
   const [cockState, setCockState] = useState<CockStateId>("hard");
   const [cockSize, setCockSize] = useState<CockSizeId>("average");
-  const [identity, setIdentity] = useState(0.9);
+  const [identity, setIdentity] = useState(0.92);
   const [fit, setFit] = useState<FitMode>("contain");
   const [cropX, setCropX] = useState(0.5);
   const [cropY, setCropY] = useState(0.5);
@@ -84,6 +85,8 @@ export default function StudioPage() {
   const [preview, setPreview] = useState<string | null>(null);
   const [faceFile, setFaceFile] = useState<File | null>(null);
   const [facePreview, setFacePreview] = useState<string | null>(null);
+  const [cockFile, setCockFile] = useState<File | null>(null);
+  const [cockPreview, setCockPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<JobResult | null>(null);
@@ -95,6 +98,8 @@ export default function StudioPage() {
 
   const needsFace =
     mode === "faceswap" || (mode === "video" && Boolean(activeTemplate.needsFace));
+  const needsCockRef =
+    mode === "scene" && Boolean(activePhotoTemplate.needsCockRef);
   const showBodyOptions =
     mode === "undress" ||
     (mode === "scene" && Boolean(activePhotoTemplate.useBodyOptions)) ||
@@ -147,6 +152,14 @@ export default function StudioPage() {
     setFacePreview(f ? URL.createObjectURL(f) : null);
   }
 
+  function onCockFile(f: File | null) {
+    setJob(null);
+    setError(null);
+    setCockFile(f);
+    if (cockPreview) URL.revokeObjectURL(cockPreview);
+    setCockPreview(f ? URL.createObjectURL(f) : null);
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!canSubmit || !file) return;
@@ -188,6 +201,25 @@ export default function StudioPage() {
           new File(
             [facePrepared],
             faceFile.name.replace(/\.\w+$/, "") + "_face.jpg",
+            { type: "image/jpeg" },
+          ),
+        );
+      }
+      if (needsCockRef && cockFile) {
+        const cockPrepared = await preparePhoto(cockFile, {
+          fit: "cover",
+          width: 512,
+          height: 512,
+          cropX: 0.5,
+          cropY: 0.5,
+          mime: "image/jpeg",
+          quality: 0.95,
+        });
+        body.set(
+          "cock",
+          new File(
+            [cockPrepared],
+            cockFile.name.replace(/\.\w+$/, "") + "_cock.jpg",
             { type: "image/jpeg" },
           ),
         );
@@ -275,7 +307,7 @@ export default function StudioPage() {
         className="border-b border-[var(--line)] pb-8"
         kicker="Studio"
         title="Narcissus"
-        lede="Face swap still + video, scene acts, undress with gender/cock options, and 5s clips (natural, sex acts, say-this). Your face stays yours — Muses live under Menu."
+        lede="Eye contact handjob, face swap, scene acts, undress, and 5s clips. Optional cock upload locks your penis into her hand — face stays hers from the photo. Muses live under Menu."
       />
 
       <form onSubmit={onSubmit} className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
@@ -339,6 +371,46 @@ export default function StudioPage() {
                 className="text-sm text-[#c4b7a8] file:mr-4 file:border-0 file:bg-[var(--accent)] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[#1a120c]"
                 onChange={(ev) => onFaceFile(ev.target.files?.[0] ?? null)}
               />
+            </div>
+          )}
+
+          {needsCockRef && (
+            <div className="space-y-3">
+              <span className="text-sm font-medium uppercase tracking-[0.18em] text-[var(--ink)]">
+                Yours (optional cock)
+              </span>
+              <div className="relative flex min-h-48 w-full items-center justify-center overflow-hidden rounded-sm border border-dashed border-[var(--line)] bg-[#12100e]">
+                {cockPreview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={cockPreview}
+                    alt="Cock reference preview"
+                    className="absolute inset-0 h-full w-full object-cover"
+                    style={{ objectPosition: "50% 50%" }}
+                  />
+                ) : (
+                  <span className="px-6 text-center text-sm text-[#c4b7a8]">
+                    Optional — upload your cock so the one in her hand matches
+                    you. Skip for a generated default. Your own adult content
+                    only.
+                  </span>
+                )}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                className="text-sm text-[#c4b7a8] file:mr-4 file:border-0 file:bg-[var(--accent)] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[#1a120c]"
+                onChange={(ev) => onCockFile(ev.target.files?.[0] ?? null)}
+              />
+              {cockFile && (
+                <button
+                  type="button"
+                  onClick={() => onCockFile(null)}
+                  className="text-xs text-[#c4b7a8] underline hover:text-[var(--accent)]"
+                >
+                  Clear cock upload (use generated default)
+                </button>
+              )}
             </div>
           )}
 
@@ -665,7 +737,9 @@ export default function StudioPage() {
                   : mode === "undress"
                     ? "Removing clothes…"
                     : mode === "scene"
-                      ? "Building scene…"
+                      ? photoTemplate === "eye_contact_handjob"
+                        ? "Building eye-contact handjob…"
+                        : "Building scene…"
                       : "Running on GPU…"
               : mode === "video"
                 ? `Make 5s ${activeTemplate.label}`
@@ -674,7 +748,11 @@ export default function StudioPage() {
                   : mode === "undress"
                     ? `Undress · ${activeBody.label}`
                     : mode === "scene"
-                      ? `Make ${activePhotoTemplate.label}`
+                      ? photoTemplate === "eye_contact_handjob"
+                        ? cockFile
+                          ? "Make eye contact handjob · yours"
+                          : "Make eye contact handjob"
+                        : `Make ${activePhotoTemplate.label}`
                       : "Run job"}
           </button>
 
@@ -694,6 +772,7 @@ export default function StudioPage() {
                 {job.cockState ? `/${job.cockState}` : ""}
                 {job.cockSize ? `/${job.cockSize}` : ""} · {job.filename}
                 {job.faceFilename ? ` + ${job.faceFilename}` : ""}
+                {job.cockFilename ? ` + cock:${job.cockFilename}` : ""}
               </p>
               <p className="text-[#c4b7a8]">{job.message}</p>
               {job.speech && (
