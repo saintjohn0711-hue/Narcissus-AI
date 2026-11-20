@@ -23,6 +23,12 @@ import {
   uploadImage,
   uploadResultPng,
 } from "@/lib/comfy";
+import {
+  isMageConfigured,
+  mageEligibleStudioMode,
+  magePublicStatus,
+  runMangoToImage,
+} from "@/lib/mage";
 import { lockHeadAndHair } from "@/lib/identityLock";
 import { localResultUrl, saveLocalResult } from "@/lib/localResults";
 import { muxAudioOntoVideo, resultsDir } from "@/lib/muxAudio";
@@ -115,6 +121,12 @@ const IDENTITY_SD15_CKPTS = [...FACEID_SD15_CKPTS];
 function asUploadFile(value: FormDataEntryValue | null): File | null {
   if (!(value instanceof File) || value.size === 0) return null;
   return value;
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  const buf = Buffer.from(await file.arrayBuffer());
+  const mime = file.type || "image/jpeg";
+  return `data:${mime};base64,${buf.toString("base64")}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -233,11 +245,110 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const photoEngineRaw = String(form.get("photoEngine") || "auto").toLowerCase();
+  const wantMage =
+    photoEngineRaw === "mage" ||
+    photoEngineRaw === "mango" ||
+    (photoEngineRaw === "auto" &&
+      !isComfyConfigured() &&
+      isMageConfigured());
+
+  // Mage Mango path — photoreal character edits only (not NSFW acts).
+  if (wantMage) {
+    const eligibility = mageEligibleStudioMode(
+      mode,
+      mode === "scene" ? photoTemplateId : null,
+    );
+    if (!eligibility.ok) {
+      return NextResponse.json(
+        {
+          error: eligibility.reason,
+          engine: "mage-mango",
+          hint: "Start Comfy (Secure RTX 4090 ~$0.89/hr) for adult Studio acts.",
+        },
+        { status: 422 },
+      );
+    }
+    if (!isMageConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "MAGE_API_KEY is not set. Add it on Vercel (Production + Preview) — create a key at Mage → API → API Keys.",
+          engine: "mage-mango",
+        },
+        { status: 503 },
+      );
+    }
+    try {
+      const prompt =
+        [
+          promptOverride ||
+            sceneTpl?.stillPrompt ||
+            "photorealistic portrait, natural light, sharp detail",
+          "exact same face and identity as the reference photo",
+          "exact same hairstyle and hairline as the reference",
+        ]
+          .filter(Boolean)
+          .join(", ");
+      const imageData = await fileToDataUrl(file);
+      const extra: string[] = [];
+      if (faceFile) extra.push(await fileToDataUrl(faceFile));
+      const mango = await runMangoToImage({
+        prompt,
+        image: imageData,
+        additionalImages: extra.length ? extra : undefined,
+        aspectRatio: "4:5",
+        resolution: "2K",
+        idempotencyKey: `studio-${mode}-${Date.now().toString(36)}`,
+      });
+      const outRes = await fetch(mango.imageUrl, { cache: "no-store" });
+      if (!outRes.ok) {
+        throw new Error(`Failed to download Mage result (${outRes.status})`);
+      }
+      const outBytes = new Uint8Array(await outRes.arrayBuffer());
+      const localName = await saveLocalResult(
+        `mage_mango_${mango.request.request_id}.png`,
+        outBytes,
+      );
+      return NextResponse.json({
+        id: mango.request.request_id,
+        status: "completed",
+        mode,
+        template: mode === "scene" ? photoTemplateId : null,
+        identity,
+        identityLocked: false,
+        filename: file.name,
+        faceFilename: faceFile?.name ?? null,
+        cockFilename: null,
+        bytes: file.size,
+        prompt,
+        checkpoint: `mage:${mango.request.model_id || "mango-v4"}`,
+        engine: "mage-mango",
+        gemsCharged: mango.gemsCharged,
+        message:
+          "Mage Mango still ready — character-consistent edit (not for NSFW acts).",
+        comfyConfigured: isComfyConfigured(),
+        mageConfigured: true,
+        mediaKind: "image",
+        resultUrl: localResultUrl(localName),
+        resultUrls: [localResultUrl(localName)],
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Mage Mango job failed";
+      return NextResponse.json(
+        { error: message, engine: "mage-mango" },
+        { status: 502 },
+      );
+    }
+  }
+
   if (!isComfyConfigured()) {
     return NextResponse.json(
       {
-        error:
-          "COMFYUI_BASE_URL is not set. Point it at the Runpod ComfyUI proxy.",
+        error: isMageConfigured()
+          ? "Comfy is offline. Adult Studio acts need Comfy (~$0.89/hr Secure RTX 4090). For mild custom/outfit stills set photoEngine=mage."
+          : "COMFYUI_BASE_URL is not set. Point it at the Runpod ComfyUI proxy (or add MAGE_API_KEY for non-adult Mage Mango stills).",
+        mage: magePublicStatus(),
       },
       { status: 503 },
     );
@@ -970,6 +1081,14 @@ export async function GET() {
       engine: "ReActorFaceSwap → SVD_img2vid",
     },
     comfyConfigured: isComfyConfigured(),
-    engine: "comfyui-reactor+instantid+undress-bodytypes+svd+faceswap-video+say-tts",
+    mage: magePublicStatus(),
+    photoEngines: {
+      comfy:
+        "Default for undress / sex-act scenes / eye-contact handjob (FaceID + epicrealism).",
+      mage:
+        "Optional Mage.space Mango (mango-v4) for mild custom/outfit stills when MAGE_API_KEY is set. Not for NSFW acts — Mage policy + content_blocked/nsfw.",
+      formField: "photoEngine=auto|comfy|mage",
+    },
+    engine: "comfyui-reactor+instantid+undress-bodytypes+svd+faceswap-video+say-tts|mage-mango",
   });
 }
