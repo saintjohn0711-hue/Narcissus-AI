@@ -18,7 +18,9 @@ Set locally in `.env.local` (or on Vercel for `narcissus-ai`):
 
 | Variable | Purpose |
 | --- | --- |
-| `COMFYUI_BASE_URL` | ComfyUI proxy (no trailing slash) |
+| `COMFYUI_BASE_URL` | ComfyUI proxy (no trailing slash) — required for NSFW Studio acts |
+| `MAGE_API_KEY` | Optional Mage.space API key (`mage_sk_…`) for Mango photoreal stills (non-adult / custom). Create at Mage → API → API Keys. |
+| `MAGE_MODEL_ID` | Optional; defaults to `mango-v4` |
 | `XAI_API_KEY` | xAI Grok for Art of X partner chat + Stories scene writer |
 | `XAI_MODEL` | Optional; defaults to `grok-4.7` |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway — enables looks vision (+ optional OpenAI-compat paths via `llmConfig`) |
